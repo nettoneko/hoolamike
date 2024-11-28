@@ -2,6 +2,36 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, derive_more::Display,
+)]
+pub enum DownloadKind {
+    #[serde(rename = "GameFileSourceDownloader, Wabbajack.Lib")]
+    GameFileSource,
+    #[serde(rename = "GoogleDriveDownloader, Wabbajack.Lib")]
+    GoogleDrive,
+    #[serde(rename = "HttpDownloader, Wabbajack.Lib")]
+    Http,
+    #[serde(rename = "ManualDownloader, Wabbajack.Lib")]
+    Manual,
+    #[serde(rename = "NexusDownloader, Wabbajack.Lib")]
+    Nexus,
+    #[serde(rename = "WabbajackCDNDownloader+State, Wabbajack.Lib")]
+    WabbajackCDN,
+}
+
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, derive_more::Display,
+)]
+pub enum DirectiveKind {
+    CreateBSA,
+    FromArchive,
+    InlineFile,
+    PatchedFromArchive,
+    RemappedInlineFile,
+    TransformedTexture,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
@@ -107,7 +137,7 @@ pub struct State {
     /// kind: String (renamed from $type)
     /// Description: The type of download state (e.g., "Nexus", "Manual", "Url").
     /// Usage: Determines the method to use when downloading the archive.
-    pub kind: String,
+    pub kind: DownloadKind,
     /// game: Option<String>
     /// Description: The game associated with the mod.
     /// Usage: Verify compatibility.
@@ -174,7 +204,7 @@ pub struct Directive {
     /// directive_type: String (renamed from $type)
     /// Description: Specifies the action to perform (e.g., "Extract", "Copy", "Patch").
     /// Usage: Determines how to process the files.
-    pub directive_type: String,
+    pub directive_kind: DirectiveKind,
     /// hash: String
     /// Description: Hash of the file involved in the directive.
     /// Usage: Verify file integrity before processing.
@@ -427,11 +457,11 @@ pub mod parsing_helpers {
         #[cfg(ignore)]
         #[test_log::test]
         fn test_wasteland_reborn() -> Result<()> {
-            include_str!("../../wasteland-reborn/test/modlist").pipe(test_modlist_file)
+            include_str!("../../wasteland-reborn/test/modlist").pipe(validate_modlist_file)
         }
     }
 
-    pub fn test_modlist_file(input: &str) -> Result<()> {
+    pub fn validate_modlist_file(input: &str) -> Result<()> {
         input
             .tap(|input| {
                 info!("file is {} bytes long", input.bytes().len());
