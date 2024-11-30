@@ -89,10 +89,10 @@ pub struct Modlist {
     pub website: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
-pub struct Archive {
+pub struct ArchiveDescriptor {
     /// hash: String
     /// Description: A hash (e.g., SHA256) of the archive file for integrity verification.
     /// Usage: Verify downloaded files to prevent corruption or tampering.
@@ -109,6 +109,13 @@ pub struct Archive {
     /// Description: Size of the archive in bytes.
     /// Usage: For progress tracking and verifying download completeness.
     pub size: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct Archive {
+    #[serde(flatten)]
+    pub descriptor: ArchiveDescriptor,
     /// state: State
     /// Description: Contains information about where and how to download the archive.
     /// Usage: Use the State fields to handle the download process.        

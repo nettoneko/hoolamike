@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::ready, str::FromStr, sync::Arc};
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -12,7 +12,10 @@ use tap::prelude::*;
 
 use crate::config_file::NexusConfig;
 
-use super::helpers::{FutureAnyhowExt, ReqwestPrettyJsonResponse};
+use super::{
+    helpers::{FutureAnyhowExt, ReqwestPrettyJsonResponse},
+    DownloadTask,
+};
 
 pub struct NexusDownloader {
     client: Client,
@@ -29,10 +32,8 @@ pub struct DownloadFileRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DownloadLinkResponse {
-    #[serde(flatten)]
-    pub data: serde_json::Map<String, serde_json::Value>,
-}
+#[serde(transparent)]
+pub struct DownloadLinkResponse(Vec<NexusDownloadLink>);
 
 #[derive(Debug)]
 pub struct ThrottlingHeaders {
@@ -53,45 +54,41 @@ pub struct ThrottlingHeaders {
 impl ThrottlingHeaders {
     fn from_response(response: &Response) -> Result<Self> {
         let headers = response.headers();
+        fn header<E, T>(headers: &HeaderMap, header_name: &str) -> Result<T>
+        where
+            E: Send + Sync + std::fmt::Display + std::fmt::Debug + 'static,
+            T: FromStr<Err = E> + Send + Sync + 'static,
+        {
+            headers
+                .get(header_name)
+                .context("no header")
+                .and_then(|value| value.to_str().context("header is not a string"))
+                .and_then(|value| {
+                    value
+                        .parse::<T>()
+                        .map_err(|message| anyhow::anyhow!("{message:?}"))
+                        .context("invalid type")
+                })
+                .with_context(|| format!("extracting [{header_name}] header"))
+        }
+
         Ok(Self {
-            hourly_limit: headers
-                .get("X-RL-Hourly-Limit")
-                .context("no header")
-                .and_then(|value| value.to_str().context("header is not a string"))
-                .and_then(|value| value.parse().context("invalid type"))
-                .context("extracting [X-RL-Hourly-Limit] header")?,
-            hourly_remaining: headers
-                .get("X-RL-Hourly-Remaining")
-                .context("no header")
-                .and_then(|value| value.to_str().context("header is not a string"))
-                .and_then(|value| value.parse().context("invalid type"))
-                .context("extracting [X-RL-Hourly-Remaining] header")?,
-            hourly_reset: headers
-                .get("X-RL-Hourly-Reset")
-                .context("no header")
-                .and_then(|value| value.to_str().context("header is not a string"))
-                .and_then(|value| value.parse().context("invalid type"))
-                .context("extracting [X-RL-Hourly-Reset] header")?,
-            daily_limit: headers
-                .get("X-RL-Daily-Limit")
-                .context("no header")
-                .and_then(|value| value.to_str().context("header is not a string"))
-                .and_then(|value| value.parse().context("invalid type"))
-                .context("extracting [X-RL-Daily-Limit] header")?,
-            daily_remaining: headers
-                .get("X-RL-Daily-Remaining")
-                .context("no header")
-                .and_then(|value| value.to_str().context("header is not a string"))
-                .and_then(|value| value.parse().context("invalid type"))
-                .context("extracting [X-RL-Daily-Remaining] header")?,
-            daily_reset: headers
-                .get("X-RL-Daily-Reset")
-                .context("no header")
-                .and_then(|value| value.to_str().context("header is not a string"))
-                .and_then(|value| value.parse().context("invalid type"))
-                .context("extracting [X-RL-Daily-Reset] header")?,
+            hourly_limit: header(headers, "X-RL-Hourly-Limit")?,
+            hourly_remaining: header(headers, "X-RL-Hourly-Remaining")?,
+            hourly_reset: header(headers, "X-RL-Hourly-Reset")?,
+            daily_limit: header(headers, "X-RL-Daily-Limit")?,
+            daily_remaining: header(headers, "X-RL-Daily-Remaining")?,
+            daily_reset: header(headers, "X-RL-Daily-Reset")?,
         })
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NexusDownloadLink {
+    #[serde(rename = "URI")]
+    pub uri: url::Url,
+    pub name: String,
+    pub short_name: String,
 }
 
 impl NexusDownloader {
@@ -126,7 +123,7 @@ impl NexusDownloader {
     ) -> Result<DownloadLinkResponse> {
         self.client
             .get(format!(
-                "{BASE_URL}/v1/{game_domain_name}/mods/{mod_id}/files/{file_id}/download_link.json"
+                "{BASE_URL}/v1/games/{game_domain_name}/mods/{mod_id}/files/{file_id}/download_link.json"
             ))
             .send()
             .map_context("sending request")
@@ -138,10 +135,18 @@ impl NexusDownloader {
             .and_then(|response| response.json_response_ok(|_| Ok(())))
             .await
     }
-    pub async fn download(self: Arc<Self>, request: DownloadFileRequest) -> Result<()> {
+    pub async fn download(self: Arc<Self>, request: DownloadFileRequest) -> Result<url::Url> {
         self.clone()
             .generate_download_link(&request)
-            .map_ok(|download_link| panic!("could not parse {download_link:?}"))
+            .and_then(|download_link| {
+                download_link
+                    .0
+                    .into_iter()
+                    .next()
+                    .context("no preferred download link found")
+                    .pipe(ready)
+            })
+            .map_ok(|link| link.uri)
             .await
     }
 }

@@ -1,3 +1,5 @@
+#![allow(clippy::unit_arg)]
+
 use anyhow::{Context, Result};
 use modlist_data::ModlistSummary;
 use std::path::PathBuf;
@@ -43,8 +45,11 @@ pub mod config_file {
         pub api_key: Option<String>,
     }
 
-    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+    #[derive(Debug, Clone, Serialize, Deserialize, derivative::Derivative)]
+    #[derivative(Default)]
     pub struct DownloadersConfig {
+        #[derivative(Default(value = "std::env::current_dir().unwrap().join(\"downloads\")"))]
+        pub downloads_directory: PathBuf,
         pub nexus: NexusConfig,
     }
 
@@ -204,7 +209,7 @@ pub mod modlist_data {
                 website: website.clone(),
                 total_download_size: archives
                     .iter()
-                    .map(|a| a.size)
+                    .map(|a| a.descriptor.size)
                     .sum::<u64>()
                     .pipe(human_readable_size),
                 description: description.clone(),
