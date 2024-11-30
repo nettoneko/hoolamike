@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use modlist_data::ModlistSummary;
 use std::path::PathBuf;
-use tracing::info;
+use tap::prelude::*;
+use tracing::{debug, info, warn};
 
 use clap::{Parser, Subcommand};
 
@@ -18,6 +19,67 @@ enum Commands {
     ValidateModlist { path: PathBuf },
     /// prints information about the modlist
     ModlistInfo { path: PathBuf },
+    /// prints prints default config. save it and modify to your liking
+    PrintDefaultConfig,
+}
+
+pub mod config_file {
+    use std::path::PathBuf;
+
+    use anyhow::{Context, Result};
+    use serde::{Deserialize, Serialize};
+    use tap::prelude::*;
+    use tracing::{debug, info, warn};
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+    #[serde(untagged)]
+    pub enum OrNotSet<V> {
+        #[default]
+        NotSet,
+        Value(V),
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+    pub struct NexusConfig {
+        pub api_key: Option<String>,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+    pub struct HoolamikeConfig {
+        pub nexus: NexusConfig,
+    }
+
+    pub static CONFIG_FILE_NAME: &str = "hoolamike.yaml";
+    impl HoolamikeConfig {
+        pub fn write(&self) -> Result<String> {
+            Self::default()
+                .pipe_ref(serde_yaml::to_string)
+                .context("serialization failed")
+                .map(|config| format!("\n# default {CONFIG_FILE_NAME} file\n# edit it according to your needs:\n{config}"))
+        }
+        pub fn find() -> Result<Self> {
+            [
+                format!("./{CONFIG_FILE_NAME}"),
+                format!("~/.config/hoolamike/{CONFIG_FILE_NAME}"),
+            ]
+            .pipe(|config_paths| {
+                config_paths
+                    .clone()
+                    .into_iter()
+                    .map(PathBuf::from)
+                    .find(|path| path.exists())
+                    .with_context(|| format!("checking paths: {config_paths:?}"))
+                    .context("no config file detected")
+            })
+            .tap_ok(|config| info!("found config at '{}'", config.display()))
+            .and_then(|config| std::fs::read_to_string(config).context("reading file"))
+            .and_then(|config| serde_yaml::from_str::<Self>(&config).context("parsing config file"))
+            .with_context(|| format!("getting [{CONFIG_FILE_NAME}]"))
+            .tap_ok(|config| {
+                debug!("{config:?}");
+            })
+        }
+    }
 }
 
 pub mod modlist_json;
@@ -163,6 +225,10 @@ pub mod downloaders {
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
     let Cli { command } = Cli::parse();
+    let config = config_file::HoolamikeConfig::find()
+        .tap_err(|message| warn!("no config detected, using default config\n{message:#?}"))
+        .unwrap_or_default();
+
     match command {
         Commands::ValidateModlist { path } => tokio::fs::read_to_string(&path)
             .await
@@ -178,5 +244,8 @@ async fn main() -> Result<()> {
             .map(|modlist| ModlistSummary::new(&modlist))
             .map(|modlist| modlist.print())
             .map(|modlist| info!("\n{modlist}")),
+        Commands::PrintDefaultConfig => config_file::HoolamikeConfig::default()
+            .write()
+            .map(|config| println!("{config}")),
     }
 }
