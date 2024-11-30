@@ -415,7 +415,7 @@ pub struct FileStateChunk {
 }
 
 pub mod parsing_helpers {
-    use std::{collections::BTreeMap, iter::repeat, ops::Not};
+    use std::collections::BTreeMap;
 
     use anyhow::{Context, Result};
     use itertools::Itertools;
@@ -423,6 +423,7 @@ pub mod parsing_helpers {
     use tap::prelude::*;
     use tracing::info;
 
+    #[allow(dead_code)]
     #[derive(Debug)]
     enum ValueSummary<'a> {
         Map {
@@ -451,12 +452,13 @@ pub mod parsing_helpers {
         }
     }
 
+    #[allow(unexpected_cfgs)]
     mod ad_hoc_test {
-        use super::*;
-
         #[cfg(ignore)]
         #[test_log::test]
         fn test_wasteland_reborn() -> Result<()> {
+            use super::*;
+
             include_str!("../../wasteland-reborn/test/modlist").pipe(validate_modlist_file)
         }
     }

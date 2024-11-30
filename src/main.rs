@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use modlist_data::ModlistSummary;
 use std::path::PathBuf;
-use tap::prelude::*;
 use tracing::info;
 
 use clap::{Parser, Subcommand};
@@ -23,13 +22,10 @@ enum Commands {
 
 pub mod modlist_json;
 pub mod modlist_data {
-    use std::collections::BTreeMap;
-
-    use anyhow::Context;
-    use clap::Subcommand;
     use itertools::Itertools;
+    use std::collections::BTreeMap;
     use tabled::{
-        settings::{object::Columns, panel::Header, Color, Rotate, Style},
+        settings::{object::Columns, Color, Rotate, Style},
         Tabled,
     };
     use tap::prelude::*;
@@ -92,14 +88,14 @@ pub mod modlist_data {
                 author,
                 description,
                 directives,
-                game_type,
-                image,
-                is_nsfw,
                 name,
-                readme,
-                version,
-                wabbajack_version,
                 website,
+                is_nsfw: _,
+                game_type: _,
+                image: _,
+                readme: _,
+                version: _,
+                wabbajack_version: _,
             }: &Modlist,
         ) -> Self {
             Self {
