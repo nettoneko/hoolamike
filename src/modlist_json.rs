@@ -2,23 +2,25 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(
-    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, derive_more::Display,
-)]
-pub enum DownloadKind {
-    #[serde(rename = "GameFileSourceDownloader, Wabbajack.Lib")]
-    GameFileSource,
-    #[serde(rename = "GoogleDriveDownloader, Wabbajack.Lib")]
-    GoogleDrive,
-    #[serde(rename = "HttpDownloader, Wabbajack.Lib")]
-    Http,
-    #[serde(rename = "ManualDownloader, Wabbajack.Lib")]
-    Manual,
-    #[serde(rename = "NexusDownloader, Wabbajack.Lib")]
-    Nexus,
-    #[serde(rename = "WabbajackCDNDownloader+State, Wabbajack.Lib")]
-    WabbajackCDN,
-}
+use crate::serde_type_guard;
+
+// #[derive(
+//     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, derive_more::Display,
+// )]
+// pub enum DownloadKind {
+//     #[serde(rename = "GameFileSourceDownloader, Wabbajack.Lib")]
+//     GameFileSource,
+//     #[serde(rename = "GoogleDriveDownloader, Wabbajack.Lib")]
+//     GoogleDrive,
+//     #[serde(rename = "HttpDownloader, Wabbajack.Lib")]
+//     Http,
+//     #[serde(rename = "ManualDownloader, Wabbajack.Lib")]
+//     Manual,
+//     #[serde(rename = "NexusDownloader, Wabbajack.Lib")]
+//     Nexus,
+//     #[serde(rename = "WabbajackCDNDownloader+State, Wabbajack.Lib")]
+//     WabbajackCDN,
+// }
 
 #[derive(
     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, derive_more::Display,
@@ -113,10 +115,71 @@ pub struct Archive {
     pub state: State,
 }
 
+mod type_guard;
+
+#[derive(Debug, Serialize, Deserialize, enum_kinds::EnumKind)]
+#[serde(tag = "$type")]
+#[serde(deny_unknown_fields)]
+#[enum_kind(
+    DownloadKind,
+    derive(Serialize, Deserialize, PartialOrd, Ord, derive_more::Display,)
+)]
+pub enum State {
+    #[serde(rename = "NexusDownloader, Wabbajack.Lib")]
+    Nexus(NexusState),
+    #[serde(rename = "GameFileSourceDownloader, Wabbajack.Lib")]
+    GameFileSource(UnknownState),
+    #[serde(rename = "GoogleDriveDownloader, Wabbajack.Lib")]
+    GoogleDrive(UnknownState),
+    #[serde(rename = "HttpDownloader, Wabbajack.Lib")]
+    Http(UnknownState),
+    #[serde(rename = "ManualDownloader, Wabbajack.Lib")]
+    Manual(UnknownState),
+    #[serde(rename = "WabbajackCDNDownloader+State, Wabbajack.Lib")]
+    WabbajackCDN(UnknownState),
+}
+
+impl State {
+    pub fn kind(&self) -> DownloadKind {
+        DownloadKind::from(self)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[serde(deny_unknown_fields)]
+pub struct NexusState {
+    pub game_name: String,
+    #[serde(rename = "FileID")]
+    pub file_id: usize,
+    #[serde(rename = "ModID")]
+    pub mod_id: usize,
+    pub author: Option<String>,
+    pub description: Option<String>,
+    #[serde(rename = "ImageURL")]
+    /// image_url: Option<String>
+    /// Description: URL to an image associated with the mod.
+    /// Usage: Display in your tool's UI.
+    pub image_url: Option<String>,
+    #[serde(rename = "IsNSFW")]
+    /// is_nsfw: Option<bool> (renamed from IsNSFW)
+    /// Description: Indicates if the mod contains adult content.
+    /// Usage: Implement content warnings or filters.
+    pub is_nsfw: bool,
+    /// name: Option<String>
+    /// Description: The name of the mod or archive.
+    /// Usage: Display to the user or use in logs.
+    pub name: String,
+    /// version: Option<String>
+    /// Description: The version of the mod.
+    /// Usage: Ensure correct versions are downloaded.
+    pub version: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
-pub struct State {
+pub struct UnknownState {
     /// id: Option<String>
     /// Description: An optional identifier, possibly for use with specific download sources.
     /// Usage: May be required for API calls to download the archive.
@@ -133,11 +196,11 @@ pub struct State {
     /// Description: The version of the mod.
     /// Usage: Ensure correct versions are downloaded.
     pub version: Option<String>,
-    #[serde(rename = "$type")]
-    /// kind: String (renamed from $type)
-    /// Description: The type of download state (e.g., "Nexus", "Manual", "Url").
-    /// Usage: Determines the method to use when downloading the archive.
-    pub kind: DownloadKind,
+    // #[serde(rename = "$type")]
+    // /// kind: String (renamed from $type)
+    // /// Description: The type of download state (e.g., "Nexus", "Manual", "Url").
+    // /// Usage: Determines the method to use when downloading the archive.
+    // pub kind: DownloadKind,
     /// game: Option<String>
     /// Description: The game associated with the mod.
     /// Usage: Verify compatibility.
@@ -454,9 +517,9 @@ pub mod parsing_helpers {
 
     #[allow(unexpected_cfgs)]
     mod ad_hoc_test {
-        #[cfg(ignore)]
+        // #[cfg(ignore)]
         #[test_log::test]
-        fn test_wasteland_reborn() -> Result<()> {
+        fn test_wasteland_reborn() -> anyhow::Result<()> {
             use super::*;
 
             include_str!("../../wasteland-reborn/test/modlist").pipe(validate_modlist_file)
@@ -482,8 +545,8 @@ pub mod parsing_helpers {
                                     .lines()
                                     .enumerate()
                                     .map(|(idx, line)| format!("{}. {line}", idx + 1))
-                                    .skip(line - 3)
-                                    .take(6)
+                                    .skip(line - 20)
+                                    .take(40)
                                     .join("\n")
                             })
                         }),

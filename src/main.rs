@@ -126,10 +126,10 @@ pub mod modlist_data {
         pub total_mods: usize,
         pub total_directives: usize,
         pub unique_directive_kinds: String,
-        pub unique_authors: usize,
+        // pub unique_authors: usize,
         pub sources: String,
         pub name: String,
-        pub unique_headers: String,
+        // pub unique_headers: String,
         pub website: String,
         pub total_download_size: String,
         pub description: String,
@@ -177,30 +177,30 @@ pub mod modlist_data {
                 author: author.clone(),
                 sources: archives
                     .iter()
-                    .map(|archive| archive.state.kind.to_string())
+                    .map(|archive| archive.state.kind().to_string())
                     .pipe(summarize_value_count),
                 total_mods: archives.len(),
-                unique_authors: archives
-                    .iter()
-                    .filter_map(|archive| archive.state.author.as_ref())
-                    .unique()
-                    .count(),
+                // unique_authors: archives
+                //     .iter()
+                //     .filter_map(|archive| archive.state.author.as_ref())
+                //     .unique()
+                //     .count(),
                 total_directives: directives.len(),
                 unique_directive_kinds: directives
                     .iter()
                     .map(|d| d.directive_kind)
                     .pipe(summarize_value_count),
                 name: name.clone(),
-                unique_headers: archives
-                    .iter()
-                    .flat_map(|a| {
-                        a.state
-                            .headers
-                            .iter()
-                            .flat_map(|m| m.iter().map(|h| h.as_str()))
-                    })
-                    .unique()
-                    .join(",\n"),
+                // unique_headers: archives
+                //     .iter()
+                //     .flat_map(|a| {
+                //         a.state
+                //             .headers
+                //             .iter()
+                //             .flat_map(|m| m.iter().map(|h| h.as_str()))
+                //     })
+                //     .unique()
+                //     .join(",\n"),
                 website: website.clone(),
                 total_download_size: archives
                     .iter()
@@ -215,50 +215,7 @@ pub mod modlist_data {
 
 pub mod downloaders;
 
-pub mod install_modlist {
-    use std::path::PathBuf;
-
-    use anyhow::{Context, Result};
-    use tracing::info;
-
-    use crate::{
-        config_file::{HoolamikeConfig, InstallationConfig},
-        helpers::human_readable_size,
-        modlist_json::Modlist,
-    };
-    use tap::prelude::*;
-
-    #[allow(clippy::needless_as_bytes)]
-    pub async fn install_modlist(
-        HoolamikeConfig {
-            downloaders,
-            installation:
-                InstallationConfig {
-                    modlist_file,
-                    original_game_dir,
-                    installation_dir,
-                },
-        }: HoolamikeConfig,
-    ) -> Result<()> {
-        modlist_file
-            .context("no modlist file")
-            .and_then(|modlist| {
-                std::fs::read_to_string(&modlist)
-                    .with_context(|| format!("reading modlist at {}", modlist.display()))
-                    .tap_ok(|read| {
-                        info!(
-                            "modlist file {} read ({})",
-                            modlist.display(),
-                            human_readable_size(read.as_bytes().len() as u64)
-                        )
-                    })
-            })
-            .and_then(|modlist| {
-                serde_json::from_str::<Modlist>(&modlist).context("parsing modlist")
-            })
-            .and_then(|modlist| todo!())
-    }
-}
+pub mod install_modlist;
 
 #[tokio::main]
 async fn main() -> Result<()> {
