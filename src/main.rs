@@ -16,9 +16,16 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// tests the modlist parser
-    ValidateModlist { path: PathBuf },
+    ValidateModlist {
+        /// path to modlist (json) file
+        path: PathBuf,
+    },
     /// prints information about the modlist
-    ModlistInfo { path: PathBuf },
+    ModlistInfo {
+        /// path to modlist (json) file
+        path: PathBuf,
+    },
+    Install,
     /// prints prints default config. save it and modify to your liking
     PrintDefaultConfig,
 }
@@ -32,21 +39,25 @@ pub mod config_file {
     use tracing::{debug, info, warn};
 
     #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-    #[serde(untagged)]
-    pub enum OrNotSet<V> {
-        #[default]
-        NotSet,
-        Value(V),
-    }
-
-    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
     pub struct NexusConfig {
         pub api_key: Option<String>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-    pub struct HoolamikeConfig {
+    pub struct DownloadersConfig {
         pub nexus: NexusConfig,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+    pub struct InstallationConfig {
+        pub modlist_file: Option<PathBuf>,
+        pub original_game_dir: Option<PathBuf>,
+        pub installation_dir: Option<PathBuf>,
+    }
+    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+    pub struct HoolamikeConfig {
+        pub downloaders: DownloadersConfig,
+        pub installation: InstallationConfig,
     }
 
     pub static CONFIG_FILE_NAME: &str = "hoolamike.yaml";
@@ -83,6 +94,21 @@ pub mod config_file {
 }
 
 pub mod modlist_json;
+pub mod helpers {
+    pub fn human_readable_size(bytes: u64) -> String {
+        const UNITS: [&str; 6] = ["B", "kB", "MB", "GB", "TB", "PB"];
+
+        if bytes < 1024 {
+            return format!("{} {}", bytes, UNITS[0]);
+        }
+
+        let exponent = (bytes as f64).log(1024.0).floor() as usize;
+        let exponent = exponent.min(UNITS.len() - 1);
+        let value = bytes as f64 / 1024f64.powi(exponent as i32);
+
+        format!("{:.2} {}", value, UNITS[exponent])
+    }
+}
 pub mod modlist_data {
     use itertools::Itertools;
     use std::collections::BTreeMap;
@@ -92,7 +118,7 @@ pub mod modlist_data {
     };
     use tap::prelude::*;
 
-    use crate::modlist_json::Modlist;
+    use crate::{helpers::human_readable_size, modlist_json::Modlist};
 
     #[derive(Tabled)]
     pub struct ModlistSummary {
@@ -107,19 +133,6 @@ pub mod modlist_data {
         pub website: String,
         pub total_download_size: String,
         pub description: String,
-    }
-    fn human_readable_size(bytes: u64) -> String {
-        const UNITS: [&str; 6] = ["B", "kB", "MB", "GB", "TB", "PB"];
-
-        if bytes < 1024 {
-            return format!("{} {}", bytes, UNITS[0]);
-        }
-
-        let exponent = (bytes as f64).log(1024.0).floor() as usize;
-        let exponent = exponent.min(UNITS.len() - 1);
-        let value = bytes as f64 / 1024f64.powi(exponent as i32);
-
-        format!("{:.2} {}", value, UNITS[exponent])
     }
 
     fn summarize_value_count<'a, I: std::fmt::Display + Ord + Clone + Eq>(
@@ -200,24 +213,50 @@ pub mod modlist_data {
     }
 }
 
-pub mod downloaders {
-    pub mod gamefile_source_downloader {
-        pub struct GameFileSourceDownloader {}
-    }
-    pub mod google_drive {
-        pub struct GoogleDriveDownloader {}
-    }
-    pub mod http {
-        pub struct HttpDownloader {}
-    }
-    pub mod manual {
-        pub struct ManualDownloader {}
-    }
-    pub mod nexus {
-        pub struct NexusDownloader {}
-    }
-    pub mod wabbajack_cdn {
-        pub struct WabbajackCDNDownloader {}
+pub mod downloaders;
+
+pub mod install_modlist {
+    use std::path::PathBuf;
+
+    use anyhow::{Context, Result};
+    use tracing::info;
+
+    use crate::{
+        config_file::{HoolamikeConfig, InstallationConfig},
+        helpers::human_readable_size,
+        modlist_json::Modlist,
+    };
+    use tap::prelude::*;
+
+    #[allow(clippy::needless_as_bytes)]
+    pub async fn install_modlist(
+        HoolamikeConfig {
+            downloaders,
+            installation:
+                InstallationConfig {
+                    modlist_file,
+                    original_game_dir,
+                    installation_dir,
+                },
+        }: HoolamikeConfig,
+    ) -> Result<()> {
+        modlist_file
+            .context("no modlist file")
+            .and_then(|modlist| {
+                std::fs::read_to_string(&modlist)
+                    .with_context(|| format!("reading modlist at {}", modlist.display()))
+                    .tap_ok(|read| {
+                        info!(
+                            "modlist file {} read ({})",
+                            modlist.display(),
+                            human_readable_size(read.as_bytes().len() as u64)
+                        )
+                    })
+            })
+            .and_then(|modlist| {
+                serde_json::from_str::<Modlist>(&modlist).context("parsing modlist")
+            })
+            .and_then(|modlist| todo!())
     }
 }
 
@@ -247,5 +286,12 @@ async fn main() -> Result<()> {
         Commands::PrintDefaultConfig => config_file::HoolamikeConfig::default()
             .write()
             .map(|config| println!("{config}")),
+        Commands::Install => install_modlist::install_modlist(config).await,
     }
+    .with_context(|| {
+        format!(
+            "error occurred, run with --help, check your configuration or file a ticket at {}",
+            env!("CARGO_PKG_REPOSITORY")
+        )
+    })
 }
