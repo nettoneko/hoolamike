@@ -258,19 +258,16 @@ pub(crate) mod progress_bars {
     pub(crate) static VALIDATE_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
         PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Validate).tap_mut(|pb| {
             pb.set_message("TOTAL");
-            pb.set_prefix("validate");
         }))
     });
     pub(crate) static DOWNLOAD_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
         PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Download).tap_mut(|pb| {
             pb.set_message("TOTAL");
-            pb.set_prefix("download");
         }))
     });
     pub(crate) static COPY_LOCAL_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
         PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Copy).tap_mut(|pb| {
             pb.set_message("TOTAL");
-            pb.set_prefix("l-copied");
         }))
     });
 
@@ -286,17 +283,27 @@ pub(crate) mod progress_bars {
             match self {
                 ProgressKind::Validate => "yellow",
                 ProgressKind::Download => "blue",
-                ProgressKind::Copy => "gray",
+                ProgressKind::Copy => "cyan",
+            }
+        }
+        #[rustfmt::skip]
+        pub fn prefix(self) -> &'static str {
+            match self {
+                ProgressKind::Validate => "[ validate ]",
+                ProgressKind::Download => "[ download ]",
+                ProgressKind::Copy =>     "[   copy   ]",
             }
         }
     }
     pub fn vertical_progress_bar(len: u64, kind: ProgressKind) -> ProgressBar {
         let color = kind.color();
+        let prefix = kind.prefix();
         ProgressBar::new(len).tap_mut(|pb| {
             pb.enable_steady_tick(std::time::Duration::from_millis(600));
+            pb.set_prefix(prefix);
             pb.set_style(
                 ProgressStyle::with_template(&format!(
-                    "{{prefix:.bold}}▕{{bar:.{color}}}▏{{msg:.{color}}} ({{bytes}}/{{total_bytes}} {{bytes_per_sec}} ETA {{eta}})"
+                    "{{prefix:.bold}}▕{{bar:.{color}}}▏({{bytes}}/{{total_bytes}} {{bytes_per_sec}} ETA {{eta}}) {{msg:.{color}}}"
                 ))
                 .unwrap()
                 .progress_chars("█▇▆▅▄▃▂▁  "),
@@ -321,11 +328,6 @@ pub(crate) mod progress_bars {
     pub fn print_warn(for_target: &str, message: &anyhow::Error) {
         PROGRESS_BAR
             .println(format!("{} {message}", style(for_target).bold().dim().yellow(),))
-            .ok();
-    }
-    pub fn print_success(for_target: &str, message: &str) {
-        PROGRESS_BAR
-            .println(format!("{} {message}", style(for_target).bold().dim().green(),))
             .ok();
     }
 }

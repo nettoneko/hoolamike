@@ -49,19 +49,18 @@ pub mod download_cache {
             .await
     }
     async fn calculate_hash(path: PathBuf) -> Result<u64> {
+        let file_name = path
+            .file_name()
+            .expect("file must have a name")
+            .to_string_lossy()
+            .to_string();
         let pb = PROGRESS_BAR
             .add(vertical_progress_bar(
                 tokio::fs::metadata(&path).await?.len(),
                 crate::progress_bars::ProgressKind::Validate,
             ))
             .tap_mut(|pb| {
-                pb.set_message(
-                    path.file_name()
-                        .expect("file must have a name")
-                        .to_string_lossy()
-                        .to_string(),
-                );
-                pb.set_prefix("validate");
+                pb.set_message(file_name.clone());
             });
 
         let mut file = tokio::fs::File::open(&path)
@@ -167,16 +166,8 @@ pub mod downloads {
                 SyncTask,
                 WithArchiveDescriptor,
             },
-            modlist_json::{Archive, GoogleDriveState, NexusState, State},
-            progress_bars::{
-                print_error,
-                print_success,
-                vertical_progress_bar,
-                ProgressKind,
-                COPY_LOCAL_TOTAL_PROGRESS_BAR,
-                DOWNLOAD_TOTAL_PROGRESS_BAR,
-                PROGRESS_BAR,
-            },
+            modlist_json::{Archive, GoogleDriveState, HttpState, ManualState, NexusState, State},
+            progress_bars::{print_error, vertical_progress_bar, ProgressKind, COPY_LOCAL_TOTAL_PROGRESS_BAR, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR},
             BUFFER_SIZE,
         },
         futures::{FutureExt, StreamExt, TryStreamExt},
@@ -227,7 +218,6 @@ pub mod downloads {
                 .add(vertical_progress_bar(expected_size, ProgressKind::Copy))
                 .tap_mut(|pb| {
                     pb.set_message(file_name.clone());
-                    pb.set_prefix("l-copied");
                 })
         };
 
@@ -268,7 +258,7 @@ pub mod downloads {
                 "[{from:?} -> {to:?}] local copy finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{copied} bytes])"
             )
         }
-        pb.finish_with_message(format!("{file_name} [OK]"));
+        pb.finish_and_clear();
         Ok(to)
     }
 
@@ -284,7 +274,6 @@ pub mod downloads {
                 .add(vertical_progress_bar(expected_size, ProgressKind::Download))
                 .tap_mut(|pb| {
                     pb.set_message(file_name.clone());
-                    pb.set_prefix("download");
                 })
         };
 
@@ -320,7 +309,7 @@ pub mod downloads {
         if downloaded != expected_size {
             anyhow::bail!("[{from:?}] download finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{downloaded} bytes])")
         }
-        pb.finish_with_message(format!("{file_name} [OK]"));
+        pb.finish_and_clear();
         Ok(to)
     }
     pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
@@ -368,7 +357,7 @@ pub mod downloads {
         if downloaded != expected_size {
             anyhow::bail!("[{from}] download finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{downloaded} bytes])")
         }
-        pb.finish_with_message(format!("{file_name} [OK]"));
+        pb.finish_and_clear();
         Ok(to)
     }
     impl Synchronizers {
@@ -382,7 +371,6 @@ pub mod downloads {
         }
 
         pub async fn prepare_sync_task(self, Archive { descriptor, state }: Archive) -> Result<SyncTask> {
-            let downloader_kind = state.kind();
             match state {
                 State::Nexus(NexusState {
                     game_name, file_id, mod_id, ..
@@ -427,8 +415,14 @@ pub mod downloads {
                     })
                     .map(SyncTask::Copy),
 
-                State::Http(kind) => Err(anyhow::anyhow!("[{downloader_kind}] {kind:?} is not implemented")),
-                State::Manual(kind) => Err(anyhow::anyhow!("[{downloader_kind}] {kind:?} is not implemented")),
+                State::Http(HttpState { url, headers: _ }) => url
+                    .pipe(|url| DownloadTask {
+                        inner: (url, self.cache.download_output_path(descriptor.name.clone())),
+                        descriptor,
+                    })
+                    .pipe(SyncTask::Download)
+                    .pipe(Ok),
+                State::Manual(ManualState { prompt, url }) => Err(anyhow::anyhow!("Manual action is required:\n\nURL: {url}\n{prompt}")),
                 State::WabbajackCDN(state) => WabbajackCDNDownloader::prepare_download(state)
                     .await
                     .context("wabbajack... :)")
@@ -478,10 +472,7 @@ pub mod downloads {
                 .try_buffer_unordered(10)
                 .filter_map(|file| {
                     match file {
-                        Ok(all_good) => {
-                            print_success(&all_good.descriptor.name, "OK");
-                            None
-                        }
+                        Ok(_) => None,
                         Err(error_occurred) => {
                             print_error("ERROR", &error_occurred);
                             Some(error_occurred)

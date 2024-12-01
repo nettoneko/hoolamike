@@ -103,6 +103,7 @@ pub struct Archive {
 
 mod type_guard;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Serialize, Deserialize, enum_kinds::EnumKind)]
 #[serde(tag = "$type")]
 #[serde(deny_unknown_fields)]
@@ -115,9 +116,9 @@ pub enum State {
     #[serde(rename = "GoogleDriveDownloader, Wabbajack.Lib")]
     GoogleDrive(GoogleDriveState),
     #[serde(rename = "HttpDownloader, Wabbajack.Lib")]
-    Http(UnknownState),
+    Http(HttpState),
     #[serde(rename = "ManualDownloader, Wabbajack.Lib")]
-    Manual(UnknownState),
+    Manual(ManualState),
     #[serde(rename = "WabbajackCDNDownloader+State, Wabbajack.Lib")]
     WabbajackCDN(WabbajackCDNDownloaderState),
 }
@@ -126,6 +127,23 @@ impl State {
     pub fn kind(&self) -> DownloadKind {
         DownloadKind::from(self)
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[serde(deny_unknown_fields)]
+pub struct HttpState {
+    #[serde(default)]
+    pub headers: Vec<()>,
+    pub url: url::Url,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[serde(deny_unknown_fields)]
+pub struct ManualState {
+    pub prompt: String,
+    pub url: url::Url,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
