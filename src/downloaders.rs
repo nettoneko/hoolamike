@@ -1,4 +1,4 @@
-use {crate::modlist_json::ArchiveDescriptor, std::path::PathBuf, url::Url};
+use {crate::modlist_json::ArchiveDescriptor, std::path::PathBuf};
 
 pub mod gamefile_source_downloader;
 pub mod google_drive;

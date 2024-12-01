@@ -1,9 +1,7 @@
 use {
     anyhow::{Context, Result},
-    soup::{NodeExt, QueryBuilderExt},
-    std::{collections::BTreeMap, future::ready},
+    soup::NodeExt,
     tap::prelude::*,
-    url::form_urlencoded,
 };
 
 pub struct GoogleDriveDownloader {}

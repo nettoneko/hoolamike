@@ -3,7 +3,7 @@ use {
         config_file::{HoolamikeConfig, InstallationConfig},
         helpers::human_readable_size,
         modlist_json::Modlist,
-        progress_bars::{print_error, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR, VALIDATE_TOTAL_PROGRESS_BAR},
+        progress_bars::{print_error, VALIDATE_TOTAL_PROGRESS_BAR},
     },
     anyhow::{Context, Result},
     downloads::Synchronizers,
@@ -15,20 +15,17 @@ use {
 
 pub mod download_cache {
     use {
-        super::DOWNLOAD_TOTAL_PROGRESS_BAR,
         crate::{
             downloaders::{helpers::FutureAnyhowExt, WithArchiveDescriptor},
             modlist_json::ArchiveDescriptor,
-            progress_bars::{print_error, print_success, print_warn, vertical_progress_bar, PROGRESS_BAR, VALIDATE_TOTAL_PROGRESS_BAR},
+            progress_bars::{print_warn, vertical_progress_bar, PROGRESS_BAR, VALIDATE_TOTAL_PROGRESS_BAR},
         },
         anyhow::{Context, Result},
         base64::Engine,
         futures::{FutureExt, TryFutureExt},
-        indicatif::ProgressBar,
         std::{future::ready, hash::Hasher, path::PathBuf, sync::Arc},
         tap::prelude::*,
         tokio::io::AsyncReadExt,
-        tracing::{info, warn},
     };
 
     #[derive(Debug, Clone)]
@@ -171,7 +168,7 @@ pub mod downloads {
                 SyncTask,
                 WithArchiveDescriptor,
             },
-            modlist_json::{Archive, ArchiveDescriptor, DownloadKind, GoogleDriveState, NexusState, State, UnknownState},
+            modlist_json::{Archive, GoogleDriveState, NexusState, State},
             progress_bars::{
                 print_error,
                 print_success,
@@ -184,13 +181,9 @@ pub mod downloads {
             BUFFER_SIZE,
         },
         futures::{FutureExt, StreamExt, TryStreamExt},
-        indicatif::MultiProgress,
-        std::{os::fd::AsFd, sync::Arc},
-        tokio::{
-            io::{AsyncReadExt, BufReader, BufWriter},
-            sync::RwLock,
-        },
-        tracing::{debug, error, warn},
+        std::sync::Arc,
+        tokio::io::{AsyncReadExt, BufReader, BufWriter},
+        tracing::warn,
     };
 
     #[derive(Clone)]

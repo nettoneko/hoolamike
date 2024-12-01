@@ -7,12 +7,8 @@ use {
     itertools::Itertools,
     reqwest::Client,
     serde::{Deserialize, Serialize},
-    std::{
-        future::ready,
-        io::{Read, Write},
-    },
+    std::{future::ready, io::Read},
     tap::prelude::*,
-    tempfile::tempfile,
 };
 
 pub struct WabbajackCDNDownloader {}
@@ -75,13 +71,13 @@ impl WabbajackCDNDownloader {
             .map_ok({
                 let url = url.clone();
                 move |WabbajackCdnFile {
+                          munged_name,
+                          parts,
                           author,
                           server_assigned_unique_id,
                           hash,
-                          munged_name,
                           original_file_name,
                           size,
-                          parts,
                       }| {
                     parts
                         .into_iter()

@@ -1,5 +1,4 @@
 use {
-    crate::serde_type_guard,
     serde::{Deserialize, Serialize},
     std::path::PathBuf,
 };

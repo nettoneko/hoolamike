@@ -3,11 +3,10 @@
 use {
     anyhow::{Context, Result},
     clap::{Parser, Subcommand},
-    indicatif::MultiProgress,
     modlist_data::ModlistSummary,
     std::path::PathBuf,
     tap::prelude::*,
-    tracing::{debug, info, warn},
+    tracing::{info, warn},
 };
 pub const BUFFER_SIZE: usize = 1024 * 128;
 
@@ -43,7 +42,7 @@ pub mod config_file {
         serde::{Deserialize, Serialize},
         std::path::PathBuf,
         tap::prelude::*,
-        tracing::{debug, info, warn},
+        tracing::{debug, info},
     };
 
     #[derive(Debug, Clone, Serialize, Deserialize, Default)]

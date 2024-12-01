@@ -1,9 +1,6 @@
 use {
-    super::{
-        helpers::{FutureAnyhowExt, ReqwestPrettyJsonResponse},
-        DownloadTask,
-    },
-    crate::{config_file::NexusConfig, modlist_json::GameName},
+    super::helpers::{FutureAnyhowExt, ReqwestPrettyJsonResponse},
+    crate::modlist_json::GameName,
     anyhow::{Context, Result},
     chrono::{DateTime, Utc},
     futures::{FutureExt, TryFutureExt},

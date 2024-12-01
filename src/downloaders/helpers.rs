@@ -4,7 +4,7 @@ use {
     itertools::Itertools,
     std::future::{ready, Future},
     tap::prelude::*,
-    tracing::{debug, trace},
+    tracing::trace,
 };
 
 #[extension_traits::extension(pub(crate) trait FutureAnyhowExt)]
