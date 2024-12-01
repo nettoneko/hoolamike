@@ -1,6 +1,7 @@
 #![allow(clippy::unit_arg)]
 
 use anyhow::{Context, Result};
+use indicatif::MultiProgress;
 use modlist_data::ModlistSummary;
 use std::path::PathBuf;
 use tap::prelude::*;
@@ -221,6 +222,51 @@ pub mod modlist_data {
 pub mod downloaders;
 
 pub mod install_modlist;
+
+pub(crate) mod progress_bars {
+    use console::style;
+    use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+    use once_cell::sync::Lazy;
+    use tap::prelude::*;
+
+    pub(crate) static PROGRESS_BAR: Lazy<MultiProgress> = Lazy::new(MultiProgress::new);
+    pub fn vertical_progress_bar(len: u64, color: &str) -> ProgressBar {
+        ProgressBar::new(len).tap_mut(|pb| {
+            pb.set_style(
+                ProgressStyle::with_template(
+                    &format!("{{prefix:.bold}}▕{{bar:.{color}}}▏{{msg:.{color}}} ({{bytes}}/{{total_bytes}}, ETA {{eta}})"),
+                )
+                .unwrap()
+                .progress_chars("█▇▆▅▄▃▂▁  "),
+            );
+        })
+    }
+
+    pub fn print_error(for_target: &str, message: &anyhow::Error) {
+        PROGRESS_BAR
+            .println(format!(
+                "{} {message}",
+                style(for_target).bold().dim().red(),
+            ))
+            .ok();
+    }
+    pub fn print_warn(for_target: &str, message: &anyhow::Error) {
+        PROGRESS_BAR
+            .println(format!(
+                "{} {message}",
+                style(for_target).bold().dim().yellow(),
+            ))
+            .ok();
+    }
+    pub fn print_success(for_target: &str, message: &str) {
+        PROGRESS_BAR
+            .println(format!(
+                "{} {message}",
+                style(for_target).bold().dim().green(),
+            ))
+            .ok();
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {

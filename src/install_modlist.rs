@@ -16,6 +16,7 @@ pub mod download_cache {
     use anyhow::{Context, Result};
     use base64::Engine;
     use futures::{FutureExt, TryFutureExt};
+    use indicatif::ProgressBar;
     use std::{future::ready, hash::Hasher, path::PathBuf, sync::Arc};
     use tap::prelude::*;
     use tokio::io::AsyncReadExt;
@@ -24,6 +25,9 @@ pub mod download_cache {
     use crate::{
         downloaders::{helpers::FutureAnyhowExt, WithArchiveDescriptor},
         modlist_json::ArchiveDescriptor,
+        progress_bars::{
+            print_error, print_success, print_warn, vertical_progress_bar, PROGRESS_BAR,
+        },
     };
 
     #[derive(Debug, Clone)]
@@ -53,19 +57,36 @@ pub mod download_cache {
             .await
     }
     async fn calculate_hash(path: PathBuf) -> Result<u64> {
+        let pb = PROGRESS_BAR
+            .add(vertical_progress_bar(
+                tokio::fs::metadata(&path).await?.len(),
+                "yellow",
+            ))
+            .tap_mut(|pb| {
+                pb.set_message(
+                    path.file_name()
+                        .expect("file must have a name")
+                        .to_string_lossy()
+                        .to_string(),
+                );
+                pb.set_prefix("validate");
+            });
+
         let mut file = tokio::fs::File::open(&path)
             .map_with_context(|| format!("opening file [{}]", path.display()))
             .await?;
-        let mut buffer: [u8; 1024] = std::array::from_fn(|_| 0);
+        let mut buffer: [u8; 1024 * 128] = std::array::from_fn(|_| 0);
         let mut hasher = xxhash_rust::xxh64::Xxh64::new(0);
         loop {
             match file.read(&mut buffer).await? {
                 0 => break,
                 read => {
+                    pb.inc(read as u64);
                     hasher.update(&buffer[..read]);
                 }
             }
         }
+        pb.finish_and_clear();
         Ok(hasher.finish())
     }
 
@@ -138,9 +159,12 @@ pub mod download_cache {
                 .and_then(|validated_path| {
                     validated_path
                         .context("does not exist")
-                        .map(|inner| WithArchiveDescriptor { inner, descriptor })
+                        .map(|inner| WithArchiveDescriptor {
+                            inner,
+                            descriptor: descriptor.clone(),
+                        })
                 })
-                .tap_err(|message| warn!("could not validate file, redownloading [{message}]"))
+                .tap_err(|message| print_warn(&descriptor.name, message))
                 .ok()
         }
     }
@@ -150,7 +174,8 @@ pub mod downloads {
     use std::{os::fd::AsFd, sync::Arc};
 
     use futures::{FutureExt, StreamExt, TryStreamExt};
-    use tokio::sync::RwLock;
+    use indicatif::MultiProgress;
+    use tokio::{io::BufWriter, sync::RwLock};
     use tracing::{debug, error, warn};
 
     use super::*;
@@ -162,6 +187,7 @@ pub mod downloads {
             DownloadTask, WithArchiveDescriptor,
         },
         modlist_json::{Archive, ArchiveDescriptor, DownloadKind, NexusState, State, UnknownState},
+        progress_bars::{print_error, print_success, vertical_progress_bar, PROGRESS_BAR},
     };
 
     #[derive(Clone)]
@@ -188,6 +214,7 @@ pub mod downloads {
 
     #[derive(Clone)]
     pub struct Downloaders {
+        progress_bar: MultiProgress,
         config: Arc<DownloadersConfig>,
         inner: DownloadersInner,
         cache: Arc<download_cache::DownloadCache>,
@@ -198,7 +225,19 @@ pub mod downloads {
         Right(R),
     }
 
-    async fn stream_file(from: url::Url, to: PathBuf) -> Result<PathBuf> {
+    async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
+        let pb = PROGRESS_BAR
+            .add(vertical_progress_bar(expected_size, "green"))
+            .tap_mut(|pb| {
+                pb.set_message(
+                    to.file_name()
+                        .expect("file must have a name")
+                        .to_string_lossy()
+                        .to_string(),
+                );
+                pb.set_prefix("download");
+            });
+
         let mut file = tokio::fs::OpenOptions::new()
             .write(true)
             .create(true)
@@ -206,21 +245,30 @@ pub mod downloads {
             .open(&to)
             .map_with_context(|| format!("opening [{}]", to.display()))
             .await?;
+        let mut writer = BufWriter::new(&mut file);
         let mut byte_stream = reqwest::get(from.to_string())
             .await
             .with_context(|| format!("making request to {from}"))?
             .bytes_stream();
         while let Some(chunk) = byte_stream.next().await {
-            tokio::io::copy(&mut chunk?.as_ref(), &mut file)
-                .await
-                .with_context(|| format!("writing to fd {:?}", file.as_fd()))?;
+            match chunk {
+                Ok(chunk) => {
+                    pb.inc(chunk.len() as u64);
+                    tokio::io::copy(&mut chunk.as_ref(), &mut writer)
+                        .await
+                        .with_context(|| format!("writing to fd {}", to.display()))?;
+                }
+                Err(message) => Err(message)?,
+            }
         }
+        pb.finish_with_message("download successful");
         Ok(to)
     }
 
     impl Downloaders {
         pub fn new(config: DownloadersConfig) -> Result<Self> {
             Ok(Self {
+                progress_bar: MultiProgress::new(),
                 config: Arc::new(config.clone()),
                 cache: Arc::new(
                     download_cache::DownloadCache::new(config.downloads_directory.clone())
@@ -234,20 +282,6 @@ pub mod downloads {
             self,
             Archive { descriptor, state }: Archive,
         ) -> Result<DownloadTask> {
-            // debug!(
-            //     ?game,
-            //     ?version,
-            //     ?id,
-            //     ?kind,
-            //     ?image_url,
-            //     ?url,
-            //     ?author,
-            //     ?mod_id,
-            //     ?name,
-            //     ?state_name,
-            //     ?size,
-            //     "downloading archive"
-            // );
             match state {
                 State::Nexus(NexusState {
                     game_name,
@@ -315,15 +349,15 @@ pub mod downloads {
                     Either::Right(WithArchiveDescriptor {
                         inner: (from, to),
                         descriptor,
-                    }) => stream_file(from, to)
+                    }) => stream_file(from, to, descriptor.size)
                         .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
                         .boxed_local(),
                 })
                 .try_buffer_unordered(10)
                 .for_each_concurrent(10, |file| {
                     match file {
-                        Ok(all_good) => info!(?all_good),
-                        Err(error_occurred) => error!(?error_occurred),
+                        Ok(all_good) => print_success(&all_good.descriptor.name, "OK"),
+                        Err(error_occurred) => print_error("ERROR", &error_occurred),
                     }
                     .pipe(ready)
                 })
