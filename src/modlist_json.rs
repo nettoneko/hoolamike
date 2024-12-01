@@ -135,7 +135,7 @@ pub enum State {
     #[serde(rename = "NexusDownloader, Wabbajack.Lib")]
     Nexus(NexusState),
     #[serde(rename = "GameFileSourceDownloader, Wabbajack.Lib")]
-    GameFileSource(UnknownState),
+    GameFileSource(GameFileSourceState),
     #[serde(rename = "GoogleDriveDownloader, Wabbajack.Lib")]
     GoogleDrive(GoogleDriveState),
     #[serde(rename = "HttpDownloader, Wabbajack.Lib")]
@@ -157,11 +157,38 @@ impl State {
 pub struct GoogleDriveState {
     pub id: String,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[serde(deny_unknown_fields)]
+pub struct GameFileSourceState {
+    pub game_version: String,
+    pub hash: String,
+    pub game_file: String,
+    pub game: GameName,
+}
+
+#[derive(
+    Debug,
+    Serialize,
+    Deserialize,
+    Clone,
+    derive_more::AsRef,
+    derive_more::Display,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    derive_more::Constructor,
+)]
+pub struct GameName(String);
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct NexusState {
-    pub game_name: String,
+    pub game_name: GameName,
     #[serde(rename = "FileID")]
     pub file_id: usize,
     #[serde(rename = "ModID")]
@@ -228,7 +255,7 @@ pub struct UnknownState {
     /// game_name: Option<String>
     /// Description: The name of the game.
     /// Usage: For display purposes or validation.
-    pub game_name: Option<String>,
+    pub game_name: Option<GameName>,
     #[serde(rename = "ImageURL")]
     /// image_url: Option<String>
     /// Description: URL to an image associated with the mod.

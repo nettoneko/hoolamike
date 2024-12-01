@@ -38,9 +38,12 @@ pub mod config_file {
     use std::path::PathBuf;
 
     use anyhow::{Context, Result};
+    use indexmap::IndexMap;
     use serde::{Deserialize, Serialize};
     use tap::prelude::*;
     use tracing::{debug, info, warn};
+
+    use crate::modlist_json::GameName;
 
     #[derive(Debug, Clone, Serialize, Deserialize, Default)]
     pub struct NexusConfig {
@@ -55,16 +58,39 @@ pub mod config_file {
         pub nexus: NexusConfig,
     }
 
+    #[derive(Debug, Clone, Serialize, Deserialize, derivative::Derivative)]
+    pub struct GameConfig {
+        pub root_directory: PathBuf,
+    }
+
     #[derive(Debug, Clone, Serialize, Deserialize, Default)]
     pub struct InstallationConfig {
         pub modlist_file: Option<PathBuf>,
-        pub original_game_dir: Option<PathBuf>,
-        pub installation_dir: Option<PathBuf>,
     }
-    #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+
+    pub type GamesConfig = IndexMap<GameName, GameConfig>;
+
+    fn default_games_config() -> GamesConfig {
+        GamesConfig::new().tap_mut(|games| {
+            games
+                .insert(
+                    GameName::new("ExampleGame".into()),
+                    GameConfig {
+                        root_directory: ["path", "to", "example", "game"]
+                            .into_iter()
+                            .fold(PathBuf::new(), |acc, next| acc.join(next)),
+                    },
+                )
+                .pipe(|_| ())
+        })
+    }
+    #[derive(Debug, Clone, Serialize, Deserialize, derivative::Derivative)]
+    #[derivative(Default)]
     pub struct HoolamikeConfig {
         pub downloaders: DownloadersConfig,
         pub installation: InstallationConfig,
+        #[derivative(Default(value = "default_games_config()"))]
+        pub games: GamesConfig,
     }
 
     pub static CONFIG_FILE_NAME: &str = "hoolamike.yaml";
@@ -247,11 +273,18 @@ pub(crate) mod progress_bars {
             }),
         )
     });
+    pub(crate) static COPY_LOCAL_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
+        PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Copy).tap_mut(|pb| {
+            pb.set_message("TOTAL");
+            pb.set_prefix("l-copied");
+        }))
+    });
 
     #[derive(Debug, Clone, Copy, derive_more::Display)]
     pub enum ProgressKind {
         Validate,
         Download,
+        Copy,
     }
 
     impl ProgressKind {
@@ -259,6 +292,7 @@ pub(crate) mod progress_bars {
             match self {
                 ProgressKind::Validate => "yellow",
                 ProgressKind::Download => "blue",
+                ProgressKind::Copy => "gray",
             }
         }
     }
@@ -279,7 +313,7 @@ pub(crate) mod progress_bars {
     pub fn print_error(for_target: &str, message: &anyhow::Error) {
         PROGRESS_BAR
             .println(format!(
-                "{} {message}",
+                "{} {message:#?}",
                 style(for_target).bold().dim().red(),
             ))
             .ok();
@@ -332,7 +366,7 @@ async fn main() -> Result<()> {
     }
     .with_context(|| {
         format!(
-            "error occurred, run with --help, check your configuration or file a ticket at {}",
+            "\n\nerror occurred, run with --help, check your configuration or file a ticket at {}",
             env!("CARGO_PKG_REPOSITORY")
         )
     })

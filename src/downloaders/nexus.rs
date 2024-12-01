@@ -10,7 +10,7 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use tap::prelude::*;
 
-use crate::config_file::NexusConfig;
+use crate::{config_file::NexusConfig, modlist_json::GameName};
 
 use super::{
     helpers::{FutureAnyhowExt, ReqwestPrettyJsonResponse},
@@ -26,7 +26,7 @@ const BASE_URL: &str = "https://api.nexusmods.com";
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct DownloadFileRequest {
-    pub game_domain_name: String,
+    pub game_domain_name: GameName,
     pub mod_id: usize,
     pub file_id: usize,
 }

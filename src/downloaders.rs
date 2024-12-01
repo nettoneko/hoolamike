@@ -4,9 +4,7 @@ use url::Url;
 
 use crate::modlist_json::ArchiveDescriptor;
 
-pub mod gamefile_source_downloader {
-    pub struct GameFileSourceDownloader {}
-}
+pub mod gamefile_source_downloader;
 pub mod google_drive;
 pub mod http {
     pub struct HttpDownloader {}
@@ -28,3 +26,10 @@ pub struct WithArchiveDescriptor<T> {
 }
 
 pub type DownloadTask = WithArchiveDescriptor<(url::Url, PathBuf)>;
+pub type CopyFileTask = WithArchiveDescriptor<(PathBuf, PathBuf)>;
+
+#[derive(Debug, Clone, derive_more::From)]
+pub enum SyncTask {
+    Download(DownloadTask),
+    Copy(CopyFileTask),
+}
