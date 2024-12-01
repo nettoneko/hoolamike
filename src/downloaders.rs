@@ -13,9 +13,7 @@ pub mod manual {
     pub struct ManualDownloader {}
 }
 pub mod nexus;
-pub mod wabbajack_cdn {
-    pub struct WabbajackCDNDownloader {}
-}
+pub mod wabbajack_cdn;
 
 pub mod helpers;
 
@@ -25,11 +23,13 @@ pub struct WithArchiveDescriptor<T> {
     pub descriptor: ArchiveDescriptor,
 }
 
+pub type MergeDownloadTask = WithArchiveDescriptor<(Vec<url::Url>, PathBuf)>;
 pub type DownloadTask = WithArchiveDescriptor<(url::Url, PathBuf)>;
 pub type CopyFileTask = WithArchiveDescriptor<(PathBuf, PathBuf)>;
 
 #[derive(Debug, Clone, derive_more::From)]
 pub enum SyncTask {
+    MergeDownload(MergeDownloadTask),
     Download(DownloadTask),
     Copy(CopyFileTask),
 }

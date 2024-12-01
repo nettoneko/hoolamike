@@ -311,10 +311,20 @@ pub(crate) mod progress_bars {
     }
 
     pub fn print_error(for_target: &str, message: &anyhow::Error) {
+        let message = message
+            .chain()
+            .enumerate()
+            .try_fold(String::new(), |mut acc, (idx, next)| {
+                use std::fmt::Write;
+                acc.pipe_ref_mut(|acc| writeln!(acc, "{idx}. {next}", idx = idx + 1))
+                    .map(|_| acc)
+            })
+            .unwrap_or_else(|_| format!("{message:?}"));
         PROGRESS_BAR
             .println(format!(
-                "{} {message:#?}",
+                "{} {}",
                 style(for_target).bold().dim().red(),
+                message
             ))
             .ok();
     }

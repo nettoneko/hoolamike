@@ -4,24 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::serde_type_guard;
 
-// #[derive(
-//     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, derive_more::Display,
-// )]
-// pub enum DownloadKind {
-//     #[serde(rename = "GameFileSourceDownloader, Wabbajack.Lib")]
-//     GameFileSource,
-//     #[serde(rename = "GoogleDriveDownloader, Wabbajack.Lib")]
-//     GoogleDrive,
-//     #[serde(rename = "HttpDownloader, Wabbajack.Lib")]
-//     Http,
-//     #[serde(rename = "ManualDownloader, Wabbajack.Lib")]
-//     Manual,
-//     #[serde(rename = "NexusDownloader, Wabbajack.Lib")]
-//     Nexus,
-//     #[serde(rename = "WabbajackCDNDownloader+State, Wabbajack.Lib")]
-//     WabbajackCDN,
-// }
-
 #[derive(
     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, derive_more::Display,
 )]
@@ -143,7 +125,7 @@ pub enum State {
     #[serde(rename = "ManualDownloader, Wabbajack.Lib")]
     Manual(UnknownState),
     #[serde(rename = "WabbajackCDNDownloader+State, Wabbajack.Lib")]
-    WabbajackCDN(UnknownState),
+    WabbajackCDN(WabbajackCDNDownloaderState),
 }
 
 impl State {
@@ -151,6 +133,14 @@ impl State {
         DownloadKind::from(self)
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[serde(deny_unknown_fields)]
+pub struct WabbajackCDNDownloaderState {
+    pub url: url::Url,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]

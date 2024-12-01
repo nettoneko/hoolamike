@@ -199,7 +199,8 @@ pub mod downloads {
             },
             helpers::FutureAnyhowExt,
             nexus::{self, NexusDownloader},
-            CopyFileTask, DownloadTask, SyncTask, WithArchiveDescriptor,
+            wabbajack_cdn::WabbajackCDNDownloader,
+            CopyFileTask, DownloadTask, MergeDownloadTask, SyncTask, WithArchiveDescriptor,
         },
         modlist_json::{
             Archive, ArchiveDescriptor, DownloadKind, GoogleDriveState, NexusState, State,
@@ -302,7 +303,62 @@ pub mod downloads {
         Ok(to)
     }
 
-    async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
+    pub async fn stream_merge_file(
+        from: Vec<url::Url>,
+        to: PathBuf,
+        expected_size: u64,
+    ) -> Result<PathBuf> {
+        let file_name = to
+            .file_name()
+            .expect("file must have a name")
+            .to_string_lossy()
+            .to_string();
+        let pb = {
+            DOWNLOAD_TOTAL_PROGRESS_BAR.inc_length(expected_size);
+            PROGRESS_BAR
+                .add(vertical_progress_bar(expected_size, ProgressKind::Download))
+                .tap_mut(|pb| {
+                    pb.set_message(file_name.clone());
+                    pb.set_prefix("download");
+                })
+        };
+
+        let mut file = tokio::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&to)
+            .map_with_context(|| format!("opening [{}]", to.display()))
+            .await?;
+        let mut writer = BufWriter::new(&mut file);
+        let mut downloaded = 0;
+        for from_chunk in from.clone().into_iter() {
+            let mut byte_stream = reqwest::get(from_chunk.to_string())
+                .await
+                .with_context(|| format!("making request to {from_chunk}"))?
+                .bytes_stream();
+            while let Some(chunk) = byte_stream.next().await {
+                match chunk {
+                    Ok(chunk) => {
+                        downloaded += chunk.len() as u64;
+                        pb.inc(chunk.len() as u64);
+                        DOWNLOAD_TOTAL_PROGRESS_BAR.inc(chunk.len() as u64);
+                        tokio::io::copy(&mut chunk.as_ref(), &mut writer)
+                            .await
+                            .with_context(|| format!("writing to fd {}", to.display()))?;
+                    }
+                    Err(message) => Err(message)?,
+                }
+            }
+        }
+
+        if downloaded != expected_size {
+            anyhow::bail!("[{from:?}] download finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{downloaded} bytes])")
+        }
+        pb.finish_with_message(format!("{file_name} [OK]"));
+        Ok(to)
+    }
+    pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
         let file_name = to
             .file_name()
             .expect("file must have a name")
@@ -350,7 +406,6 @@ pub mod downloads {
         pb.finish_with_message(format!("{file_name} [OK]"));
         Ok(to)
     }
-
     impl Synchronizers {
         pub fn new(config: DownloadersConfig, games_config: GamesConfig) -> Result<Self> {
             Ok(Self {
@@ -444,9 +499,17 @@ pub mod downloads {
                 State::Manual(kind) => Err(anyhow::anyhow!(
                     "[{downloader_kind}] {kind:?} is not implemented"
                 )),
-                State::WabbajackCDN(kind) => Err(anyhow::anyhow!(
-                    "[{downloader_kind}] {kind:?} is not implemented"
-                )),
+                State::WabbajackCDN(state) => WabbajackCDNDownloader::prepare_download(state)
+                    .await
+                    .context("wabbajack... :)")
+                    .map(|source_urls| MergeDownloadTask {
+                        inner: (
+                            source_urls,
+                            self.cache.download_output_path(descriptor.name.clone()),
+                        ),
+                        descriptor,
+                    })
+                    .map(SyncTask::MergeDownload),
             }
         }
 
@@ -478,6 +541,17 @@ pub mod downloads {
                 .map_ok(|file| match file {
                     Either::Left(exists) => exists.pipe(Ok).pipe(ready).boxed_local(),
                     Either::Right(sync_task) => match sync_task {
+                        SyncTask::MergeDownload(WithArchiveDescriptor {
+                            inner: (from, to),
+                            descriptor,
+                        }) => stream_merge_file(from.clone(), to.clone(), descriptor.size)
+                            .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
+                            .map(move |res| {
+                                res.with_context(|| {
+                                    format!("when downloading [{from:?} -> {to:?}]")
+                                })
+                            })
+                            .boxed_local(),
                         SyncTask::Download(WithArchiveDescriptor {
                             inner: (from, to),
                             descriptor,
