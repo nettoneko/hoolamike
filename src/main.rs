@@ -1,13 +1,14 @@
 #![allow(clippy::unit_arg)]
 
-use anyhow::{Context, Result};
-use indicatif::MultiProgress;
-use modlist_data::ModlistSummary;
-use std::path::PathBuf;
-use tap::prelude::*;
-use tracing::{debug, info, warn};
-
-use clap::{Parser, Subcommand};
+use {
+    anyhow::{Context, Result},
+    clap::{Parser, Subcommand},
+    indicatif::MultiProgress,
+    modlist_data::ModlistSummary,
+    std::path::PathBuf,
+    tap::prelude::*,
+    tracing::{debug, info, warn},
+};
 pub const BUFFER_SIZE: usize = 1024 * 128;
 
 #[derive(Parser)]
@@ -35,15 +36,15 @@ enum Commands {
 }
 
 pub mod config_file {
-    use std::path::PathBuf;
-
-    use anyhow::{Context, Result};
-    use indexmap::IndexMap;
-    use serde::{Deserialize, Serialize};
-    use tap::prelude::*;
-    use tracing::{debug, info, warn};
-
-    use crate::modlist_json::GameName;
+    use {
+        crate::modlist_json::GameName,
+        anyhow::{Context, Result},
+        indexmap::IndexMap,
+        serde::{Deserialize, Serialize},
+        std::path::PathBuf,
+        tap::prelude::*,
+        tracing::{debug, info, warn},
+    };
 
     #[derive(Debug, Clone, Serialize, Deserialize, Default)]
     pub struct NexusConfig {
@@ -102,26 +103,23 @@ pub mod config_file {
                 .map(|config| format!("\n# default {CONFIG_FILE_NAME} file\n# edit it according to your needs:\n{config}"))
         }
         pub fn find() -> Result<Self> {
-            [
-                format!("./{CONFIG_FILE_NAME}"),
-                format!("~/.config/hoolamike/{CONFIG_FILE_NAME}"),
-            ]
-            .pipe(|config_paths| {
-                config_paths
-                    .clone()
-                    .into_iter()
-                    .map(PathBuf::from)
-                    .find(|path| path.exists())
-                    .with_context(|| format!("checking paths: {config_paths:?}"))
-                    .context("no config file detected")
-            })
-            .tap_ok(|config| info!("found config at '{}'", config.display()))
-            .and_then(|config| std::fs::read_to_string(config).context("reading file"))
-            .and_then(|config| serde_yaml::from_str::<Self>(&config).context("parsing config file"))
-            .with_context(|| format!("getting [{CONFIG_FILE_NAME}]"))
-            .tap_ok(|config| {
-                debug!("{config:?}");
-            })
+            [format!("./{CONFIG_FILE_NAME}"), format!("~/.config/hoolamike/{CONFIG_FILE_NAME}")]
+                .pipe(|config_paths| {
+                    config_paths
+                        .clone()
+                        .into_iter()
+                        .map(PathBuf::from)
+                        .find(|path| path.exists())
+                        .with_context(|| format!("checking paths: {config_paths:?}"))
+                        .context("no config file detected")
+                })
+                .tap_ok(|config| info!("found config at '{}'", config.display()))
+                .and_then(|config| std::fs::read_to_string(config).context("reading file"))
+                .and_then(|config| serde_yaml::from_str::<Self>(&config).context("parsing config file"))
+                .with_context(|| format!("getting [{CONFIG_FILE_NAME}]"))
+                .tap_ok(|config| {
+                    debug!("{config:?}");
+                })
         }
     }
 }
@@ -143,15 +141,16 @@ pub mod helpers {
     }
 }
 pub mod modlist_data {
-    use itertools::Itertools;
-    use std::collections::BTreeMap;
-    use tabled::{
-        settings::{object::Columns, Color, Rotate, Style},
-        Tabled,
+    use {
+        crate::{helpers::human_readable_size, modlist_json::Modlist},
+        itertools::Itertools,
+        std::collections::BTreeMap,
+        tabled::{
+            settings::{object::Columns, Color, Rotate, Style},
+            Tabled,
+        },
+        tap::prelude::*,
     };
-    use tap::prelude::*;
-
-    use crate::{helpers::human_readable_size, modlist_json::Modlist};
 
     #[derive(Tabled)]
     pub struct ModlistSummary {
@@ -168,9 +167,7 @@ pub mod modlist_data {
         pub description: String,
     }
 
-    fn summarize_value_count<'a, I: std::fmt::Display + Ord + Clone + Eq>(
-        items: impl Iterator<Item = I> + 'a,
-    ) -> String {
+    fn summarize_value_count<'a, I: std::fmt::Display + Ord + Clone + Eq>(items: impl Iterator<Item = I> + 'a) -> String {
         items
             .fold(BTreeMap::new(), |acc, directive| {
                 acc.tap_mut(move |acc| {
@@ -251,27 +248,25 @@ pub mod downloaders;
 pub mod install_modlist;
 
 pub(crate) mod progress_bars {
-    use console::style;
-    use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-    use once_cell::sync::Lazy;
-    use tap::prelude::*;
+    use {
+        console::style,
+        indicatif::{MultiProgress, ProgressBar, ProgressStyle},
+        once_cell::sync::Lazy,
+        tap::prelude::*,
+    };
 
     pub(crate) static PROGRESS_BAR: Lazy<MultiProgress> = Lazy::new(MultiProgress::new);
     pub(crate) static VALIDATE_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
-        PROGRESS_BAR.add(
-            vertical_progress_bar(0, ProgressKind::Validate).tap_mut(|pb| {
-                pb.set_message("TOTAL");
-                pb.set_prefix("validate");
-            }),
-        )
+        PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Validate).tap_mut(|pb| {
+            pb.set_message("TOTAL");
+            pb.set_prefix("validate");
+        }))
     });
     pub(crate) static DOWNLOAD_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
-        PROGRESS_BAR.add(
-            vertical_progress_bar(0, ProgressKind::Download).tap_mut(|pb| {
-                pb.set_message("TOTAL");
-                pb.set_prefix("download");
-            }),
-        )
+        PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Download).tap_mut(|pb| {
+            pb.set_message("TOTAL");
+            pb.set_prefix("download");
+        }))
     });
     pub(crate) static COPY_LOCAL_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
         PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Copy).tap_mut(|pb| {
@@ -301,9 +296,9 @@ pub(crate) mod progress_bars {
         ProgressBar::new(len).tap_mut(|pb| {
             pb.enable_steady_tick(std::time::Duration::from_millis(600));
             pb.set_style(
-                ProgressStyle::with_template(
-                    &format!("{{prefix:.bold}}▕{{bar:.{color}}}▏{{msg:.{color}}} ({{bytes}}/{{total_bytes}} {{bytes_per_sec}} ETA {{eta}})"),
-                )
+                ProgressStyle::with_template(&format!(
+                    "{{prefix:.bold}}▕{{bar:.{color}}}▏{{msg:.{color}}} ({{bytes}}/{{total_bytes}} {{bytes_per_sec}} ETA {{eta}})"
+                ))
                 .unwrap()
                 .progress_chars("█▇▆▅▄▃▂▁  "),
             );
@@ -321,27 +316,17 @@ pub(crate) mod progress_bars {
             })
             .unwrap_or_else(|_| format!("{message:?}"));
         PROGRESS_BAR
-            .println(format!(
-                "{} {}",
-                style(for_target).bold().dim().red(),
-                message
-            ))
+            .println(format!("{} {}", style(for_target).bold().dim().red(), message))
             .ok();
     }
     pub fn print_warn(for_target: &str, message: &anyhow::Error) {
         PROGRESS_BAR
-            .println(format!(
-                "{} {message}",
-                style(for_target).bold().dim().yellow(),
-            ))
+            .println(format!("{} {message}", style(for_target).bold().dim().yellow(),))
             .ok();
     }
     pub fn print_success(for_target: &str, message: &str) {
         PROGRESS_BAR
-            .println(format!(
-                "{} {message}",
-                style(for_target).bold().dim().green(),
-            ))
+            .println(format!("{} {message}", style(for_target).bold().dim().green(),))
             .ok();
     }
 }
@@ -363,9 +348,7 @@ async fn main() -> Result<()> {
         Commands::ModlistInfo { path } => tokio::fs::read_to_string(&path)
             .await
             .context("reading modlist")
-            .and_then(|m| {
-                serde_json::from_str::<modlist_json::Modlist>(&m).context("parsing modlist")
-            })
+            .and_then(|m| serde_json::from_str::<modlist_json::Modlist>(&m).context("parsing modlist"))
             .map(|modlist| ModlistSummary::new(&modlist))
             .map(|modlist| modlist.print())
             .map(|modlist| info!("\n{modlist}")),

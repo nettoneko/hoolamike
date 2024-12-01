@@ -1,15 +1,15 @@
-use anyhow::{Context, Result};
-use futures::TryFutureExt;
-use itertools::Itertools;
-use std::{future::ready, path::PathBuf};
-use tap::prelude::*;
-
-use indexmap::IndexMap;
-
-use crate::{
-    config_file::{GameConfig, GamesConfig},
-    install_modlist::download_cache::validate_hash,
-    modlist_json::{GameFileSourceState, GameName},
+use {
+    crate::{
+        config_file::{GameConfig, GamesConfig},
+        install_modlist::download_cache::validate_hash,
+        modlist_json::{GameFileSourceState, GameName},
+    },
+    anyhow::{Context, Result},
+    futures::TryFutureExt,
+    indexmap::IndexMap,
+    itertools::Itertools,
+    std::{future::ready, path::PathBuf},
+    tap::prelude::*,
 };
 
 pub struct GameFileSourceDownloader {
@@ -31,10 +31,7 @@ impl GameFileSourceDownloader {
             .exists()
             .then_some(root_directory.clone())
             .with_context(|| format!("[{}] does not exist", root_directory.display()))
-            .map(|source_directory| Self {
-                source_directory,
-                game_name,
-            })
+            .map(|source_directory| Self { source_directory, game_name })
     }
     pub async fn prepare_copy(
         &self,
@@ -48,12 +45,7 @@ impl GameFileSourceDownloader {
         self.game_name
             .eq(&game)
             .then_some(())
-            .with_context(|| {
-                format!(
-                    "expected downloader for [{game}], but this is a downloader for [{}]",
-                    self.game_name
-                )
-            })
+            .with_context(|| format!("expected downloader for [{game}], but this is a downloader for [{}]", self.game_name))
             .and_then(|_| normalize_path(game_file))
             .and_then(|game_file| {
                 self.source_directory.join(game_file).pipe(|game_file| {
@@ -71,9 +63,7 @@ impl GameFileSourceDownloader {
 
 pub type GameFileSourceSynchronizers = IndexMap<GameName, GameFileSourceDownloader>;
 
-pub fn get_game_file_source_synchronizers(
-    config: GamesConfig,
-) -> Result<GameFileSourceSynchronizers> {
+pub fn get_game_file_source_synchronizers(config: GamesConfig) -> Result<GameFileSourceSynchronizers> {
     config
         .into_iter()
         .map(|(game, config)| {

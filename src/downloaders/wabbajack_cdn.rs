@@ -1,19 +1,19 @@
-use anyhow::{Context, Result};
-use flate2::read::GzDecoder;
-use futures::{StreamExt, TryFutureExt};
-use itertools::Itertools;
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
-use std::{
-    future::ready,
-    io::{Read, Write},
+use {
+    super::helpers::FutureAnyhowExt,
+    crate::modlist_json::WabbajackCDNDownloaderState,
+    anyhow::{Context, Result},
+    flate2::read::GzDecoder,
+    futures::{StreamExt, TryFutureExt},
+    itertools::Itertools,
+    reqwest::Client,
+    serde::{Deserialize, Serialize},
+    std::{
+        future::ready,
+        io::{Read, Write},
+    },
+    tap::prelude::*,
+    tempfile::tempfile,
 };
-use tap::prelude::*;
-use tempfile::tempfile;
-
-use crate::modlist_json::WabbajackCDNDownloaderState;
-
-use super::helpers::FutureAnyhowExt;
 
 pub struct WabbajackCDNDownloader {}
 
@@ -46,14 +46,10 @@ pub struct WabbajackCdnFile {
 }
 
 impl WabbajackCDNDownloader {
-    pub async fn prepare_download(
-        WabbajackCDNDownloaderState { url }: WabbajackCDNDownloaderState,
-    ) -> Result<Vec<url::Url>> {
+    pub async fn prepare_download(WabbajackCDNDownloaderState { url }: WabbajackCDNDownloaderState) -> Result<Vec<url::Url>> {
         let deduced_url = format!("{url}/{MAGIC_FILENAME}");
         Client::new()
-            .get(
-                deduced_url.to_string(),
-            )
+            .get(deduced_url.to_string())
             .send()
             .map_with_context(|| format!("fetching from [{deduced_url}]"))
             .and_then(|response| response.bytes().map_context("reading bytes"))
@@ -70,10 +66,7 @@ impl WabbajackCDNDownloader {
                                     })
                                     .map(|_| output)
                             })
-                            .and_then(|contents| {
-                                serde_json::from_str::<WabbajackCdnFile>(&contents)
-                                    .with_context(|| format!("deserializing:\n\n{contents}"))
-                            })
+                            .and_then(|contents| serde_json::from_str::<WabbajackCdnFile>(&contents).with_context(|| format!("deserializing:\n\n{contents}")))
                     })
                 })
                 .map_context("thread crashed")
@@ -81,11 +74,24 @@ impl WabbajackCDNDownloader {
             })
             .map_ok({
                 let url = url.clone();
-                move |WabbajackCdnFile { author, server_assigned_unique_id, hash, munged_name, original_file_name, size, parts }| {
-                parts.into_iter().map(move |Part {index, ..}| {
-                    url.clone().tap_mut(|url| url.set_path(&format!("{munged_name}/parts/{index}")))
-                }).collect_vec()
-            }})
+                move |WabbajackCdnFile {
+                          author,
+                          server_assigned_unique_id,
+                          hash,
+                          munged_name,
+                          original_file_name,
+                          size,
+                          parts,
+                      }| {
+                    parts
+                        .into_iter()
+                        .map(move |Part { index, .. }| {
+                            url.clone()
+                                .tap_mut(|url| url.set_path(&format!("{munged_name}/parts/{index}")))
+                        })
+                        .collect_vec()
+                }
+            })
             .await
             .with_context(|| format!("fetching stuff from deduced url: [{deduced_url}] based on [{url}]"))
     }

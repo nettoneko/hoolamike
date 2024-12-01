@@ -1,40 +1,35 @@
-use std::{future::ready, path::PathBuf};
-
-use anyhow::{Context, Result};
-use downloads::Synchronizers;
-use futures::{FutureExt, TryFutureExt};
-use tracing::info;
-
-use crate::{
-    config_file::{HoolamikeConfig, InstallationConfig},
-    helpers::human_readable_size,
-    modlist_json::Modlist,
-    progress_bars::{
-        print_error, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR, VALIDATE_TOTAL_PROGRESS_BAR,
+use {
+    crate::{
+        config_file::{HoolamikeConfig, InstallationConfig},
+        helpers::human_readable_size,
+        modlist_json::Modlist,
+        progress_bars::{print_error, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR, VALIDATE_TOTAL_PROGRESS_BAR},
     },
+    anyhow::{Context, Result},
+    downloads::Synchronizers,
+    futures::{FutureExt, TryFutureExt},
+    std::{future::ready, path::PathBuf},
+    tap::prelude::*,
+    tracing::info,
 };
-use tap::prelude::*;
 
 pub mod download_cache {
-    use anyhow::{Context, Result};
-    use base64::Engine;
-    use futures::{FutureExt, TryFutureExt};
-    use indicatif::ProgressBar;
-    use std::{future::ready, hash::Hasher, path::PathBuf, sync::Arc};
-    use tap::prelude::*;
-    use tokio::io::AsyncReadExt;
-    use tracing::{info, warn};
-
-    use crate::{
-        downloaders::{helpers::FutureAnyhowExt, WithArchiveDescriptor},
-        modlist_json::ArchiveDescriptor,
-        progress_bars::{
-            print_error, print_success, print_warn, vertical_progress_bar, PROGRESS_BAR,
-            VALIDATE_TOTAL_PROGRESS_BAR,
+    use {
+        super::DOWNLOAD_TOTAL_PROGRESS_BAR,
+        crate::{
+            downloaders::{helpers::FutureAnyhowExt, WithArchiveDescriptor},
+            modlist_json::ArchiveDescriptor,
+            progress_bars::{print_error, print_success, print_warn, vertical_progress_bar, PROGRESS_BAR, VALIDATE_TOTAL_PROGRESS_BAR},
         },
+        anyhow::{Context, Result},
+        base64::Engine,
+        futures::{FutureExt, TryFutureExt},
+        indicatif::ProgressBar,
+        std::{future::ready, hash::Hasher, path::PathBuf, sync::Arc},
+        tap::prelude::*,
+        tokio::io::AsyncReadExt,
+        tracing::{info, warn},
     };
-
-    use super::DOWNLOAD_TOTAL_PROGRESS_BAR;
 
     #[derive(Debug, Clone)]
     pub struct DownloadCache {
@@ -47,12 +42,7 @@ pub mod download_cache {
                 .map(|_| Self {
                     root_directory: root_directory.clone(),
                 })
-                .with_context(|| {
-                    format!(
-                        "creating download cache handler at [{}]",
-                        root_directory.display()
-                    )
-                })
+                .with_context(|| format!("creating download cache handler at [{}]", root_directory.display()))
         }
     }
 
@@ -112,9 +102,7 @@ pub mod download_cache {
             .and_then(|hash| {
                 hash.eq(&expected_hash)
                     .then_some(path.clone())
-                    .with_context(|| {
-                        format!("hash mismatch, expected [{expected_hash}], found [{hash}]")
-                    })
+                    .with_context(|| format!("hash mismatch, expected [{expected_hash}], found [{hash}]"))
                     .pipe(ready)
             })
             .await
@@ -126,9 +114,7 @@ pub mod download_cache {
             found_size
                 .eq(&expected_size)
                 .then_some(path)
-                .with_context(|| {
-                    format!("size mismatch (expected [{expected_size} bytes], found [{found_size} bytes])")
-                })
+                .with_context(|| format!("size mismatch (expected [{expected_size} bytes], found [{found_size} bytes])"))
         })
     }
 
@@ -136,24 +122,14 @@ pub mod download_cache {
         pub fn download_output_path(&self, file_name: String) -> PathBuf {
             self.root_directory.join(file_name)
         }
-        pub async fn verify(
-            self: Arc<Self>,
-            descriptor: ArchiveDescriptor,
-        ) -> Option<WithArchiveDescriptor<PathBuf>> {
-            let ArchiveDescriptor {
-                hash,
-                meta: _,
-                name,
-                size,
-            } = descriptor.clone();
+        pub async fn verify(self: Arc<Self>, descriptor: ArchiveDescriptor) -> Option<WithArchiveDescriptor<PathBuf>> {
+            let ArchiveDescriptor { hash, meta: _, name, size } = descriptor.clone();
             self.download_output_path(name)
                 .pipe(Ok)
                 .pipe(ready)
                 .and_then(|expected_path| async move {
                     tokio::fs::try_exists(&expected_path)
-                        .map_with_context(|| {
-                            format!("checking if path [{}] exists", expected_path.display())
-                        })
+                        .map_with_context(|| format!("checking if path [{}] exists", expected_path.display()))
                         .map_ok(|exists| exists.then_some(expected_path.clone()))
                         .await
                 })
@@ -180,37 +156,41 @@ pub mod download_cache {
 }
 
 pub mod downloads {
-    use std::{os::fd::AsFd, sync::Arc};
-
-    use futures::{FutureExt, StreamExt, TryStreamExt};
-    use indicatif::MultiProgress;
-    use tokio::{
-        io::{AsyncReadExt, BufReader, BufWriter},
-        sync::RwLock,
-    };
-    use tracing::{debug, error, warn};
-
-    use super::*;
-    use crate::{
-        config_file::{DownloadersConfig, GamesConfig},
-        downloaders::{
-            gamefile_source_downloader::{
-                get_game_file_source_synchronizers, GameFileSourceSynchronizers,
+    use {
+        super::*,
+        crate::{
+            config_file::{DownloadersConfig, GamesConfig},
+            downloaders::{
+                gamefile_source_downloader::{get_game_file_source_synchronizers, GameFileSourceSynchronizers},
+                helpers::FutureAnyhowExt,
+                nexus::{self, NexusDownloader},
+                wabbajack_cdn::WabbajackCDNDownloader,
+                CopyFileTask,
+                DownloadTask,
+                MergeDownloadTask,
+                SyncTask,
+                WithArchiveDescriptor,
             },
-            helpers::FutureAnyhowExt,
-            nexus::{self, NexusDownloader},
-            wabbajack_cdn::WabbajackCDNDownloader,
-            CopyFileTask, DownloadTask, MergeDownloadTask, SyncTask, WithArchiveDescriptor,
+            modlist_json::{Archive, ArchiveDescriptor, DownloadKind, GoogleDriveState, NexusState, State, UnknownState},
+            progress_bars::{
+                print_error,
+                print_success,
+                vertical_progress_bar,
+                ProgressKind,
+                COPY_LOCAL_TOTAL_PROGRESS_BAR,
+                DOWNLOAD_TOTAL_PROGRESS_BAR,
+                PROGRESS_BAR,
+            },
+            BUFFER_SIZE,
         },
-        modlist_json::{
-            Archive, ArchiveDescriptor, DownloadKind, GoogleDriveState, NexusState, State,
-            UnknownState,
+        futures::{FutureExt, StreamExt, TryStreamExt},
+        indicatif::MultiProgress,
+        std::{os::fd::AsFd, sync::Arc},
+        tokio::{
+            io::{AsyncReadExt, BufReader, BufWriter},
+            sync::RwLock,
         },
-        progress_bars::{
-            print_error, print_success, vertical_progress_bar, ProgressKind,
-            COPY_LOCAL_TOTAL_PROGRESS_BAR, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR,
-        },
-        BUFFER_SIZE,
+        tracing::{debug, error, warn},
     };
 
     #[derive(Clone)]
@@ -219,12 +199,7 @@ pub mod downloads {
     }
 
     impl DownloadersInner {
-        pub fn new(
-            DownloadersConfig {
-                nexus,
-                downloads_directory: _,
-            }: DownloadersConfig,
-        ) -> Result<Self> {
+        pub fn new(DownloadersConfig { nexus, downloads_directory: _ }: DownloadersConfig) -> Result<Self> {
             Ok(Self {
                 nexus: nexus
                     .api_key
@@ -297,17 +272,15 @@ pub mod downloads {
         }
 
         if copied != expected_size {
-            anyhow::bail!("[{from:?} -> {to:?}] local copy finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{copied} bytes])")
+            anyhow::bail!(
+                "[{from:?} -> {to:?}] local copy finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{copied} bytes])"
+            )
         }
         pb.finish_with_message(format!("{file_name} [OK]"));
         Ok(to)
     }
 
-    pub async fn stream_merge_file(
-        from: Vec<url::Url>,
-        to: PathBuf,
-        expected_size: u64,
-    ) -> Result<PathBuf> {
+    pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
         let file_name = to
             .file_name()
             .expect("file must have a name")
@@ -410,29 +383,17 @@ pub mod downloads {
         pub fn new(config: DownloadersConfig, games_config: GamesConfig) -> Result<Self> {
             Ok(Self {
                 config: Arc::new(config.clone()),
-                cache: Arc::new(
-                    download_cache::DownloadCache::new(config.downloads_directory.clone())
-                        .context("building download cache")?,
-                ),
+                cache: Arc::new(download_cache::DownloadCache::new(config.downloads_directory.clone()).context("building download cache")?),
                 inner: DownloadersInner::new(config).context("building downloaders")?,
-                game_synchronizers: Arc::new(
-                    get_game_file_source_synchronizers(games_config)
-                        .context("building game file source synchronizers")?,
-                ),
+                game_synchronizers: Arc::new(get_game_file_source_synchronizers(games_config).context("building game file source synchronizers")?),
             })
         }
 
-        pub async fn prepare_sync_task(
-            self,
-            Archive { descriptor, state }: Archive,
-        ) -> Result<SyncTask> {
+        pub async fn prepare_sync_task(self, Archive { descriptor, state }: Archive) -> Result<SyncTask> {
             let downloader_kind = state.kind();
             match state {
                 State::Nexus(NexusState {
-                    game_name,
-                    file_id,
-                    mod_id,
-                    ..
+                    game_name, file_id, mod_id, ..
                 }) => {
                     self.inner
                         .nexus
@@ -449,64 +410,38 @@ pub mod downloads {
                         })
                         .await
                         .map(|url| DownloadTask {
-                            inner: (
-                                url,
-                                self.cache.download_output_path(descriptor.name.clone()),
-                            ),
+                            inner: (url, self.cache.download_output_path(descriptor.name.clone())),
                             descriptor,
                         })
                         .map(SyncTask::from)
                 }
-                State::GoogleDrive(GoogleDriveState { id }) => {
-                    crate::downloaders::google_drive::GoogleDriveDownloader::download(
-                        id,
-                        descriptor.size,
-                    )
+                State::GoogleDrive(GoogleDriveState { id }) => crate::downloaders::google_drive::GoogleDriveDownloader::download(id, descriptor.size)
                     .await
                     .map(|url| DownloadTask {
-                        inner: (
-                            url,
-                            self.cache.download_output_path(descriptor.name.clone()),
-                        ),
+                        inner: (url, self.cache.download_output_path(descriptor.name.clone())),
                         descriptor,
                     })
-                    .map(SyncTask::Download)
-                }
+                    .map(SyncTask::Download),
                 State::GameFileSource(state) => self
                     .game_synchronizers
                     .get(&state.game)
-                    .with_context(|| {
-                        format!(
-                            "check config, no game source configured for [{}]",
-                            state.game
-                        )
-                    })
+                    .with_context(|| format!("check config, no game source configured for [{}]", state.game))
                     .pipe(ready)
                     .and_then(|synchronizer| synchronizer.prepare_copy(state))
                     .await
                     .map(|source_path| CopyFileTask {
-                        inner: (
-                            source_path,
-                            self.cache.download_output_path(descriptor.name.clone()),
-                        ),
+                        inner: (source_path, self.cache.download_output_path(descriptor.name.clone())),
                         descriptor,
                     })
                     .map(SyncTask::Copy),
 
-                State::Http(kind) => Err(anyhow::anyhow!(
-                    "[{downloader_kind}] {kind:?} is not implemented"
-                )),
-                State::Manual(kind) => Err(anyhow::anyhow!(
-                    "[{downloader_kind}] {kind:?} is not implemented"
-                )),
+                State::Http(kind) => Err(anyhow::anyhow!("[{downloader_kind}] {kind:?} is not implemented")),
+                State::Manual(kind) => Err(anyhow::anyhow!("[{downloader_kind}] {kind:?} is not implemented")),
                 State::WabbajackCDN(state) => WabbajackCDNDownloader::prepare_download(state)
                     .await
                     .context("wabbajack... :)")
                     .map(|source_urls| MergeDownloadTask {
-                        inner: (
-                            source_urls,
-                            self.cache.download_output_path(descriptor.name.clone()),
-                        ),
+                        inner: (source_urls, self.cache.download_output_path(descriptor.name.clone())),
                         descriptor,
                     })
                     .map(SyncTask::MergeDownload),
@@ -517,20 +452,11 @@ pub mod downloads {
             futures::stream::iter(archives)
                 .map(|Archive { descriptor, state }| async {
                     match self.cache.clone().verify(descriptor.clone()).await {
-                        Some(verified) => {
-                            Ok(Either::Left(verified.tap(|verified| {
-                                info!(?verified, "succesfully verified a file")
-                            })))
-                        }
+                        Some(verified) => Ok(Either::Left(verified.tap(|verified| info!(?verified, "succesfully verified a file")))),
                         None => self
                             .clone()
                             .prepare_sync_task(Archive {
-                                descriptor: descriptor.tap(|descriptor| {
-                                    warn!(
-                                        ?descriptor,
-                                        "could not verify a file, it will be downloaded"
-                                    )
-                                }),
+                                descriptor: descriptor.tap(|descriptor| warn!(?descriptor, "could not verify a file, it will be downloaded")),
                                 state,
                             })
                             .await
@@ -541,36 +467,19 @@ pub mod downloads {
                 .map_ok(|file| match file {
                     Either::Left(exists) => exists.pipe(Ok).pipe(ready).boxed_local(),
                     Either::Right(sync_task) => match sync_task {
-                        SyncTask::MergeDownload(WithArchiveDescriptor {
-                            inner: (from, to),
-                            descriptor,
-                        }) => stream_merge_file(from.clone(), to.clone(), descriptor.size)
+                        SyncTask::MergeDownload(WithArchiveDescriptor { inner: (from, to), descriptor }) => {
+                            stream_merge_file(from.clone(), to.clone(), descriptor.size)
+                                .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
+                                .map(move |res| res.with_context(|| format!("when downloading [{from:?} -> {to:?}]")))
+                                .boxed_local()
+                        }
+                        SyncTask::Download(WithArchiveDescriptor { inner: (from, to), descriptor }) => stream_file(from.clone(), to.clone(), descriptor.size)
                             .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
-                            .map(move |res| {
-                                res.with_context(|| {
-                                    format!("when downloading [{from:?} -> {to:?}]")
-                                })
-                            })
+                            .map(move |res| res.with_context(|| format!("when downloading [{from} -> {to:?}]")))
                             .boxed_local(),
-                        SyncTask::Download(WithArchiveDescriptor {
-                            inner: (from, to),
-                            descriptor,
-                        }) => stream_file(from.clone(), to.clone(), descriptor.size)
+                        SyncTask::Copy(WithArchiveDescriptor { inner: (from, to), descriptor }) => copy_local_file(from.clone(), to.clone(), descriptor.size)
                             .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
-                            .map(move |res| {
-                                res.with_context(|| format!("when downloading [{from} -> {to:?}]"))
-                            })
-                            .boxed_local(),
-                        SyncTask::Copy(WithArchiveDescriptor {
-                            inner: (from, to),
-                            descriptor,
-                        }) => copy_local_file(from.clone(), to.clone(), descriptor.size)
-                            .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
-                            .map(move |res| {
-                                res.with_context(|| {
-                                    format!("when when copying [{from:?} -> {to:?}]")
-                                })
-                            })
+                            .map(move |res| res.with_context(|| format!("when when copying [{from:?} -> {to:?}]")))
                             .boxed_local(),
                     },
                 })
@@ -653,13 +562,7 @@ pub async fn install_modlist(
                             many_errors.iter().for_each(|error| {
                                 print_error("ARCHIVE", error);
                             });
-                            print_error(
-                                "ARCHIVES",
-                                &anyhow::anyhow!(
-                                    "could not continue due to [{}] errors",
-                                    many_errors.len()
-                                ),
-                            );
+                            print_error("ARCHIVES", &anyhow::anyhow!("could not continue due to [{}] errors", many_errors.len()));
                             Err(errors.into_iter().next().unwrap())
                         }
                     })

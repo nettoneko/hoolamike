@@ -1,12 +1,10 @@
-use std::path::PathBuf;
+use {
+    crate::serde_type_guard,
+    serde::{Deserialize, Serialize},
+    std::path::PathBuf,
+};
 
-use serde::{Deserialize, Serialize};
-
-use crate::serde_type_guard;
-
-#[derive(
-    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, derive_more::Display,
-)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, derive_more::Display)]
 pub enum DirectiveKind {
     CreateBSA,
     FromArchive,
@@ -100,7 +98,7 @@ pub struct Archive {
     pub descriptor: ArchiveDescriptor,
     /// state: State
     /// Description: Contains information about where and how to download the archive.
-    /// Usage: Use the State fields to handle the download process.        
+    /// Usage: Use the State fields to handle the download process.
     pub state: State,
 }
 
@@ -109,10 +107,7 @@ mod type_guard;
 #[derive(Debug, Serialize, Deserialize, enum_kinds::EnumKind)]
 #[serde(tag = "$type")]
 #[serde(deny_unknown_fields)]
-#[enum_kind(
-    DownloadKind,
-    derive(Serialize, Deserialize, PartialOrd, Ord, derive_more::Display,)
-)]
+#[enum_kind(DownloadKind, derive(Serialize, Deserialize, PartialOrd, Ord, derive_more::Display,))]
 pub enum State {
     #[serde(rename = "NexusDownloader, Wabbajack.Lib")]
     Nexus(NexusState),
@@ -158,20 +153,7 @@ pub struct GameFileSourceState {
     pub game: GameName,
 }
 
-#[derive(
-    Debug,
-    Serialize,
-    Deserialize,
-    Clone,
-    derive_more::AsRef,
-    derive_more::Display,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    derive_more::Constructor,
-)]
+#[derive(Debug, Serialize, Deserialize, Clone, derive_more::AsRef, derive_more::Display, PartialEq, Eq, PartialOrd, Ord, Hash, derive_more::Constructor)]
 pub struct GameName(String);
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -284,7 +266,7 @@ pub struct UnknownState {
     #[serde(rename = "ModID")]
     /// mod_id: Option<usize> (renamed from ModID)
     /// Description: Mod ID from the hosting site.
-    /// Usage: Required for downloading from specific mod repositories.        
+    /// Usage: Required for downloading from specific mod repositories.
     pub mod_id: Option<usize>,
 }
 
@@ -342,7 +324,7 @@ pub struct Directive {
     pub file_states: Option<Vec<FileState>>,
     /// state: Option<DirectiveState>
     /// Description: Additional metadata about the directive's state.
-    /// Usage: Process directives accurately based on their state.        
+    /// Usage: Process directives accurately based on their state.
     pub state: Option<DirectiveState>,
 }
 
@@ -368,7 +350,7 @@ pub struct ImageState {
     pub perceptual_hash: String,
     /// width: u64
     /// Description: Width of the image in pixels.
-    /// Usage: May be needed for processing or validation.        
+    /// Usage: May be needed for processing or validation.
     pub width: u64,
 }
 
@@ -396,7 +378,7 @@ pub struct DirectiveState {
     pub kind: u64,
     /// version: u64
     /// Description: Version number of the directive or file format.
-    /// Usage: Ensure compatibility with processing routines.        
+    /// Usage: Ensure compatibility with processing routines.
     pub version: u64,
 }
 
@@ -476,7 +458,7 @@ pub struct FileState {
     pub name_hash: u64,
     /// path: PathBuf
     /// Description: File system path to the file.
-    /// Usage: Access the file during installation.        
+    /// Usage: Access the file during installation.
     pub path: PathBuf,
 }
 
@@ -502,29 +484,25 @@ pub struct FileStateChunk {
     pub full_sz: u64,
     /// start_mip: u64
     /// Description: Starting mipmap level for this chunk.
-    /// Usage: For texture processing.        
+    /// Usage: For texture processing.
     pub start_mip: u64,
 }
 
 pub mod parsing_helpers {
-    use std::collections::BTreeMap;
-
-    use anyhow::{Context, Result};
-    use itertools::Itertools;
-    use serde_json::Value;
-    use tap::prelude::*;
-    use tracing::info;
+    use {
+        anyhow::{Context, Result},
+        itertools::Itertools,
+        serde_json::Value,
+        std::collections::BTreeMap,
+        tap::prelude::*,
+        tracing::info,
+    };
 
     #[allow(dead_code)]
     #[derive(Debug)]
     enum ValueSummary<'a> {
-        Map {
-            fields: BTreeMap<&'a str, Self>,
-        },
-        Array {
-            first_element: Option<Box<Self>>,
-            len: usize,
-        },
+        Map { fields: BTreeMap<&'a str, Self> },
+        Array { first_element: Option<Box<Self>>, len: usize },
         Other(&'a serde_json::Value),
     }
 

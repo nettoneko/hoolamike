@@ -1,20 +1,21 @@
-use std::{future::ready, str::FromStr, sync::Arc};
-
-use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
-use futures::{FutureExt, TryFutureExt};
-use reqwest::{
-    header::{HeaderMap, HeaderValue},
-    Client, ClientBuilder, Response,
-};
-use serde::{Deserialize, Serialize};
-use tap::prelude::*;
-
-use crate::{config_file::NexusConfig, modlist_json::GameName};
-
-use super::{
-    helpers::{FutureAnyhowExt, ReqwestPrettyJsonResponse},
-    DownloadTask,
+use {
+    super::{
+        helpers::{FutureAnyhowExt, ReqwestPrettyJsonResponse},
+        DownloadTask,
+    },
+    crate::{config_file::NexusConfig, modlist_json::GameName},
+    anyhow::{Context, Result},
+    chrono::{DateTime, Utc},
+    futures::{FutureExt, TryFutureExt},
+    reqwest::{
+        header::{HeaderMap, HeaderValue},
+        Client,
+        ClientBuilder,
+        Response,
+    },
+    serde::{Deserialize, Serialize},
+    std::{future::ready, str::FromStr, sync::Arc},
+    tap::prelude::*,
 };
 
 pub struct NexusDownloader {

@@ -1,18 +1,21 @@
-use soup::{NodeExt, QueryBuilderExt};
-use std::{collections::BTreeMap, future::ready};
-use tap::prelude::*;
-use url::form_urlencoded;
-
-use anyhow::{Context, Result};
+use {
+    anyhow::{Context, Result},
+    soup::{NodeExt, QueryBuilderExt},
+    std::{collections::BTreeMap, future::ready},
+    tap::prelude::*,
+    url::form_urlencoded,
+};
 
 pub struct GoogleDriveDownloader {}
 
 pub mod response_parsing {
-    use anyhow::{Context, Result};
-    use regex::Regex;
-    use scraper::{Html, Selector};
-    use std::collections::HashMap;
-    use url::{form_urlencoded, Url};
+    use {
+        anyhow::{Context, Result},
+        regex::Regex,
+        scraper::{Html, Selector},
+        std::collections::HashMap,
+        url::{form_urlencoded, Url},
+    };
 
     #[derive(Debug)]
     struct FileURLRetrievalError(String);
@@ -27,10 +30,7 @@ pub mod response_parsing {
 
         for line in contents.lines() {
             if let Some(captures) = download_url_re.captures(line) {
-                url = format!(
-                    "https://docs.google.com{}",
-                    captures.get(1).unwrap().as_str()
-                );
+                url = format!("https://docs.google.com{}", captures.get(1).unwrap().as_str());
                 url = url.replace("&amp;", "&");
                 break;
             }
@@ -41,13 +41,10 @@ pub mod response_parsing {
                 if let Some(action) = form.value().attr("action") {
                     url = action.replace("&amp;", "&");
                     let mut url_components = Url::parse(&url).context("Invalid URL format")?;
-                    let mut query_params: HashMap<_, _> =
-                        url_components.query_pairs().into_owned().collect();
+                    let mut query_params: HashMap<_, _> = url_components.query_pairs().into_owned().collect();
 
                     for input in form.select(&Selector::parse("input[type=\"hidden\"]").unwrap()) {
-                        if let (Some(name), Some(value)) =
-                            (input.value().attr("name"), input.value().attr("value"))
-                        {
+                        if let (Some(name), Some(value)) = (input.value().attr("name"), input.value().attr("value")) {
                             query_params.insert(name.to_string(), value.to_string());
                         }
                     }
@@ -79,10 +76,9 @@ pub mod response_parsing {
 impl GoogleDriveDownloader {
     /// wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1WmGuPCblM-L22O38qs939FRRs9ehnLsU' -O your_file_name
     pub async fn download(id: String, expected_size: u64) -> Result<url::Url> {
-        let original_url =
-            format!("https://docs.google.com/uc?export=download&id={id}&export=download&confirm=t")
-                .pipe_deref(url::Url::parse)
-                .context("invalid url")?;
+        let original_url = format!("https://docs.google.com/uc?export=download&id={id}&export=download&confirm=t")
+            .pipe_deref(url::Url::parse)
+            .context("invalid url")?;
 
         let response = {
             reqwest::Client::new()

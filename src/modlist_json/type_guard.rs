@@ -22,10 +22,7 @@ macro_rules! serde_type_guard {
                 if value == $identifier {
                     Ok($name)
                 } else {
-                    Err(serde::de::Error::custom(format!(
-                        "Expected \"{}\", but found \"{}\"",
-                        $identifier, value
-                    )))
+                    Err(serde::de::Error::custom(format!("Expected \"{}\", but found \"{}\"", $identifier, value)))
                 }
             }
         }

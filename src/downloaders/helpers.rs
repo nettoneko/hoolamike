@@ -1,9 +1,11 @@
-use anyhow::{Context, Result};
-use futures::{FutureExt, TryFuture, TryFutureExt};
-use itertools::Itertools;
-use std::future::{ready, Future};
-use tap::prelude::*;
-use tracing::{debug, trace};
+use {
+    anyhow::{Context, Result},
+    futures::{FutureExt, TryFuture, TryFutureExt},
+    itertools::Itertools,
+    std::future::{ready, Future},
+    tap::prelude::*,
+    tracing::{debug, trace},
+};
 
 #[extension_traits::extension(pub(crate) trait FutureAnyhowExt)]
 impl<U, T, E> U
@@ -27,9 +29,7 @@ where
     }
 }
 
-pub fn deserialize_json_with_error_location<T: serde::de::DeserializeOwned>(
-    text: &str,
-) -> Result<T> {
+pub fn deserialize_json_with_error_location<T: serde::de::DeserializeOwned>(text: &str) -> Result<T> {
     serde_json::from_str(text)
         .context("parsing text")
         .with_context(|| {
@@ -63,10 +63,7 @@ impl reqwest::Response
 where
     Self: Sized,
 {
-    async fn json_response_ok<T: serde::de::DeserializeOwned, V: FnOnce(&str) -> Result<()>>(
-        self,
-        validate: V,
-    ) -> Result<T> {
+    async fn json_response_ok<T: serde::de::DeserializeOwned, V: FnOnce(&str) -> Result<()>>(self, validate: V) -> Result<T> {
         match self.error_for_status_ref() {
             Ok(_) => Ok(self),
             Err(error) => match self.text().await {
@@ -77,13 +74,7 @@ where
         }
         .pipe(ready)
         .and_then(|response| response.text().map_context("extracting text from response"))
-        .inspect_ok(|text| {
-            trace!(
-                "fetched {} bytes of text ({}...)",
-                text.bytes().len(),
-                &text[..(64.min(text.len()))]
-            )
-        })
+        .inspect_ok(|text| trace!("fetched {} bytes of text ({}...)", text.bytes().len(), &text[..(64.min(text.len()))]))
         .and_then(|response| {
             validate(&response)
                 .pipe(ready)
