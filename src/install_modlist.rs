@@ -21,7 +21,6 @@ pub mod download_cache {
             progress_bars::{print_warn, vertical_progress_bar, PROGRESS_BAR, VALIDATE_TOTAL_PROGRESS_BAR},
         },
         anyhow::{Context, Result},
-        base64::Engine,
         futures::{FutureExt, TryFutureExt},
         std::{future::ready, hash::Hasher, path::PathBuf, sync::Arc},
         tap::prelude::*,
@@ -205,7 +204,7 @@ pub mod downloads {
 
     #[derive(Clone)]
     pub struct Synchronizers {
-        config: Arc<DownloadersConfig>,
+        pub config: Arc<DownloadersConfig>,
         inner: DownloadersInner,
         cache: Arc<download_cache::DownloadCache>,
         game_synchronizers: Arc<GameFileSourceSynchronizers>,
@@ -535,17 +534,17 @@ pub async fn install_modlist(
         .and_then(
             move |Modlist {
                       archives,
-                      author,
-                      description,
-                      directives,
-                      game_type,
-                      image,
-                      is_nsfw,
-                      name,
-                      readme,
-                      version,
-                      wabbajack_version,
-                      website,
+                      author: _,
+                      description: _,
+                      directives: _,
+                      game_type: _,
+                      image: _,
+                      is_nsfw: _,
+                      name: _,
+                      readme: _,
+                      version: _,
+                      wabbajack_version: _,
+                      website: _,
                   }| {
                 downloaders
                     .sync_downloads(archives)

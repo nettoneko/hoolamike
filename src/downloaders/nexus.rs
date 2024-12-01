@@ -3,7 +3,7 @@ use {
     crate::modlist_json::GameName,
     anyhow::{Context, Result},
     chrono::{DateTime, Utc},
-    futures::{FutureExt, TryFutureExt},
+    futures::TryFutureExt,
     reqwest::{
         header::{HeaderMap, HeaderValue},
         Client,

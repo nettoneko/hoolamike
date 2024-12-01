@@ -3,7 +3,7 @@ use {
     crate::modlist_json::WabbajackCDNDownloaderState,
     anyhow::{Context, Result},
     flate2::read::GzDecoder,
-    futures::{StreamExt, TryFutureExt},
+    futures::TryFutureExt,
     itertools::Itertools,
     reqwest::Client,
     serde::{Deserialize, Serialize},
@@ -73,11 +73,11 @@ impl WabbajackCDNDownloader {
                 move |WabbajackCdnFile {
                           munged_name,
                           parts,
-                          author,
-                          server_assigned_unique_id,
-                          hash,
-                          original_file_name,
-                          size,
+                          author: _,
+                          server_assigned_unique_id: _,
+                          hash: _,
+                          original_file_name: _,
+                          size: _,
                       }| {
                     parts
                         .into_iter()

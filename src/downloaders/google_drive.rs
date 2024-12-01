@@ -1,6 +1,5 @@
 use {
     anyhow::{Context, Result},
-    soup::NodeExt,
     tap::prelude::*,
 };
 
@@ -14,9 +13,6 @@ pub mod response_parsing {
         std::collections::HashMap,
         url::{form_urlencoded, Url},
     };
-
-    #[derive(Debug)]
-    struct FileURLRetrievalError(String);
 
     /// BASED ON https://github.com/wkentaro/gdown/blob/main/gdown/download.py
     pub fn get_url_from_gdrive_confirmation(contents: &str) -> Result<url::Url> {
