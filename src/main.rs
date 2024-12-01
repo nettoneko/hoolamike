@@ -217,7 +217,7 @@ pub mod modlist_data {
                 total_directives: directives.len(),
                 unique_directive_kinds: directives
                     .iter()
-                    .map(|d| d.directive_kind)
+                    .map(|d| d.directive_kind())
                     .pipe(summarize_value_count),
                 name: name.clone(),
                 // unique_headers: archives
