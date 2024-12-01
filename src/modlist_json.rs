@@ -137,7 +137,7 @@ pub enum State {
     #[serde(rename = "GameFileSourceDownloader, Wabbajack.Lib")]
     GameFileSource(UnknownState),
     #[serde(rename = "GoogleDriveDownloader, Wabbajack.Lib")]
-    GoogleDrive(UnknownState),
+    GoogleDrive(GoogleDriveState),
     #[serde(rename = "HttpDownloader, Wabbajack.Lib")]
     Http(UnknownState),
     #[serde(rename = "ManualDownloader, Wabbajack.Lib")]
@@ -151,7 +151,12 @@ impl State {
         DownloadKind::from(self)
     }
 }
-
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[serde(deny_unknown_fields)]
+pub struct GoogleDriveState {
+    pub id: String,
+}
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]

@@ -8,6 +8,7 @@ use tap::prelude::*;
 use tracing::{debug, info, warn};
 
 use clap::{Parser, Subcommand};
+pub const BUFFER_SIZE: usize = 1024 * 128;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -230,11 +231,44 @@ pub(crate) mod progress_bars {
     use tap::prelude::*;
 
     pub(crate) static PROGRESS_BAR: Lazy<MultiProgress> = Lazy::new(MultiProgress::new);
-    pub fn vertical_progress_bar(len: u64, color: &str) -> ProgressBar {
+    pub(crate) static VALIDATE_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
+        PROGRESS_BAR.add(
+            vertical_progress_bar(0, ProgressKind::Validate).tap_mut(|pb| {
+                pb.set_message("TOTAL");
+                pb.set_prefix("validate");
+            }),
+        )
+    });
+    pub(crate) static DOWNLOAD_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
+        PROGRESS_BAR.add(
+            vertical_progress_bar(0, ProgressKind::Download).tap_mut(|pb| {
+                pb.set_message("TOTAL");
+                pb.set_prefix("download");
+            }),
+        )
+    });
+
+    #[derive(Debug, Clone, Copy, derive_more::Display)]
+    pub enum ProgressKind {
+        Validate,
+        Download,
+    }
+
+    impl ProgressKind {
+        fn color(self) -> &'static str {
+            match self {
+                ProgressKind::Validate => "yellow",
+                ProgressKind::Download => "blue",
+            }
+        }
+    }
+    pub fn vertical_progress_bar(len: u64, kind: ProgressKind) -> ProgressBar {
+        let color = kind.color();
         ProgressBar::new(len).tap_mut(|pb| {
+            pb.enable_steady_tick(std::time::Duration::from_millis(600));
             pb.set_style(
                 ProgressStyle::with_template(
-                    &format!("{{prefix:.bold}}▕{{bar:.{color}}}▏{{msg:.{color}}} ({{bytes}}/{{total_bytes}}, ETA {{eta}})"),
+                    &format!("{{prefix:.bold}}▕{{bar:.{color}}}▏{{msg:.{color}}} ({{bytes}}/{{total_bytes}} {{bytes_per_sec}} ETA {{eta}})"),
                 )
                 .unwrap()
                 .progress_chars("█▇▆▅▄▃▂▁  "),

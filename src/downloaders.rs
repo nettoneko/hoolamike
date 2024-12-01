@@ -7,9 +7,7 @@ use crate::modlist_json::ArchiveDescriptor;
 pub mod gamefile_source_downloader {
     pub struct GameFileSourceDownloader {}
 }
-pub mod google_drive {
-    pub struct GoogleDriveDownloader {}
-}
+pub mod google_drive;
 pub mod http {
     pub struct HttpDownloader {}
 }

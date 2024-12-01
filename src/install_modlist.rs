@@ -2,13 +2,16 @@ use std::{future::ready, path::PathBuf};
 
 use anyhow::{Context, Result};
 use downloads::Downloaders;
-use futures::TryFutureExt;
+use futures::{FutureExt, TryFutureExt};
 use tracing::info;
 
 use crate::{
     config_file::{HoolamikeConfig, InstallationConfig},
     helpers::human_readable_size,
     modlist_json::Modlist,
+    progress_bars::{
+        print_error, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR, VALIDATE_TOTAL_PROGRESS_BAR,
+    },
 };
 use tap::prelude::*;
 
@@ -27,8 +30,11 @@ pub mod download_cache {
         modlist_json::ArchiveDescriptor,
         progress_bars::{
             print_error, print_success, print_warn, vertical_progress_bar, PROGRESS_BAR,
+            VALIDATE_TOTAL_PROGRESS_BAR,
         },
     };
+
+    use super::DOWNLOAD_TOTAL_PROGRESS_BAR;
 
     #[derive(Debug, Clone)]
     pub struct DownloadCache {
@@ -60,7 +66,7 @@ pub mod download_cache {
         let pb = PROGRESS_BAR
             .add(vertical_progress_bar(
                 tokio::fs::metadata(&path).await?.len(),
-                "yellow",
+                crate::progress_bars::ProgressKind::Validate,
             ))
             .tap_mut(|pb| {
                 pb.set_message(
@@ -75,13 +81,14 @@ pub mod download_cache {
         let mut file = tokio::fs::File::open(&path)
             .map_with_context(|| format!("opening file [{}]", path.display()))
             .await?;
-        let mut buffer: [u8; 1024 * 128] = std::array::from_fn(|_| 0);
+        let mut buffer: [u8; crate::BUFFER_SIZE] = std::array::from_fn(|_| 0);
         let mut hasher = xxhash_rust::xxh64::Xxh64::new(0);
         loop {
             match file.read(&mut buffer).await? {
                 0 => break,
                 read => {
                     pb.inc(read as u64);
+                    VALIDATE_TOTAL_PROGRESS_BAR.inc(read as u64);
                     hasher.update(&buffer[..read]);
                 }
             }
@@ -186,8 +193,14 @@ pub mod downloads {
             nexus::{self, NexusDownloader},
             DownloadTask, WithArchiveDescriptor,
         },
-        modlist_json::{Archive, ArchiveDescriptor, DownloadKind, NexusState, State, UnknownState},
-        progress_bars::{print_error, print_success, vertical_progress_bar, PROGRESS_BAR},
+        modlist_json::{
+            Archive, ArchiveDescriptor, DownloadKind, GoogleDriveState, NexusState, State,
+            UnknownState,
+        },
+        progress_bars::{
+            print_error, print_success, vertical_progress_bar, ProgressKind,
+            DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR,
+        },
     };
 
     #[derive(Clone)]
@@ -226,17 +239,20 @@ pub mod downloads {
     }
 
     async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
-        let pb = PROGRESS_BAR
-            .add(vertical_progress_bar(expected_size, "green"))
-            .tap_mut(|pb| {
-                pb.set_message(
-                    to.file_name()
-                        .expect("file must have a name")
-                        .to_string_lossy()
-                        .to_string(),
-                );
-                pb.set_prefix("download");
-            });
+        let file_name = to
+            .file_name()
+            .expect("file must have a name")
+            .to_string_lossy()
+            .to_string();
+        let pb = {
+            DOWNLOAD_TOTAL_PROGRESS_BAR.inc_length(expected_size);
+            PROGRESS_BAR
+                .add(vertical_progress_bar(expected_size, ProgressKind::Download))
+                .tap_mut(|pb| {
+                    pb.set_message(file_name.clone());
+                    pb.set_prefix("download");
+                })
+        };
 
         let mut file = tokio::fs::OpenOptions::new()
             .write(true)
@@ -254,6 +270,7 @@ pub mod downloads {
             match chunk {
                 Ok(chunk) => {
                     pb.inc(chunk.len() as u64);
+                    DOWNLOAD_TOTAL_PROGRESS_BAR.inc(chunk.len() as u64);
                     tokio::io::copy(&mut chunk.as_ref(), &mut writer)
                         .await
                         .with_context(|| format!("writing to fd {}", to.display()))?;
@@ -261,7 +278,7 @@ pub mod downloads {
                 Err(message) => Err(message)?,
             }
         }
-        pb.finish_with_message("download successful");
+        pb.finish_with_message(format!("{file_name} [OK]"));
         Ok(to)
     }
 
@@ -282,6 +299,7 @@ pub mod downloads {
             self,
             Archive { descriptor, state }: Archive,
         ) -> Result<DownloadTask> {
+            let downloader_kind = state.kind();
             match state {
                 State::Nexus(NexusState {
                     game_name,
@@ -302,24 +320,34 @@ pub mod downloads {
                                 file_id,
                             })
                         })
-                        .map_ok(|url| DownloadTask {
-                            inner: (
-                                url,
-                                self.cache.download_output_path(descriptor.name.clone()),
-                            ),
-                            descriptor,
-                        })
                         .await
                 }
-                State::GameFileSource(kind) => Err(anyhow::anyhow!("{kind:?} is not implemented")),
-                State::GoogleDrive(kind) => Err(anyhow::anyhow!("{kind:?} is not implemented")),
-                State::Http(kind) => Err(anyhow::anyhow!("{kind:?} is not implemented")),
-                State::Manual(kind) => Err(anyhow::anyhow!("{kind:?} is not implemented")),
-                State::WabbajackCDN(kind) => Err(anyhow::anyhow!("{kind:?} is not implemented")),
+                State::GameFileSource(kind) => Err(anyhow::anyhow!(
+                    "[{downloader_kind}] {kind:?} is not implemented"
+                )),
+                State::GoogleDrive(GoogleDriveState { id }) => {
+                    crate::downloaders::google_drive::GoogleDriveDownloader::download(id)
+                }
+                State::Http(kind) => Err(anyhow::anyhow!(
+                    "[{downloader_kind}] {kind:?} is not implemented"
+                )),
+                State::Manual(kind) => Err(anyhow::anyhow!(
+                    "[{downloader_kind}] {kind:?} is not implemented"
+                )),
+                State::WabbajackCDN(kind) => Err(anyhow::anyhow!(
+                    "[{downloader_kind}] {kind:?} is not implemented"
+                )),
             }
+            .map(|url| DownloadTask {
+                inner: (
+                    url,
+                    self.cache.download_output_path(descriptor.name.clone()),
+                ),
+                descriptor,
+            })
         }
 
-        pub async fn sync_downloads(self, archives: Vec<Archive>) -> Result<()> {
+        pub async fn sync_downloads(self, archives: Vec<Archive>) -> Vec<anyhow::Error> {
             futures::stream::iter(archives)
                 .map(|Archive { descriptor, state }| async {
                     match self.cache.clone().verify(descriptor.clone()).await {
@@ -354,15 +382,21 @@ pub mod downloads {
                         .boxed_local(),
                 })
                 .try_buffer_unordered(10)
-                .for_each_concurrent(10, |file| {
+                .filter_map(|file| {
                     match file {
-                        Ok(all_good) => print_success(&all_good.descriptor.name, "OK"),
-                        Err(error_occurred) => print_error("ERROR", &error_occurred),
+                        Ok(all_good) => {
+                            print_success(&all_good.descriptor.name, "OK");
+                            None
+                        }
+                        Err(error_occurred) => {
+                            print_error("ERROR", &error_occurred);
+                            Some(error_occurred)
+                        }
                     }
                     .pipe(ready)
                 })
+                .collect::<Vec<_>>()
                 .await
-                .pipe(Ok)
         }
     }
 }
@@ -395,6 +429,17 @@ pub async fn install_modlist(
                 })
         })
         .and_then(|modlist| serde_json::from_str::<Modlist>(&modlist).context("parsing modlist"))
+        .tap_ok(|modlist| {
+            // PROGRESS
+            modlist
+                .archives
+                .iter()
+                .map(|archive| archive.descriptor.size)
+                .sum::<u64>()
+                .pipe(|total_size| {
+                    VALIDATE_TOTAL_PROGRESS_BAR.set_length(total_size);
+                })
+        })
         .pipe(ready)
         .and_then(
             move |Modlist {
@@ -410,7 +455,26 @@ pub async fn install_modlist(
                       version,
                       wabbajack_version,
                       website,
-                  }| { downloaders.sync_downloads(archives) },
+                  }| {
+                downloaders
+                    .sync_downloads(archives)
+                    .map(|errors| match errors.as_slice() {
+                        &[] => Ok(()),
+                        many_errors => {
+                            many_errors.iter().for_each(|error| {
+                                print_error("ARCHIVE", error);
+                            });
+                            print_error(
+                                "ARCHIVES",
+                                &anyhow::anyhow!(
+                                    "could not continue due to [{}] errors",
+                                    many_errors.len()
+                                ),
+                            );
+                            Err(errors.into_iter().next().unwrap())
+                        }
+                    })
+            },
         )
         .await
 }
