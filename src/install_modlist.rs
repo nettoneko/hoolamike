@@ -18,7 +18,7 @@ pub mod download_cache {
         crate::{
             downloaders::{helpers::FutureAnyhowExt, WithArchiveDescriptor},
             modlist_json::ArchiveDescriptor,
-            progress_bars::{print_warn, vertical_progress_bar, PROGRESS_BAR, VALIDATE_TOTAL_PROGRESS_BAR},
+            progress_bars::{vertical_progress_bar, PROGRESS_BAR, VALIDATE_TOTAL_PROGRESS_BAR},
         },
         anyhow::{Context, Result},
         futures::{FutureExt, TryFutureExt},
@@ -78,7 +78,7 @@ pub mod download_cache {
                 }
             }
         }
-        pb.finish_and_clear();
+        pb.finish();
         Ok(hasher.finish())
     }
 
@@ -144,7 +144,6 @@ pub mod download_cache {
                             descriptor: descriptor.clone(),
                         })
                 })
-                .tap_err(|message| print_warn(&descriptor.name, message))
                 .ok()
         }
     }
@@ -258,7 +257,7 @@ pub mod downloads {
                 "[{from:?} -> {to:?}] local copy finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{copied} bytes])"
             )
         }
-        pb.finish_and_clear();
+        pb.finish();
         Ok(to)
     }
 
@@ -309,7 +308,7 @@ pub mod downloads {
         if downloaded != expected_size {
             anyhow::bail!("[{from:?}] download finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{downloaded} bytes])")
         }
-        pb.finish_and_clear();
+        pb.finish();
         Ok(to)
     }
     pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
@@ -324,7 +323,6 @@ pub mod downloads {
                 .add(vertical_progress_bar(expected_size, ProgressKind::Download))
                 .tap_mut(|pb| {
                     pb.set_message(file_name.clone());
-                    pb.set_prefix("download");
                 })
         };
 
@@ -357,7 +355,7 @@ pub mod downloads {
         if downloaded != expected_size {
             anyhow::bail!("[{from}] download finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{downloaded} bytes])")
         }
-        pb.finish_and_clear();
+        pb.finish();
         Ok(to)
     }
     impl Synchronizers {

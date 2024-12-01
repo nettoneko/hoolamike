@@ -325,16 +325,25 @@ pub(crate) mod progress_bars {
             .println(format!("{} {}", style(for_target).bold().dim().red(), message))
             .ok();
     }
-    pub fn print_warn(for_target: &str, message: &anyhow::Error) {
-        PROGRESS_BAR
-            .println(format!("{} {message}", style(for_target).bold().dim().yellow(),))
-            .ok();
-    }
+    // pub fn print_warn(for_target: &str, message: &anyhow::Error) {
+    //     PROGRESS_BAR
+    //         .println(format!("{} {message}", style(for_target).bold().dim().yellow(),))
+    //         .ok();
+    // }
 }
+fn setup_logging() {
+    use tracing_subscriber::{fmt, prelude::__tracing_subscriber_SubscriberExt, EnvFilter};
 
+    let subscriber = tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
+        .with(fmt::Layer::new().with_writer(std::io::stderr));
+    tracing::subscriber::set_global_default(subscriber)
+        .context("Unable to set a global subscriber")
+        .expect("logging failed");
+}
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    setup_logging();
     let Cli { command } = Cli::parse();
     let config = config_file::HoolamikeConfig::find()
         .tap_err(|message| warn!("no config detected, using default config\n{message:#?}"))
