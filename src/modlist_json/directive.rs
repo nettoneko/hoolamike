@@ -1,4 +1,10 @@
-use super::*;
+use {super::*, nonempty::NonEmpty};
+
+/// typically starts with an archive hash and then goes on recursively
+/// with paths within those archives
+/// BONUS_POINTS: try working with it without fully  extracting the nested archives
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ArchiveHashPath(NonEmpty<String>);
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -30,6 +36,7 @@ pub struct CreateBSADirective {
     /// Usage: Process directives accurately based on their state.
     pub state: DirectiveState,
 }
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
@@ -49,8 +56,9 @@ pub struct FromArchiveDirective {
     /// archive_hash_path: Option<Vec<String>>
     /// Description: Paths within an archive, identified by their hashes.
     /// Usage: Locate specific files inside archives.
-    pub archive_hash_path: Vec<String>,
+    pub archive_hash_path: ArchiveHashPath,
 }
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
@@ -73,6 +81,7 @@ pub struct InlineFileDirective {
     /// Usage: Where to place extracted or processed files.
     pub to: String,
 }
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
@@ -97,7 +106,7 @@ pub struct PatchedFromArchiveDirective {
     /// archive_hash_path: Option<Vec<String>>
     /// Description: Paths within an archive, identified by their hashes.
     /// Usage: Locate specific files inside archives.
-    pub archive_hash_path: Vec<String>,
+    pub archive_hash_path: ArchiveHashPath,
     /// from_hash: Option<String>
     /// Description: Hash of the source file within an archive.
     /// Usage: Verify the correct source file is used.
@@ -108,6 +117,7 @@ pub struct PatchedFromArchiveDirective {
     /// Usage: Apply the correct patch during installation.
     pub patch_id: String,
 }
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
@@ -154,5 +164,5 @@ pub struct TransformedTextureDirective {
     /// archive_hash_path: Option<Vec<String>>
     /// Description: Paths within an archive, identified by their hashes.
     /// Usage: Locate specific files inside archives.
-    pub archive_hash_path: Vec<String>,
+    pub archive_hash_path: ArchiveHashPath,
 }

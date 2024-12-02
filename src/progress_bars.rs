@@ -9,16 +9,19 @@ pub(crate) static PROGRESS_BAR: Lazy<MultiProgress> = Lazy::new(MultiProgress::n
 pub(crate) static VALIDATE_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
     PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Validate).tap_mut(|pb| {
         pb.set_message("TOTAL");
+        pb.abandon_with_message("adad");
     }))
 });
 pub(crate) static DOWNLOAD_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
     PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Download).tap_mut(|pb| {
         pb.set_message("TOTAL");
+        pb.abandon_with_message("adad");
     }))
 });
 pub(crate) static COPY_LOCAL_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
     PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Copy).tap_mut(|pb| {
         pb.set_message("TOTAL");
+        pb.abandon_with_message("adad");
     }))
 });
 
@@ -50,7 +53,7 @@ pub fn vertical_progress_bar(len: u64, kind: ProgressKind) -> ProgressBar {
     let color = kind.color();
     let prefix = kind.prefix();
     ProgressBar::new(len).tap_mut(|pb| {
-        pb.enable_steady_tick(std::time::Duration::from_millis(600));
+        pb.enable_steady_tick(std::time::Duration::from_millis(800));
         pb.set_prefix(prefix);
         pb.set_style(
             ProgressStyle::with_template(&format!(

@@ -17,6 +17,7 @@ use {
         progress_bars::{print_error, vertical_progress_bar, ProgressKind, COPY_LOCAL_TOTAL_PROGRESS_BAR, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR},
         BUFFER_SIZE,
     },
+    fs2::FileExt,
     futures::{FutureExt, StreamExt, TryStreamExt},
     std::sync::Arc,
     tokio::io::{AsyncReadExt, BufReader, BufWriter},
@@ -53,6 +54,21 @@ enum Either<L, R> {
     Right(R),
 }
 
+async fn prealocate_file(file_path: &mut tokio::fs::File, expected_size: u64) -> Result<()> {
+    file_path
+        .try_clone()
+        .map_context("cloning file handle")
+        .and_then(|file| file.into_std().map(Ok))
+        .and_then(|file| {
+            tokio::task::block_in_place(|| {
+                file.allocate(expected_size)
+                    .context("allocating expected size")
+            })
+            .pipe(ready)
+        })
+        .await
+}
+
 async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
     let file_name = to
         .file_name()
@@ -68,6 +84,11 @@ async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Resu
             })
     };
 
+    let mut source_file = tokio::fs::OpenOptions::new()
+        .read(true)
+        .open(&from)
+        .map_with_context(|| format!("opening [{}]", from.display()))
+        .await?;
     let mut target_file = tokio::fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -75,11 +96,7 @@ async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Resu
         .open(&to)
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
-    let mut source_file = tokio::fs::OpenOptions::new()
-        .read(true)
-        .open(&from)
-        .map_with_context(|| format!("opening [{}]", from.display()))
-        .await?;
+    prealocate_file(&mut target_file, expected_size).await?;
 
     let mut writer = BufWriter::new(&mut target_file);
     let mut reader = BufReader::new(&mut source_file);
@@ -103,7 +120,7 @@ async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Resu
     if copied != expected_size {
         anyhow::bail!("[{from:?} -> {to:?}] local copy finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{copied} bytes])")
     }
-    pb.finish();
+    pb.finish_and_clear();
     Ok(to)
 }
 
@@ -122,14 +139,16 @@ pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: 
             })
     };
 
-    let mut file = tokio::fs::OpenOptions::new()
+    let mut target_file = tokio::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .open(&to)
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
-    let mut writer = BufWriter::new(&mut file);
+    prealocate_file(&mut target_file, expected_size).await?;
+
+    let mut writer = BufWriter::new(&mut target_file);
     let mut downloaded = 0;
     for from_chunk in from.clone().into_iter() {
         let mut byte_stream = reqwest::get(from_chunk.to_string())
@@ -154,7 +173,7 @@ pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: 
     if downloaded != expected_size {
         anyhow::bail!("[{from:?}] download finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{downloaded} bytes])")
     }
-    pb.finish();
+    pb.finish_and_clear();
     Ok(to)
 }
 pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
@@ -172,14 +191,15 @@ pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Res
             })
     };
 
-    let mut file = tokio::fs::OpenOptions::new()
+    let mut target_file = tokio::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .open(&to)
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
-    let mut writer = BufWriter::new(&mut file);
+    prealocate_file(&mut target_file, expected_size).await?;
+    let mut writer = BufWriter::new(&mut target_file);
     let mut byte_stream = reqwest::get(from.to_string())
         .await
         .with_context(|| format!("making request to {from}"))?
@@ -201,7 +221,7 @@ pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Res
     if downloaded != expected_size {
         anyhow::bail!("[{from}] download finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{downloaded} bytes])")
     }
-    pb.finish();
+    pb.finish_and_clear();
     Ok(to)
 }
 impl Synchronizers {
@@ -293,7 +313,7 @@ impl Synchronizers {
                         .map(Either::Right),
                 }
             })
-            .buffer_unordered(num_cpus::get())
+            .buffer_unordered(num_cpus::get().checked_div(4).unwrap_or(num_cpus::get()))
             .map_ok(|file| match file {
                 Either::Left(exists) => exists.pipe(Ok).pipe(ready).boxed_local(),
                 Either::Right(sync_task) => match sync_task {
@@ -313,7 +333,7 @@ impl Synchronizers {
                         .boxed_local(),
                 },
             })
-            .try_buffer_unordered(10)
+            .try_buffer_unordered(4)
             .filter_map(|file| {
                 match file {
                     Ok(_) => None,

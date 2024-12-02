@@ -62,7 +62,7 @@ async fn calculate_hash(path: PathBuf) -> Result<u64> {
             }
         }
     }
-    pb.finish();
+    pb.finish_and_clear();
     Ok(hasher.finish())
 }
 
