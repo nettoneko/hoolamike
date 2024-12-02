@@ -15,13 +15,13 @@ use {
         },
         error::{MultiErrorCollectExt, TotalResult},
         modlist_json::{Archive, Directive, GoogleDriveState, HttpState, ManualState, NexusState, State},
-        progress_bars::{vertical_progress_bar, ProgressKind, COPY_LOCAL_TOTAL_PROGRESS_BAR, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR},
+        progress_bars::{print_success, vertical_progress_bar, ProgressKind, COPY_LOCAL_TOTAL_PROGRESS_BAR, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR},
         BUFFER_SIZE,
     },
     fs2::FileExt,
     futures::{FutureExt, StreamExt, TryStreamExt},
     std::sync::Arc,
-    tokio::io::{AsyncReadExt, BufReader, BufWriter},
+    tokio::io::AsyncReadExt,
     tracing::warn,
 };
 
@@ -55,21 +55,6 @@ enum Either<L, R> {
     Right(R),
 }
 
-async fn preallocate_file(file_path: &mut tokio::fs::File, expected_size: u64) -> Result<()> {
-    file_path
-        .try_clone()
-        .map_context("cloning file handle")
-        .and_then(|file| file.into_std().map(Ok))
-        .and_then(|file| {
-            tokio::task::block_in_place(|| {
-                file.allocate(expected_size)
-                    .context("allocating expected size")
-            })
-            .pipe(ready)
-        })
-        .await
-}
-
 async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
     let file_name = to
         .file_name()
@@ -78,8 +63,8 @@ async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Resu
         .to_string();
     let pb = {
         COPY_LOCAL_TOTAL_PROGRESS_BAR.inc_length(expected_size);
-        PROGRESS_BAR
-            .add(vertical_progress_bar(expected_size, ProgressKind::Copy))
+        vertical_progress_bar(expected_size, ProgressKind::Copy)
+            .attach_to(&PROGRESS_BAR)
             .tap_mut(|pb| {
                 pb.set_message(file_name.clone());
             })
@@ -90,38 +75,21 @@ async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Resu
         .open(&from)
         .map_with_context(|| format!("opening [{}]", from.display()))
         .await?;
-    let mut target_file = tokio::fs::OpenOptions::new()
+    let target_file = tokio::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .open(&to)
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
-    preallocate_file(&mut target_file, expected_size).await?;
 
-    let mut writer = BufWriter::new(&mut target_file);
-    let mut reader = BufReader::new(&mut source_file);
-
-    let mut copied = 0;
-    let mut buffer = [0; BUFFER_SIZE];
-    loop {
-        match reader.read(&mut buffer).await? {
-            0 => break,
-            copied_chunk => {
-                copied += copied_chunk as u64;
-                pb.inc(copied_chunk as u64);
-                COPY_LOCAL_TOTAL_PROGRESS_BAR.inc(copied_chunk as u64);
-                tokio::io::copy(&mut buffer.as_ref(), &mut writer)
-                    .await
-                    .with_context(|| format!("writing to {}", to.display()))?;
-            }
-        }
-    }
+    let copied = tokio::io::copy(&mut source_file, &mut pb.wrap_async_write(target_file))
+        .await
+        .context("copying")?;
 
     if copied != expected_size {
         anyhow::bail!("[{from:?} -> {to:?}] local copy finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{copied} bytes])")
     }
-    pb.finish_and_clear();
     Ok(to)
 }
 
@@ -133,23 +101,22 @@ pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: 
         .to_string();
     let pb = {
         DOWNLOAD_TOTAL_PROGRESS_BAR.inc_length(expected_size);
-        PROGRESS_BAR
-            .add(vertical_progress_bar(expected_size, ProgressKind::Download))
+        vertical_progress_bar(expected_size, ProgressKind::Download)
+            .attach_to(&PROGRESS_BAR)
             .tap_mut(|pb| {
                 pb.set_message(file_name.clone());
             })
     };
 
-    let mut target_file = tokio::fs::OpenOptions::new()
+    let target_file = tokio::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .open(&to)
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
-    preallocate_file(&mut target_file, expected_size).await?;
 
-    let mut writer = BufWriter::new(&mut target_file);
+    let mut writer = &mut pb.wrap_async_write(target_file);
     let mut downloaded = 0;
     for from_chunk in from.clone().into_iter() {
         let mut byte_stream = reqwest::get(from_chunk.to_string())
@@ -174,7 +141,6 @@ pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: 
     if downloaded != expected_size {
         anyhow::bail!("[{from:?}] download finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{downloaded} bytes])")
     }
-    pb.finish_and_clear();
     Ok(to)
 }
 pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
@@ -185,8 +151,8 @@ pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Res
         .to_string();
     let pb = {
         DOWNLOAD_TOTAL_PROGRESS_BAR.inc_length(expected_size);
-        PROGRESS_BAR
-            .add(vertical_progress_bar(expected_size, ProgressKind::Download))
+        vertical_progress_bar(expected_size, ProgressKind::Download)
+            .attach_to(&PROGRESS_BAR)
             .tap_mut(|pb| {
                 pb.set_message(file_name.clone());
             })
@@ -199,8 +165,7 @@ pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Res
         .open(&to)
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
-    preallocate_file(&mut target_file, expected_size).await?;
-    let mut writer = BufWriter::new(&mut target_file);
+    let mut writer = &mut target_file;
     let mut byte_stream = reqwest::get(from.to_string())
         .await
         .with_context(|| format!("making request to {from}"))?
@@ -222,7 +187,6 @@ pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Res
     if downloaded != expected_size {
         anyhow::bail!("[{from}] download finished, but received unexpected size (expected [{expected_size}] bytes, downloaded [{downloaded} bytes])")
     }
-    pb.finish_and_clear();
     Ok(to)
 }
 impl Synchronizers {
@@ -300,43 +264,66 @@ impl Synchronizers {
     }
 
     pub async fn sync_downloads(self, archives: Vec<Archive>) -> TotalResult<WithArchiveDescriptor<PathBuf>> {
+        let total_archives = archives.len();
         futures::stream::iter(archives)
             .map(|Archive { descriptor, state }| async {
-                match self.cache.clone().verify(descriptor.clone()).await {
-                    Some(verified) => Ok(Either::Left(verified.tap(|verified| info!(?verified, "succesfully verified a file")))),
-                    None => self
+                match self
+                    .cache
+                    .clone()
+                    .verify(descriptor.clone())
+                    .pipe(tokio::task::spawn)
+                    .map_context("task crashed")
+                    .and_then(ready)
+                    .await
+                {
+                    Ok(verified) => Ok(Either::Left(verified.tap(|verified| info!(?verified, "succesfully verified a file")))),
+                    Err(message) => self
                         .clone()
                         .prepare_sync_task(Archive {
-                            descriptor: descriptor.tap(|descriptor| warn!(?descriptor, "could not verify a file, it will be downloaded")),
+                            descriptor: descriptor.tap(|descriptor| warn!(?descriptor, ?message, "could not verify a file, it will be downloaded")),
                             state,
                         })
                         .await
                         .map(Either::Right),
                 }
             })
-            .buffer_unordered(crate::sane_concurrency())
-            .map_ok(|file| match file {
-                Either::Left(exists) => exists.pipe(Ok).pipe(ready).boxed_local(),
-                Either::Right(sync_task) => match sync_task {
-                    SyncTask::MergeDownload(WithArchiveDescriptor { inner: (from, to), descriptor }) => {
-                        stream_merge_file(from.clone(), to.clone(), descriptor.size)
-                            .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
-                            .map(move |res| res.with_context(|| format!("when downloading [{from:?} -> {to:?}]")))
-                            .boxed_local()
-                    }
-                    SyncTask::Download(WithArchiveDescriptor { inner: (from, to), descriptor }) => stream_file(from.clone(), to.clone(), descriptor.size)
-                        .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
-                        .map(move |res| res.with_context(|| format!("when downloading [{from} -> {to:?}]")))
-                        .boxed_local(),
-                    SyncTask::Copy(WithArchiveDescriptor { inner: (from, to), descriptor }) => copy_local_file(from.clone(), to.clone(), descriptor.size)
-                        .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
-                        .map(move |res| res.with_context(|| format!("when when copying [{from:?} -> {to:?}]")))
-                        .boxed_local(),
-                },
-            })
-            .try_buffer_unordered(crate::sane_concurrency())
+            .buffered(num_cpus::get().checked_div(2).unwrap_or(1))
             .collect::<Vec<_>>()
             .await
+            .pipe(futures::stream::iter)
+            .and_then(|file| match file {
+                Either::Left(exists) => exists.pipe(Ok).pipe(ready).boxed(),
+                Either::Right(sync_task) => {
+                    let name = match &sync_task {
+                        SyncTask::MergeDownload(d) => d.descriptor.name.clone(),
+                        SyncTask::Download(d) => d.descriptor.name.clone(),
+                        SyncTask::Copy(d) => d.descriptor.name.clone(),
+                    };
+                    match sync_task {
+                        SyncTask::MergeDownload(WithArchiveDescriptor { inner: (from, to), descriptor }) => {
+                            stream_merge_file(from.clone(), to.clone(), descriptor.size)
+                                .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
+                                .map(move |res| res.with_context(|| format!("when downloading [{from:?} -> {to:?}]")))
+                                .boxed()
+                        }
+                        SyncTask::Download(WithArchiveDescriptor { inner: (from, to), descriptor }) => stream_file(from.clone(), to.clone(), descriptor.size)
+                            .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
+                            .map(move |res| res.with_context(|| format!("when downloading [{from} -> {to:?}]")))
+                            .boxed(),
+                        SyncTask::Copy(WithArchiveDescriptor { inner: (from, to), descriptor }) => copy_local_file(from.clone(), to.clone(), descriptor.size)
+                            .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
+                            .map(move |res| res.with_context(|| format!("when when copying [{from:?} -> {to:?}]")))
+                            .boxed(),
+                    }
+                    .inspect_err({
+                        let name = name.clone();
+                        move |message| print_error(name, message)
+                    })
+                    .inspect_ok(move |_| print_success(name, "[OK]"))
+                    .boxed()
+                }
+            })
             .multi_error_collect()
+            .await
     }
 }

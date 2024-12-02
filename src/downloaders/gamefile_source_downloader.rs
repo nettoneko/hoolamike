@@ -1,11 +1,12 @@
 use {
+    super::helpers::FutureAnyhowExt,
     crate::{
         config_file::{GameConfig, GamesConfig},
         install_modlist::download_cache::validate_hash,
         modlist_json::{GameFileSourceState, GameName},
     },
     anyhow::{Context, Result},
-    futures::TryFutureExt,
+    futures::{FutureExt, TryFutureExt},
     indexmap::IndexMap,
     itertools::Itertools,
     std::{future::ready, path::PathBuf},
@@ -47,15 +48,20 @@ impl GameFileSourceDownloader {
             .then_some(())
             .with_context(|| format!("expected downloader for [{game}], but this is a downloader for [{}]", self.game_name))
             .and_then(|_| normalize_path(game_file))
+            .pipe(ready)
             .and_then(|game_file| {
                 self.source_directory.join(game_file).pipe(|game_file| {
                     game_file
-                        .exists()
-                        .then(|| game_file.clone())
-                        .with_context(|| format!("[{}] does not exist", game_file.display()))
+                        .clone()
+                        .pipe(tokio::fs::try_exists)
+                        .map_context("checking for file existence")
+                        .and_then(|exists| async move {
+                            exists
+                                .then_some(game_file.clone())
+                                .with_context(|| format!("[{}] does not exist", game_file.display()))
+                        })
                 })
             })
-            .pipe(ready)
             .and_then(|source| validate_hash(source, hash))
             .await
     }

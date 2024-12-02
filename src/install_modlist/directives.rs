@@ -122,8 +122,7 @@ impl DirectivesHandler {
         directives
             .pipe(futures::stream::iter)
             .then(|directive| self.clone().handle(directive))
-            .collect::<Vec<Result<_>>>()
-            .await
             .multi_error_collect()
+            .await
     }
 }

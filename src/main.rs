@@ -10,10 +10,6 @@ use {
 };
 pub const BUFFER_SIZE: usize = 1024 * 128;
 
-fn sane_concurrency() -> usize {
-    num_cpus::get().checked_div(2).unwrap_or(num_cpus::get())
-}
-
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
@@ -39,20 +35,28 @@ enum Commands {
 }
 
 pub mod error {
-    use tap::prelude::*;
+    use {
+        futures::{FutureExt, Stream, StreamExt, TryStreamExt},
+        std::future::ready,
+        tap::prelude::*,
+    };
     pub type TotalResult<T> = std::result::Result<Vec<T>, Vec<anyhow::Error>>;
 
     #[extension_traits::extension(pub trait MultiErrorCollectExt)]
-    impl<T> Vec<anyhow::Result<T>> {
-        fn multi_error_collect(self) -> TotalResult<T> {
-            self.into_iter()
-                .fold((vec![], vec![]), |acc, next| {
-                    acc.tap_mut(|(ok, errors)| match next {
-                        Ok(v) => ok.push(v),
-                        Err(e) => errors.push(e),
-                    })
+    impl<S, T> S
+    where
+        S: Stream<Item = anyhow::Result<T>> + StreamExt,
+    {
+        async fn multi_error_collect(self) -> TotalResult<T> {
+            self.fold((vec![], vec![]), |acc, next| {
+                acc.tap_mut(|(ok, errors)| match next {
+                    Ok(v) => ok.push(v),
+                    Err(e) => errors.push(e),
                 })
-                .pipe(|(ok, errors)| errors.is_empty().then_some(ok).ok_or(errors))
+                .pipe(ready)
+            })
+            .map(|(ok, errors)| errors.is_empty().then_some(ok).ok_or(errors))
+            .await
         }
     }
 }
@@ -70,7 +74,16 @@ fn setup_logging() {
 
     let subscriber = tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
-        .with(fmt::Layer::new().with_writer(std::io::stderr));
+        .pipe(|registry| {
+            // #[cfg(debug_assertions)]
+            {
+                registry.with(console_subscriber::spawn())
+            }
+            // #[cfg(not(debug_assertions))]
+            // {
+            //     registry.with(fmt::Layer::new().with_writer(std::io::stderr))
+            // }
+        });
     tracing::subscriber::set_global_default(subscriber)
         .context("Unable to set a global subscriber")
         .expect("logging failed");

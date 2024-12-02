@@ -1,5 +1,8 @@
 use {
+    super::helpers::FutureAnyhowExt,
     anyhow::{Context, Result},
+    futures::TryFutureExt,
+    std::future::ready,
     tap::prelude::*,
 };
 
@@ -88,52 +91,14 @@ impl GoogleDriveDownloader {
             _ => {
                 response
                     .text()
+                    .map_context("extracting text")
+                    .and_then(|text| {
+                        tokio::task::spawn_blocking(move || response_parsing::get_url_from_gdrive_confirmation(&text))
+                            .map_context("thread crashed")
+                            .and_then(ready)
+                    })
                     .await
-                    .context("extracting text")
-                    .and_then(|text| response_parsing::get_url_from_gdrive_confirmation(&text))
-                // // .tap(|e| panic!("{e}"))
-                // .pipe_deref(soup::Soup::new)
-                // .pipe(|response| -> Result<_> {
-                //     // let href = response
-                //     //     .tag("a")
-                //     //     .find_all()
-                //     //     .filter_map(|a| a.attrs().get("href").cloned())
-                //     //     .find(|href| href.starts_with("/open"))
-                //     //     .context("could not find href")?
-                //     //     .replace("\\u003d", "=")
-                //     //     .replace("%3F", "?")
-                //     //     .replace("\\u0026", "&");
-                //     let params = response
-                //         .tag("input")
-                //         .find_all()
-                //         .filter_map(|input| {
-                //             input.attrs().pipe_ref(|attrs| {
-                //                 attrs
-                //                     .get("type")
-                //                     .and_then(|ty| ty.eq("hidden").then_some(()))
-                //                     .and_then(|_| {
-                //                         attrs
-                //                             .get("name")
-                //                             .cloned()
-                //                             .zip(attrs.get("value").cloned())
-                //                     })
-                //             })
-                //         })
-                //         .collect::<BTreeMap<_, _>>();
-                //     let params = serde_urlencoded::to_string(&params)
-                //         .context("serializing query params")?;
-                //     original_url
-                //         .tap_mut(|original_url| {
-                //             original_url.set_path("/open");
-                //             original_url.set_query(Some(&params));
-                //         })
-                //         .pipe(Ok)
-                // })
-                //
             }
         }
-
-        // .pipe_deref(url::Url::parse)
-        // .context("could not build valid url")
     }
 }

@@ -38,11 +38,8 @@ async fn calculate_hash(path: PathBuf) -> Result<u64> {
         .expect("file must have a name")
         .to_string_lossy()
         .to_string();
-    let pb = PROGRESS_BAR
-        .add(vertical_progress_bar(
-            tokio::fs::metadata(&path).await?.len(),
-            crate::progress_bars::ProgressKind::Validate,
-        ))
+    let pb = vertical_progress_bar(tokio::fs::metadata(&path).await?.len(), crate::progress_bars::ProgressKind::Validate)
+        .attach_to(&PROGRESS_BAR)
         .tap_mut(|pb| {
             pb.set_message(file_name.clone());
         });
@@ -56,13 +53,12 @@ async fn calculate_hash(path: PathBuf) -> Result<u64> {
         match file.read(&mut buffer).await? {
             0 => break,
             read => {
+                hasher.update(&buffer[..read]);
                 pb.inc(read as u64);
                 VALIDATE_TOTAL_PROGRESS_BAR.inc(read as u64);
-                hasher.update(&buffer[..read]);
             }
         }
     }
-    pb.finish_and_clear();
     Ok(hasher.finish())
 }
 
@@ -101,7 +97,7 @@ impl DownloadCache {
     pub fn download_output_path(&self, file_name: String) -> PathBuf {
         self.root_directory.join(file_name)
     }
-    pub async fn verify(self: Arc<Self>, descriptor: ArchiveDescriptor) -> Option<WithArchiveDescriptor<PathBuf>> {
+    pub async fn verify(self: Arc<Self>, descriptor: ArchiveDescriptor) -> Result<WithArchiveDescriptor<PathBuf>> {
         let ArchiveDescriptor { hash, meta: _, name, size } = descriptor.clone();
         self.download_output_path(name)
             .pipe(Ok)
@@ -116,8 +112,8 @@ impl DownloadCache {
                 Some(existing_path) => validate_file_size(existing_path.clone(), size)
                     .and_then(|found_path| validate_hash(found_path, hash))
                     .map_ok(Some)
-                    .boxed_local(),
-                None => None.pipe(Ok).pipe(ready).boxed_local(),
+                    .boxed(),
+                None => None.pipe(Ok).pipe(ready).boxed(),
             })
             .await
             .and_then(|validated_path| {
@@ -128,6 +124,5 @@ impl DownloadCache {
                         descriptor: descriptor.clone(),
                     })
             })
-            .ok()
     }
 }
