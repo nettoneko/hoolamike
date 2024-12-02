@@ -9,19 +9,16 @@ pub(crate) static PROGRESS_BAR: Lazy<MultiProgress> = Lazy::new(MultiProgress::n
 pub(crate) static VALIDATE_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
     PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Validate).tap_mut(|pb| {
         pb.set_message("TOTAL");
-        pb.abandon_with_message("adad");
     }))
 });
 pub(crate) static DOWNLOAD_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
     PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Download).tap_mut(|pb| {
         pb.set_message("TOTAL");
-        pb.abandon_with_message("adad");
     }))
 });
 pub(crate) static COPY_LOCAL_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
     PROGRESS_BAR.add(vertical_progress_bar(0, ProgressKind::Copy).tap_mut(|pb| {
         pb.set_message("TOTAL");
-        pb.abandon_with_message("adad");
     }))
 });
 

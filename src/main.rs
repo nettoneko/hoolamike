@@ -10,6 +10,10 @@ use {
 };
 pub const BUFFER_SIZE: usize = 1024 * 128;
 
+fn sane_concurrency() -> usize {
+    num_cpus::get().checked_div(2).unwrap_or(num_cpus::get())
+}
+
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
@@ -32,6 +36,25 @@ enum Commands {
     Install,
     /// prints prints default config. save it and modify to your liking
     PrintDefaultConfig,
+}
+
+pub mod error {
+    use tap::prelude::*;
+    pub type TotalResult<T> = std::result::Result<Vec<T>, Vec<anyhow::Error>>;
+
+    #[extension_traits::extension(pub trait MultiErrorCollectExt)]
+    impl<T> Vec<anyhow::Result<T>> {
+        fn multi_error_collect(self) -> TotalResult<T> {
+            self.into_iter()
+                .fold((vec![], vec![]), |acc, next| {
+                    acc.tap_mut(|(ok, errors)| match next {
+                        Ok(v) => ok.push(v),
+                        Err(e) => errors.push(e),
+                    })
+                })
+                .pipe(|(ok, errors)| errors.is_empty().then_some(ok).ok_or(errors))
+        }
+    }
 }
 
 pub mod config_file;
@@ -76,7 +99,16 @@ async fn main() -> Result<()> {
         Commands::PrintDefaultConfig => config_file::HoolamikeConfig::default()
             .write()
             .map(|config| println!("{config}")),
-        Commands::Install => install_modlist::install_modlist(config).await,
+        Commands::Install => install_modlist::install_modlist(config)
+            .await
+            .map_err(|errors| {
+                errors
+                    .iter()
+                    .enumerate()
+                    .for_each(|(idx, reason)| tracing::error!("{idx}. {reason:?}", idx = idx + 1));
+                anyhow::anyhow!("could not finish installation due to [{}] errors", errors.len())
+            })
+            .map(|count| info!("successfully installed [{}] mods", count.len())),
     }
     .with_context(|| {
         format!(

@@ -1,14 +1,16 @@
 use {
     crate::{
         config_file::{HoolamikeConfig, InstallationConfig},
+        error::TotalResult,
         helpers::human_readable_size,
         modlist_json::Modlist,
         progress_bars::{print_error, VALIDATE_TOTAL_PROGRESS_BAR},
     },
     anyhow::{Context, Result},
+    directives::DirectivesHandler,
     downloads::Synchronizers,
     futures::{FutureExt, TryFutureExt},
-    std::{future::ready, path::PathBuf},
+    std::{future::ready, path::PathBuf, sync::Arc},
     tap::prelude::*,
     tracing::info,
 };
@@ -17,6 +19,8 @@ pub mod download_cache;
 
 pub mod downloads;
 
+pub mod directives;
+
 #[allow(clippy::needless_as_bytes)]
 pub async fn install_modlist(
     HoolamikeConfig {
@@ -24,8 +28,11 @@ pub async fn install_modlist(
         installation: InstallationConfig { modlist_file },
         games,
     }: HoolamikeConfig,
-) -> Result<()> {
-    let downloaders = Synchronizers::new(downloaders, games).context("setting up downloaders")?;
+) -> TotalResult<()> {
+    let synchronizers = Synchronizers::new(downloaders, games)
+        .context("setting up downloaders")
+        .map_err(|e| vec![e])?;
+    let directives_handler = DirectivesHandler::new().pipe(Arc::new);
 
     modlist_file
         .context("no modlist file")
@@ -53,12 +60,13 @@ pub async fn install_modlist(
                 })
         })
         .pipe(ready)
+        .map_err(|e| vec![e])
         .and_then(
             move |Modlist {
                       archives,
                       author: _,
                       description: _,
-                      directives: _,
+                      directives,
                       game_type: _,
                       image: _,
                       is_nsfw: _,
@@ -68,18 +76,10 @@ pub async fn install_modlist(
                       wabbajack_version: _,
                       website: _,
                   }| {
-                downloaders
+                synchronizers
+                    .clone()
                     .sync_downloads(archives)
-                    .map(|errors| match errors.as_slice() {
-                        &[] => Ok(()),
-                        many_errors => {
-                            many_errors.iter().for_each(|error| {
-                                print_error("ARCHIVE", error);
-                            });
-                            print_error("ARCHIVES", &anyhow::anyhow!("could not continue due to [{}] errors", many_errors.len()));
-                            Err(errors.into_iter().next().unwrap())
-                        }
-                    })
+                    .and_then(|_sync_summary| directives_handler.handle_directives(directives))
             },
         )
         .await

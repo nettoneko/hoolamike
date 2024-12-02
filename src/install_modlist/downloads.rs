@@ -13,8 +13,9 @@ use {
             SyncTask,
             WithArchiveDescriptor,
         },
-        modlist_json::{Archive, GoogleDriveState, HttpState, ManualState, NexusState, State},
-        progress_bars::{print_error, vertical_progress_bar, ProgressKind, COPY_LOCAL_TOTAL_PROGRESS_BAR, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR},
+        error::{MultiErrorCollectExt, TotalResult},
+        modlist_json::{Archive, Directive, GoogleDriveState, HttpState, ManualState, NexusState, State},
+        progress_bars::{vertical_progress_bar, ProgressKind, COPY_LOCAL_TOTAL_PROGRESS_BAR, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR},
         BUFFER_SIZE,
     },
     fs2::FileExt,
@@ -54,7 +55,7 @@ enum Either<L, R> {
     Right(R),
 }
 
-async fn prealocate_file(file_path: &mut tokio::fs::File, expected_size: u64) -> Result<()> {
+async fn preallocate_file(file_path: &mut tokio::fs::File, expected_size: u64) -> Result<()> {
     file_path
         .try_clone()
         .map_context("cloning file handle")
@@ -96,7 +97,7 @@ async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Resu
         .open(&to)
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
-    prealocate_file(&mut target_file, expected_size).await?;
+    preallocate_file(&mut target_file, expected_size).await?;
 
     let mut writer = BufWriter::new(&mut target_file);
     let mut reader = BufReader::new(&mut source_file);
@@ -146,7 +147,7 @@ pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: 
         .open(&to)
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
-    prealocate_file(&mut target_file, expected_size).await?;
+    preallocate_file(&mut target_file, expected_size).await?;
 
     let mut writer = BufWriter::new(&mut target_file);
     let mut downloaded = 0;
@@ -198,7 +199,7 @@ pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Res
         .open(&to)
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
-    prealocate_file(&mut target_file, expected_size).await?;
+    preallocate_file(&mut target_file, expected_size).await?;
     let mut writer = BufWriter::new(&mut target_file);
     let mut byte_stream = reqwest::get(from.to_string())
         .await
@@ -298,7 +299,7 @@ impl Synchronizers {
         }
     }
 
-    pub async fn sync_downloads(self, archives: Vec<Archive>) -> Vec<anyhow::Error> {
+    pub async fn sync_downloads(self, archives: Vec<Archive>) -> TotalResult<WithArchiveDescriptor<PathBuf>> {
         futures::stream::iter(archives)
             .map(|Archive { descriptor, state }| async {
                 match self.cache.clone().verify(descriptor.clone()).await {
@@ -313,7 +314,7 @@ impl Synchronizers {
                         .map(Either::Right),
                 }
             })
-            .buffer_unordered(num_cpus::get().checked_div(4).unwrap_or(num_cpus::get()))
+            .buffer_unordered(crate::sane_concurrency())
             .map_ok(|file| match file {
                 Either::Left(exists) => exists.pipe(Ok).pipe(ready).boxed_local(),
                 Either::Right(sync_task) => match sync_task {
@@ -333,18 +334,9 @@ impl Synchronizers {
                         .boxed_local(),
                 },
             })
-            .try_buffer_unordered(4)
-            .filter_map(|file| {
-                match file {
-                    Ok(_) => None,
-                    Err(error_occurred) => {
-                        print_error("ERROR", &error_occurred);
-                        Some(error_occurred)
-                    }
-                }
-                .pipe(ready)
-            })
+            .try_buffer_unordered(crate::sane_concurrency())
             .collect::<Vec<_>>()
             .await
+            .multi_error_collect()
     }
 }
