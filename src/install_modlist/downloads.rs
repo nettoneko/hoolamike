@@ -265,6 +265,7 @@ impl Synchronizers {
 
     pub async fn sync_downloads(self, archives: Vec<Archive>) -> TotalResult<WithArchiveDescriptor<PathBuf>> {
         let total_archives = archives.len();
+        let base_concurrency = 5;
         futures::stream::iter(archives)
             .map(|Archive { descriptor, state }| async {
                 match self
@@ -287,19 +288,23 @@ impl Synchronizers {
                         .map(Either::Right),
                 }
             })
-            .buffered(num_cpus::get().checked_div(2).unwrap_or(1))
+            .buffer_unordered(base_concurrency)
             .collect::<Vec<_>>()
             .await
             .pipe(futures::stream::iter)
-            .and_then(|file| match file {
-                Either::Left(exists) => exists.pipe(Ok).pipe(ready).boxed(),
-                Either::Right(sync_task) => {
-                    let name = match &sync_task {
+            .map_ok(|file| {
+                let name = match &file {
+                    Either::Left(left) => left.descriptor.name.clone(),
+                    Either::Right(right) => match right {
                         SyncTask::MergeDownload(d) => d.descriptor.name.clone(),
                         SyncTask::Download(d) => d.descriptor.name.clone(),
                         SyncTask::Copy(d) => d.descriptor.name.clone(),
-                    };
-                    match sync_task {
+                    },
+                };
+
+                match file {
+                    Either::Left(exists) => exists.pipe(Ok).pipe(ready).boxed(),
+                    Either::Right(sync_task) => match sync_task {
                         SyncTask::MergeDownload(WithArchiveDescriptor { inner: (from, to), descriptor }) => {
                             stream_merge_file(from.clone(), to.clone(), descriptor.size)
                                 .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
@@ -314,15 +319,19 @@ impl Synchronizers {
                             .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
                             .map(move |res| res.with_context(|| format!("when when copying [{from:?} -> {to:?}]")))
                             .boxed(),
-                    }
-                    .inspect_err({
-                        let name = name.clone();
-                        move |message| print_error(name, message)
-                    })
-                    .inspect_ok(move |_| print_success(name, "[OK]"))
-                    .boxed()
+                    },
                 }
+                .inspect_err({
+                    let name = name.clone();
+                    move |message| print_error(name, message)
+                })
+                .inspect_ok(move |_| print_success(name, "[OK]"))
+                .pipe(tokio::task::spawn)
+                .map_context("task crashed")
+                .and_then(ready)
+                .boxed()
             })
+            .try_buffer_unordered(base_concurrency * 2)
             .multi_error_collect()
             .await
     }
