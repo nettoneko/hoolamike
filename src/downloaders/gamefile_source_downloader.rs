@@ -6,7 +6,7 @@ use {
         modlist_json::{GameFileSourceState, GameName},
     },
     anyhow::{Context, Result},
-    futures::{FutureExt, TryFutureExt},
+    futures::TryFutureExt,
     indexmap::IndexMap,
     itertools::Itertools,
     std::{future::ready, path::PathBuf},

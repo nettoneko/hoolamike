@@ -9,7 +9,7 @@ use {
     anyhow::{Context, Result},
     directives::DirectivesHandler,
     downloads::Synchronizers,
-    futures::{FutureExt, TryFutureExt},
+    futures::TryFutureExt,
     std::{future::ready, path::PathBuf, sync::Arc},
     tap::prelude::*,
     tracing::info,

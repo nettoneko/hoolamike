@@ -36,13 +36,13 @@ enum Commands {
 
 pub mod error {
     use {
-        futures::{FutureExt, Stream, StreamExt, TryStreamExt},
+        futures::{FutureExt, Stream, StreamExt},
         std::future::ready,
         tap::prelude::*,
     };
     pub type TotalResult<T> = std::result::Result<Vec<T>, Vec<anyhow::Error>>;
 
-    #[extension_traits::extension(pub trait MultiErrorCollectExt)]
+    #[extension_traits::extension(pub(crate) trait MultiErrorCollectExt)]
     impl<S, T> S
     where
         S: Stream<Item = anyhow::Result<T>> + StreamExt,
@@ -69,6 +69,7 @@ pub mod modlist_data;
 pub mod modlist_json;
 pub(crate) mod progress_bars;
 
+#[allow(unused_imports)]
 fn setup_logging() {
     use tracing_subscriber::{fmt, prelude::__tracing_subscriber_SubscriberExt, EnvFilter};
 

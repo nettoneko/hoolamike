@@ -1,6 +1,6 @@
 use {
     crate::error::{MultiErrorCollectExt, TotalResult},
-    anyhow::{Context, Result},
+    anyhow::Result,
     futures::StreamExt,
     std::sync::Arc,
     tap::prelude::*,

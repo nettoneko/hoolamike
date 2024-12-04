@@ -14,14 +14,11 @@ use {
             WithArchiveDescriptor,
         },
         error::{MultiErrorCollectExt, TotalResult},
-        modlist_json::{Archive, Directive, GoogleDriveState, HttpState, ManualState, NexusState, State},
+        modlist_json::{Archive, GoogleDriveState, HttpState, ManualState, NexusState, State},
         progress_bars::{print_success, vertical_progress_bar, ProgressKind, COPY_LOCAL_TOTAL_PROGRESS_BAR, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR},
-        BUFFER_SIZE,
     },
-    fs2::FileExt,
     futures::{FutureExt, StreamExt, TryStreamExt},
     std::sync::Arc,
-    tokio::io::AsyncReadExt,
     tracing::warn,
 };
 
@@ -264,7 +261,6 @@ impl Synchronizers {
     }
 
     pub async fn sync_downloads(self, archives: Vec<Archive>) -> TotalResult<WithArchiveDescriptor<PathBuf>> {
-        let total_archives = archives.len();
         let base_concurrency = 5;
         futures::stream::iter(archives)
             .map(|Archive { descriptor, state }| async {
