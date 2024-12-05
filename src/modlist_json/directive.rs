@@ -94,11 +94,6 @@ pub struct PatchedFromArchiveDirective {
     /// Description: Size of the file.
     /// Usage: For validation and progress tracking.
     pub size: u64,
-    #[serde(rename = "SourceDataID")]
-    /// source_data_id: Option<String> (renamed from SourceDataID)
-    /// Description: Identifier linking to the source data.
-    /// Usage: May be used internally to reference data.
-    pub source_data_id: Option<uuid::Uuid>,
     /// to: String
     /// Description: Destination path for the directive's output.
     /// Usage: Where to place extracted or processed files.
@@ -115,7 +110,7 @@ pub struct PatchedFromArchiveDirective {
     /// patch_id: Option<String> (renamed from PatchID)
     /// Description: Identifier for a patch operation.
     /// Usage: Apply the correct patch during installation.
-    pub patch_id: String,
+    pub patch_id: uuid::Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
