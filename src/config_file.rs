@@ -3,7 +3,10 @@ use {
     anyhow::{Context, Result},
     indexmap::IndexMap,
     serde::{Deserialize, Serialize},
-    std::path::PathBuf,
+    std::{
+        iter::{empty, once},
+        path::{Path, PathBuf},
+    },
     tap::prelude::*,
     tracing::{debug, info},
 };
@@ -26,9 +29,18 @@ pub struct GameConfig {
     pub root_directory: PathBuf,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+fn join_default_path(segments: impl IntoIterator<Item = &'static str>) -> PathBuf {
+    empty()
+        .chain(once("FIXME"))
+        .chain(segments.into_iter())
+        .fold(PathBuf::new(), |acc, next| acc.join(next))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, derivative::Derivative)]
+#[derivative(Default)]
 pub struct InstallationConfig {
-    pub modlist_file: Option<PathBuf>,
+    #[derivative(Default(value = "join_default_path([\"path\",\"to\",\"file.wabbajack\" ])"))]
+    pub wabbajack_file_path: PathBuf,
 }
 
 pub type GamesConfig = IndexMap<GameName, GameConfig>;
@@ -39,9 +51,7 @@ fn default_games_config() -> GamesConfig {
             .insert(
                 GameName::new("ExampleGame".into()),
                 GameConfig {
-                    root_directory: ["path", "to", "example", "game"]
-                        .into_iter()
-                        .fold(PathBuf::new(), |acc, next| acc.join(next)),
+                    root_directory: join_default_path(["path", "to", "example", "game"]),
                 },
             )
             .pipe(|_| ())
@@ -64,20 +74,17 @@ impl HoolamikeConfig {
             .context("serialization failed")
             .map(|config| format!("\n# default {CONFIG_FILE_NAME} file\n# edit it according to your needs:\n{config}"))
     }
-    pub fn find() -> Result<Self> {
-        [format!("./{CONFIG_FILE_NAME}"), format!("~/.config/hoolamike/{CONFIG_FILE_NAME}")]
-            .pipe(|config_paths| {
-                config_paths
-                    .clone()
-                    .into_iter()
-                    .map(PathBuf::from)
-                    .find(|path| path.exists())
-                    .with_context(|| format!("checking paths: {config_paths:?}"))
-                    .context("no config file detected")
-            })
+    pub fn find(path: &Path) -> Result<(PathBuf, Self)> {
+        path.exists()
+            .then(|| path.to_owned())
+            .with_context(|| format!("config path [{}] does not exist", path.display()))
             .tap_ok(|config| info!("found config at '{}'", config.display()))
-            .and_then(|config| std::fs::read_to_string(config).context("reading file"))
-            .and_then(|config| serde_yaml::from_str::<Self>(&config).context("parsing config file"))
+            .and_then(|config_path| {
+                std::fs::read_to_string(&config_path)
+                    .context("reading file")
+                    .and_then(|config| serde_yaml::from_str::<Self>(&config).context("parsing config file"))
+                    .map(|config| (config_path, config))
+            })
             .with_context(|| format!("getting [{CONFIG_FILE_NAME}]"))
             .tap_ok(|config| {
                 debug!("{config:?}");

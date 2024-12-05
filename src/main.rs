@@ -4,6 +4,7 @@ use {
     anyhow::{Context, Result},
     clap::{Parser, Subcommand},
     modlist_data::ModlistSummary,
+    progress_bars::{print_error, print_success, PROGRESS_BAR},
     std::path::PathBuf,
     tap::prelude::*,
     tracing::{info, warn},
@@ -13,6 +14,16 @@ pub const BUFFER_SIZE: usize = 1024 * 128;
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
+    /// the hoolamike config file is where you configure your installation - we're linux users, we can't afford windows
+    /// which means we can't afford GUI-capable hardware anyway
+    ///
+    /// in the config you'll have to specify a modlist file - you'll have to download it
+    /// can it be downloaded autside of wabbajack gui client?
+    /// yes and no
+    /// they can be found here: https://build.wabbajack.org/authored_files **BUT** the manual download should be avoided unless absolutely necessary.
+    /// probably best approach would be visiting official Wabbajack discord server and asking someone which file is safe to download
+    #[arg(long, short = 'c', default_value = std::env::current_dir().unwrap().join("hoolamike.yaml").into_os_string())]
+    hoolamike_config: PathBuf,
     #[command(subcommand)]
     command: Commands,
 }
@@ -21,52 +32,84 @@ struct Cli {
 enum Commands {
     /// tests the modlist parser
     ValidateModlist {
-        /// path to modlist (json) file
+        /// path to modlist (.wabbajack) file
         path: PathBuf,
     },
     /// prints information about the modlist
     ModlistInfo {
-        /// path to modlist (json) file
+        /// path to modlist (.wabbajack) file
         path: PathBuf,
     },
-    Install,
+    Install {
+        /// skip verification (used mostly for developing the tool)
+        #[arg(long)]
+        skip_verify_and_downloads: bool,
+    },
     /// prints prints default config. save it and modify to your liking
     PrintDefaultConfig,
 }
 
-pub mod error {
-    use {
-        futures::{FutureExt, Stream, StreamExt},
-        std::future::ready,
-        tap::prelude::*,
-    };
-    pub type TotalResult<T> = std::result::Result<Vec<T>, Vec<anyhow::Error>>;
-
-    #[extension_traits::extension(pub(crate) trait MultiErrorCollectExt)]
-    impl<S, T> S
-    where
-        S: Stream<Item = anyhow::Result<T>> + StreamExt,
-    {
-        async fn multi_error_collect(self) -> TotalResult<T> {
-            self.fold((vec![], vec![]), |acc, next| {
-                acc.tap_mut(|(ok, errors)| match next {
-                    Ok(v) => ok.push(v),
-                    Err(e) => errors.push(e),
-                })
-                .pipe(ready)
-            })
-            .map(|(ok, errors)| errors.is_empty().then_some(ok).ok_or(errors))
-            .await
-        }
+pub mod utils {
+    pub fn boxed_iter<'a, T: 'a>(iter: impl Iterator<Item = T> + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
+        Box::new(iter)
     }
 }
 
+pub mod error;
+
+pub mod compression;
 pub mod config_file;
 pub mod downloaders;
 pub mod helpers;
 pub mod install_modlist;
 pub mod modlist_data;
 pub mod modlist_json;
+pub mod wabbajack_file {
+    use {
+        crate::compression::ProcessArchive,
+        anyhow::{Context, Result},
+        std::path::{Path, PathBuf},
+        tap::prelude::*,
+    };
+
+    #[derive(Debug)]
+    pub struct WabbajackFile {
+        pub wabbajack_file_path: PathBuf,
+        pub wabbajack_entries: Vec<PathBuf>,
+        pub modlist: super::modlist_json::Modlist,
+    }
+
+    const MODLIST_JSON_FILENAME: &str = "modlist";
+
+    impl WabbajackFile {
+        pub fn load(path: PathBuf) -> Result<Self> {
+            let pb = indicatif::ProgressBar::new_spinner()
+                .with_prefix(path.display().to_string())
+                .tap_mut(|pb| crate::progress_bars::ProgressKind::Validate.stylize(pb));
+            std::fs::OpenOptions::new()
+                .read(true)
+                .open(&path)
+                .context("opening file")
+                .and_then(|file| crate::compression::zip::ZipArchive::new(file).context("reading archive"))
+                .and_then(|mut archive| {
+                    archive.list_paths().and_then(|entries| {
+                        archive
+                            .get_handle(Path::new(MODLIST_JSON_FILENAME))
+                            .context("looking up file by name")
+                            .and_then(|handle| {
+                                serde_json::from_reader::<_, crate::modlist_json::Modlist>(&mut pb.wrap_read(handle)).context("reading archive contents")
+                            })
+                            .with_context(|| format!("reading [{MODLIST_JSON_FILENAME}]"))
+                            .map(|modlist| Self {
+                                wabbajack_file_path: path,
+                                wabbajack_entries: entries,
+                                modlist,
+                            })
+                    })
+                })
+        }
+    }
+}
 pub(crate) mod progress_bars;
 
 #[allow(unused_imports)]
@@ -78,12 +121,13 @@ fn setup_logging() {
         .pipe(|registry| {
             // #[cfg(debug_assertions)]
             {
-                registry.with(console_subscriber::spawn())
+                // registry.with(console_subscriber::spawn())
             }
             // #[cfg(not(debug_assertions))]
             // {
             //     registry.with(fmt::Layer::new().with_writer(std::io::stderr))
             // }
+            registry
         });
     tracing::subscriber::set_global_default(subscriber)
         .context("Unable to set a global subscriber")
@@ -92,10 +136,9 @@ fn setup_logging() {
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_logging();
-    let Cli { command } = Cli::parse();
-    let config = config_file::HoolamikeConfig::find()
-        .tap_err(|message| warn!("no config detected, using default config\n{message:#?}"))
-        .unwrap_or_default();
+    let Cli { command, hoolamike_config } = Cli::parse();
+    let (config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
+    print_success("hoolamike".into(), &format!("found config at [{}]", config_path.display()));
 
     match command {
         Commands::ValidateModlist { path } => tokio::fs::read_to_string(&path)
@@ -113,7 +156,7 @@ async fn main() -> Result<()> {
         Commands::PrintDefaultConfig => config_file::HoolamikeConfig::default()
             .write()
             .map(|config| println!("{config}")),
-        Commands::Install => install_modlist::install_modlist(config)
+        Commands::Install { skip_verify_and_downloads } => install_modlist::install_modlist(config, skip_verify_and_downloads)
             .await
             .map_err(|errors| {
                 errors

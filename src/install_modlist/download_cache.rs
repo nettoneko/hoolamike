@@ -32,6 +32,7 @@ async fn read_file_size(path: &PathBuf) -> Result<u64> {
         .map_ok(|metadata| metadata.len())
         .await
 }
+
 async fn calculate_hash(path: PathBuf) -> Result<u64> {
     let file_name = path
         .file_name()
@@ -47,7 +48,7 @@ async fn calculate_hash(path: PathBuf) -> Result<u64> {
     let mut file = tokio::fs::File::open(&path)
         .map_with_context(|| format!("opening file [{}]", path.display()))
         .await?;
-    let mut buffer: [u8; crate::BUFFER_SIZE] = std::array::from_fn(|_| 0);
+    let mut buffer = vec![0; crate::BUFFER_SIZE];
     let mut hasher = xxhash_rust::xxh64::Xxh64::new(0);
     loop {
         match file.read(&mut buffer).await? {

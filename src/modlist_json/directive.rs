@@ -75,7 +75,7 @@ pub struct InlineFileDirective {
     /// source_data_id: Option<String> (renamed from SourceDataID)
     /// Description: Identifier linking to the source data.
     /// Usage: May be used internally to reference data.
-    pub source_data_id: String,
+    pub source_data_id: uuid::Uuid,
     /// to: String
     /// Description: Destination path for the directive's output.
     /// Usage: Where to place extracted or processed files.
@@ -98,7 +98,7 @@ pub struct PatchedFromArchiveDirective {
     /// source_data_id: Option<String> (renamed from SourceDataID)
     /// Description: Identifier linking to the source data.
     /// Usage: May be used internally to reference data.
-    pub source_data_id: Option<String>,
+    pub source_data_id: Option<uuid::Uuid>,
     /// to: String
     /// Description: Destination path for the directive's output.
     /// Usage: Where to place extracted or processed files.
@@ -134,7 +134,7 @@ pub struct RemappedInlineFileDirective {
     /// source_data_id: Option<String> (renamed from SourceDataID)
     /// Description: Identifier linking to the source data.
     /// Usage: May be used internally to reference data.
-    pub source_data_id: String,
+    pub source_data_id: uuid::Uuid,
     /// to: String
     /// Description: Destination path for the directive's output.
     /// Usage: Where to place extracted or processed files.

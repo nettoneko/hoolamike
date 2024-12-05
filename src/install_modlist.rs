@@ -1,16 +1,18 @@
 use {
     crate::{
         config_file::{HoolamikeConfig, InstallationConfig},
+        downloaders::WithArchiveDescriptor,
         error::TotalResult,
-        helpers::human_readable_size,
-        modlist_json::Modlist,
-        progress_bars::{print_error, VALIDATE_TOTAL_PROGRESS_BAR},
+        modlist_json::{Archive, Modlist},
+        progress_bars::VALIDATE_TOTAL_PROGRESS_BAR,
+        wabbajack_file::WabbajackFile,
     },
-    anyhow::{Context, Result},
+    anyhow::Context,
     directives::DirectivesHandler,
     downloads::Synchronizers,
-    futures::TryFutureExt,
-    std::{future::ready, path::PathBuf, sync::Arc},
+    futures::{FutureExt, TryFutureExt},
+    itertools::Itertools,
+    std::{convert::identity, future::ready, sync::Arc},
     tap::prelude::*,
     tracing::info,
 };
@@ -25,32 +27,30 @@ pub mod directives;
 pub async fn install_modlist(
     HoolamikeConfig {
         downloaders,
-        installation: InstallationConfig { modlist_file },
+        installation: InstallationConfig {
+            wabbajack_file_path: modlist_file,
+        },
         games,
     }: HoolamikeConfig,
+    skip_verify_and_downloads: bool,
 ) -> TotalResult<()> {
     let synchronizers = Synchronizers::new(downloaders, games)
         .context("setting up downloaders")
         .map_err(|e| vec![e])?;
-    let directives_handler = DirectivesHandler::new().pipe(Arc::new);
 
-    modlist_file
-        .context("no modlist file")
-        .and_then(|modlist| {
-            std::fs::read_to_string(&modlist)
-                .with_context(|| format!("reading modlist at {}", modlist.display()))
-                .tap_ok(|read| {
-                    info!(
-                        "modlist file {} read ({})",
-                        modlist.display(),
-                        human_readable_size(read.as_bytes().len() as u64)
-                    )
-                })
-        })
-        .and_then(|modlist| serde_json::from_str::<Modlist>(&modlist).context("parsing modlist"))
-        .tap_ok(|modlist| {
+    let WabbajackFile {
+        wabbajack_file_path,
+        wabbajack_entries,
+        modlist,
+    } = tokio::task::spawn_blocking(move || WabbajackFile::load(modlist_file))
+        .await
+        .context("thread crashed")
+        .and_then(identity)
+        .context("loading modlist file")
+        .tap_ok(|wabbajack| {
             // PROGRESS
-            modlist
+            wabbajack
+                .modlist
                 .archives
                 .iter()
                 .map(|archive| archive.descriptor.size)
@@ -59,8 +59,11 @@ pub async fn install_modlist(
                     VALIDATE_TOTAL_PROGRESS_BAR.set_length(total_size);
                 })
         })
+        .map_err(|e| vec![e])?;
+
+    modlist
+        .pipe(Ok)
         .pipe(ready)
-        .map_err(|e| vec![e])
         .and_then(
             move |Modlist {
                       archives,
@@ -76,10 +79,24 @@ pub async fn install_modlist(
                       wabbajack_version: _,
                       website: _,
                   }| {
-                synchronizers
-                    .clone()
-                    .sync_downloads(archives)
-                    .and_then(|_sync_summary| directives_handler.handle_directives(directives))
+                match skip_verify_and_downloads {
+                    true => archives
+                        .into_iter()
+                        .map(|Archive { descriptor, state: _ }| WithArchiveDescriptor {
+                            inner: synchronizers
+                                .cache
+                                .download_output_path(descriptor.name.clone()),
+                            descriptor,
+                        })
+                        .collect_vec()
+                        .pipe(Ok)
+                        .pipe(ready)
+                        .boxed_local(),
+                    false => synchronizers.clone().sync_downloads(archives).boxed_local(),
+                }
+                .map_ok(DirectivesHandler::new)
+                .map_ok(Arc::new)
+                .and_then(|directives_handler| directives_handler.handle_directives(directives))
             },
         )
         .await

@@ -1,8 +1,11 @@
 use {
-    crate::error::{MultiErrorCollectExt, TotalResult},
-    anyhow::Result,
-    futures::StreamExt,
-    std::sync::Arc,
+    crate::{
+        downloaders::WithArchiveDescriptor,
+        error::{MultiErrorCollectExt, TotalResult},
+    },
+    anyhow::{Context, Result},
+    futures::{FutureExt, StreamExt, TryStreamExt},
+    std::{path::PathBuf, sync::Arc},
     tap::prelude::*,
 };
 
@@ -87,6 +90,7 @@ pub mod transformed_texture {
 use crate::modlist_json::Directive;
 
 pub struct DirectivesHandler {
+    pub sync_summary: Vec<WithArchiveDescriptor<PathBuf>>,
     pub create_bsa: create_bsa::CreateBSAHandler,
     pub from_archive: from_archive::FromArchiveHandler,
     pub inline_file: inline_file::InlineFileHandler,
@@ -97,8 +101,9 @@ pub struct DirectivesHandler {
 
 impl DirectivesHandler {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+    pub fn new(sync_summary: Vec<WithArchiveDescriptor<PathBuf>>) -> Self {
         Self {
+            sync_summary,
             create_bsa: create_bsa::CreateBSAHandler {},
             from_archive: from_archive::FromArchiveHandler {},
             inline_file: inline_file::InlineFileHandler {},
@@ -121,7 +126,13 @@ impl DirectivesHandler {
     pub async fn handle_directives(self: Arc<Self>, directives: Vec<Directive>) -> TotalResult<()> {
         directives
             .pipe(futures::stream::iter)
-            .then(|directive| self.clone().handle(directive))
+            .then(|directive| {
+                let directive_debug = format!("{directive:#?}");
+                self.clone()
+                    .handle(directive)
+                    .map(move |r| r.with_context(|| format!("when handling directive: {directive_debug}")))
+            })
+            .map_err(|e| Err(e).expect("all directives must be handled"))
             .multi_error_collect()
             .await
     }

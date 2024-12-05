@@ -72,12 +72,10 @@ impl ProgressKind {
         }
     }
 }
-pub fn vertical_progress_bar(len: u64, kind: ProgressKind) -> LazyProgressBar {
-    let color = kind.color();
-    let prefix = kind.prefix();
-    LazyProgressBar::new(len, move |pb| {
-        // pb.enable_steady_tick(std::time::Duration::from_millis(800));
-        pb.set_prefix(prefix);
+
+impl ProgressKind {
+    pub fn stylize(self, pb: &mut ProgressBar) {
+        let color = self.color();
         pb.set_style(
             ProgressStyle::with_template(&format!(
                 "{{prefix:.bold}}▕{{bar:.{color}}}▏({{bytes}}/{{total_bytes}} {{bytes_per_sec}} ETA {{eta}}) {{msg:.{color}}}"
@@ -85,6 +83,15 @@ pub fn vertical_progress_bar(len: u64, kind: ProgressKind) -> LazyProgressBar {
             .unwrap()
             .progress_chars("█▇▆▅▄▃▂▁  "),
         );
+    }
+}
+
+pub fn vertical_progress_bar(len: u64, kind: ProgressKind) -> LazyProgressBar {
+    LazyProgressBar::new(len, move |mut pb| {
+        // pb.enable_steady_tick(std::time::Duration::from_millis(800));
+        kind.stylize(&mut pb);
+        let prefix = kind.prefix();
+        pb.set_prefix(prefix);
         pb.with_finish(indicatif::ProgressFinish::AndClear)
     })
 }

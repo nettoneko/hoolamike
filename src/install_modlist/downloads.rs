@@ -15,10 +15,19 @@ use {
         },
         error::{MultiErrorCollectExt, TotalResult},
         modlist_json::{Archive, GoogleDriveState, HttpState, ManualState, NexusState, State},
-        progress_bars::{print_success, vertical_progress_bar, ProgressKind, COPY_LOCAL_TOTAL_PROGRESS_BAR, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR},
+        progress_bars::{
+            print_error,
+            print_success,
+            vertical_progress_bar,
+            ProgressKind,
+            COPY_LOCAL_TOTAL_PROGRESS_BAR,
+            DOWNLOAD_TOTAL_PROGRESS_BAR,
+            PROGRESS_BAR,
+        },
     },
+    anyhow::Result,
     futures::{FutureExt, StreamExt, TryStreamExt},
-    std::sync::Arc,
+    std::{path::PathBuf, sync::Arc},
     tracing::warn,
 };
 
@@ -43,7 +52,7 @@ impl DownloadersInner {
 pub struct Synchronizers {
     pub config: Arc<DownloadersConfig>,
     inner: DownloadersInner,
-    cache: Arc<download_cache::DownloadCache>,
+    pub(crate) cache: Arc<download_cache::DownloadCache>,
     game_synchronizers: Arc<GameFileSourceSynchronizers>,
 }
 
