@@ -32,7 +32,7 @@ pub struct GameConfig {
 fn join_default_path(segments: impl IntoIterator<Item = &'static str>) -> PathBuf {
     empty()
         .chain(once("FIXME"))
-        .chain(segments.into_iter())
+        .chain(segments)
         .fold(PathBuf::new(), |acc, next| acc.join(next))
 }
 
@@ -41,6 +41,8 @@ fn join_default_path(segments: impl IntoIterator<Item = &'static str>) -> PathBu
 pub struct InstallationConfig {
     #[derivative(Default(value = "join_default_path([\"path\",\"to\",\"file.wabbajack\" ])"))]
     pub wabbajack_file_path: PathBuf,
+    #[derivative(Default(value = "std::env::current_dir().unwrap()"))]
+    pub installation_path: PathBuf,
 }
 
 pub type GamesConfig = IndexMap<GameName, GameConfig>;

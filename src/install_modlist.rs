@@ -29,6 +29,7 @@ pub async fn install_modlist(
         downloaders,
         installation: InstallationConfig {
             wabbajack_file_path: modlist_file,
+            installation_path,
         },
         games,
     }: HoolamikeConfig,
@@ -38,16 +39,19 @@ pub async fn install_modlist(
         .context("setting up downloaders")
         .map_err(|e| vec![e])?;
 
-    let WabbajackFile {
-        wabbajack_file_path,
-        wabbajack_entries,
-        modlist,
-    } = tokio::task::spawn_blocking(move || WabbajackFile::load(modlist_file))
+    let (
+        wabbajack_file_handle,
+        WabbajackFile {
+            wabbajack_file_path: _,
+            wabbajack_entries: _,
+            modlist,
+        },
+    ) = tokio::task::spawn_blocking(move || WabbajackFile::load(modlist_file))
         .await
         .context("thread crashed")
         .and_then(identity)
         .context("loading modlist file")
-        .tap_ok(|wabbajack| {
+        .tap_ok(|(_, wabbajack)| {
             // PROGRESS
             wabbajack
                 .modlist
@@ -94,7 +98,7 @@ pub async fn install_modlist(
                         .boxed_local(),
                     false => synchronizers.clone().sync_downloads(archives).boxed_local(),
                 }
-                .map_ok(DirectivesHandler::new)
+                .map_ok(|summary| DirectivesHandler::new(wabbajack_file_handle, installation_path, summary))
                 .map_ok(Arc::new)
                 .and_then(|directives_handler| directives_handler.handle_directives(directives))
             },

@@ -69,7 +69,7 @@ async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Resu
         .to_string();
     let pb = {
         COPY_LOCAL_TOTAL_PROGRESS_BAR.inc_length(expected_size);
-        vertical_progress_bar(expected_size, ProgressKind::Copy)
+        vertical_progress_bar(expected_size, ProgressKind::Copy, indicatif::ProgressFinish::AndClear)
             .attach_to(&PROGRESS_BAR)
             .tap_mut(|pb| {
                 pb.set_message(file_name.clone());
@@ -107,7 +107,7 @@ pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: 
         .to_string();
     let pb = {
         DOWNLOAD_TOTAL_PROGRESS_BAR.inc_length(expected_size);
-        vertical_progress_bar(expected_size, ProgressKind::Download)
+        vertical_progress_bar(expected_size, ProgressKind::Download, indicatif::ProgressFinish::AndClear)
             .attach_to(&PROGRESS_BAR)
             .tap_mut(|pb| {
                 pb.set_message(file_name.clone());
@@ -157,7 +157,7 @@ pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Res
         .to_string();
     let pb = {
         DOWNLOAD_TOTAL_PROGRESS_BAR.inc_length(expected_size);
-        vertical_progress_bar(expected_size, ProgressKind::Download)
+        vertical_progress_bar(expected_size, ProgressKind::Download, indicatif::ProgressFinish::AndClear)
             .attach_to(&PROGRESS_BAR)
             .tap_mut(|pb| {
                 pb.set_message(file_name.clone());

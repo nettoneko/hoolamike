@@ -36,14 +36,18 @@ async fn read_file_size(path: &PathBuf) -> Result<u64> {
 async fn calculate_hash(path: PathBuf) -> Result<u64> {
     let file_name = path
         .file_name()
-        .expect("file must have a name")
+        .context("file must have a name")?
         .to_string_lossy()
         .to_string();
-    let pb = vertical_progress_bar(tokio::fs::metadata(&path).await?.len(), crate::progress_bars::ProgressKind::Validate)
-        .attach_to(&PROGRESS_BAR)
-        .tap_mut(|pb| {
-            pb.set_message(file_name.clone());
-        });
+    let pb = vertical_progress_bar(
+        tokio::fs::metadata(&path).await?.len(),
+        crate::progress_bars::ProgressKind::Validate,
+        indicatif::ProgressFinish::AndClear,
+    )
+    .attach_to(&PROGRESS_BAR)
+    .tap_mut(|pb| {
+        pb.set_message(file_name.clone());
+    });
 
     let mut file = tokio::fs::File::open(&path)
         .map_with_context(|| format!("opening file [{}]", path.display()))

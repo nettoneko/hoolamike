@@ -4,7 +4,13 @@ use {super::*, nonempty::NonEmpty};
 /// with paths within those archives
 /// BONUS_POINTS: try working with it without fully  extracting the nested archives
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ArchiveHashPath(NonEmpty<String>);
+#[serde(untagged)]
+pub enum ArchiveHashPath {
+    JustArchiveHash((String,)),
+    ArchiveHashAndPath((String, MaybeWindowsPath)),
+    ArchiveHashAndTwoPaths((String, MaybeWindowsPath, MaybeWindowsPath)),
+    Long(NonEmpty<String>),
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -21,7 +27,7 @@ pub struct CreateBSADirective {
     /// to: String
     /// Description: Destination path for the directive's output.
     /// Usage: Where to place extracted or processed files.
-    pub to: String,
+    pub to: MaybeWindowsPath,
     #[serde(rename = "TempID")]
     /// temp_id: Option<String> (renamed from TempID)
     /// Description: Temporary identifier used during processing.
@@ -52,7 +58,7 @@ pub struct FromArchiveDirective {
     /// to: String
     /// Description: Destination path for the directive's output.
     /// Usage: Where to place extracted or processed files.
-    pub to: String,
+    pub to: MaybeWindowsPath,
     /// archive_hash_path: Option<Vec<String>>
     /// Description: Paths within an archive, identified by their hashes.
     /// Usage: Locate specific files inside archives.
@@ -79,7 +85,7 @@ pub struct InlineFileDirective {
     /// to: String
     /// Description: Destination path for the directive's output.
     /// Usage: Where to place extracted or processed files.
-    pub to: String,
+    pub to: MaybeWindowsPath,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -97,7 +103,7 @@ pub struct PatchedFromArchiveDirective {
     /// to: String
     /// Description: Destination path for the directive's output.
     /// Usage: Where to place extracted or processed files.
-    pub to: String,
+    pub to: MaybeWindowsPath,
     /// archive_hash_path: Option<Vec<String>>
     /// Description: Paths within an archive, identified by their hashes.
     /// Usage: Locate specific files inside archives.
@@ -133,7 +139,7 @@ pub struct RemappedInlineFileDirective {
     /// to: String
     /// Description: Destination path for the directive's output.
     /// Usage: Where to place extracted or processed files.
-    pub to: String,
+    pub to: MaybeWindowsPath,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -155,7 +161,7 @@ pub struct TransformedTextureDirective {
     /// to: String
     /// Description: Destination path for the directive's output.
     /// Usage: Where to place extracted or processed files.
-    pub to: String,
+    pub to: MaybeWindowsPath,
     /// archive_hash_path: Option<Vec<String>>
     /// Description: Paths within an archive, identified by their hashes.
     /// Usage: Locate specific files inside archives.

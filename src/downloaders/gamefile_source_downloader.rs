@@ -8,7 +8,6 @@ use {
     anyhow::{Context, Result},
     futures::TryFutureExt,
     indexmap::IndexMap,
-    itertools::Itertools,
     std::{future::ready, path::PathBuf},
     tap::prelude::*,
 };
@@ -16,14 +15,6 @@ use {
 pub struct GameFileSourceDownloader {
     game_name: GameName,
     source_directory: PathBuf,
-}
-
-fn normalize_path(path: String) -> Result<PathBuf> {
-    match path.contains("\\") {
-        true => path.split("\\").join("/").parse::<PathBuf>(),
-        false => path.parse::<PathBuf>(),
-    }
-    .with_context(|| format!("could not normalize [{path}]"))
 }
 
 impl GameFileSourceDownloader {
@@ -47,7 +38,7 @@ impl GameFileSourceDownloader {
             .eq(&game)
             .then_some(())
             .with_context(|| format!("expected downloader for [{game}], but this is a downloader for [{}]", self.game_name))
-            .and_then(|_| normalize_path(game_file))
+            .map(|_| game_file.into_path())
             .pipe(ready)
             .and_then(|game_file| {
                 self.source_directory.join(game_file).pipe(|game_file| {

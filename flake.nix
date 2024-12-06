@@ -30,6 +30,7 @@
                 clang
                 cargo-make
                 trunk
+                libarchive
                 # mold-wrapped # couldn't get mold to work
                 # for tests
                 glib

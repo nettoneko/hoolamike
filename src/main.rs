@@ -4,10 +4,10 @@ use {
     anyhow::{Context, Result},
     clap::{Parser, Subcommand},
     modlist_data::ModlistSummary,
-    progress_bars::{print_error, print_success, PROGRESS_BAR},
+    progress_bars::print_success,
     std::path::PathBuf,
     tap::prelude::*,
-    tracing::{info, warn},
+    tracing::info,
 };
 pub const BUFFER_SIZE: usize = 1024 * 128;
 
@@ -50,6 +50,30 @@ enum Commands {
 }
 
 pub mod utils {
+    use {
+        itertools::Itertools,
+        serde::{Deserialize, Serialize},
+        std::path::PathBuf,
+    };
+
+    #[derive(Debug, Serialize, Deserialize, PartialEq, PartialOrd, Hash, derive_more::Display)]
+    pub struct MaybeWindowsPath(pub String);
+
+    impl MaybeWindowsPath {
+        pub fn into_path(self) -> PathBuf {
+            let s = self.0;
+            let s = match s.contains("\\\\") {
+                true => s.split("\\\\").join("/"),
+                false => s,
+            };
+            let s = match s.contains("\\") {
+                true => s.split("\\").join("/"),
+                false => s,
+            };
+            PathBuf::from(s)
+        }
+    }
+
     pub fn boxed_iter<'a, T: 'a>(iter: impl Iterator<Item = T> + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
         Box::new(iter)
     }
@@ -66,7 +90,10 @@ pub mod modlist_data;
 pub mod modlist_json;
 pub mod wabbajack_file {
     use {
-        crate::compression::ProcessArchive,
+        crate::{
+            compression::ProcessArchive,
+            install_modlist::directives::{WabbajackFileHandle, WabbajackFileHandleExt},
+        },
         anyhow::{Context, Result},
         std::path::{Path, PathBuf},
         tap::prelude::*,
@@ -82,7 +109,7 @@ pub mod wabbajack_file {
     const MODLIST_JSON_FILENAME: &str = "modlist";
 
     impl WabbajackFile {
-        pub fn load(path: PathBuf) -> Result<Self> {
+        pub fn load(path: PathBuf) -> Result<(WabbajackFileHandle, Self)> {
             let pb = indicatif::ProgressBar::new_spinner()
                 .with_prefix(path.display().to_string())
                 .tap_mut(|pb| crate::progress_bars::ProgressKind::Validate.stylize(pb));
@@ -105,6 +132,7 @@ pub mod wabbajack_file {
                                 wabbajack_entries: entries,
                                 modlist,
                             })
+                            .map(|data| (WabbajackFileHandle::from_archive(archive), data))
                     })
                 })
         }

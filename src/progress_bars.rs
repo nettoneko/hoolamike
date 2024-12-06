@@ -9,19 +9,19 @@ use {
 pub(crate) static PROGRESS_BAR: Lazy<MultiProgress> = Lazy::new(MultiProgress::new);
 
 pub(crate) static VALIDATE_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
-    vertical_progress_bar(0, ProgressKind::Validate)
+    vertical_progress_bar(0, ProgressKind::Validate, indicatif::ProgressFinish::AndLeave)
         .attach_to(&PROGRESS_BAR)
         .tap_mut(|pb| pb.set_message("TOTAL"))
 });
 
 pub(crate) static DOWNLOAD_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
-    vertical_progress_bar(0, ProgressKind::Download)
+    vertical_progress_bar(0, ProgressKind::Download, indicatif::ProgressFinish::AndLeave)
         .attach_to(&PROGRESS_BAR)
         .tap_mut(|pb| pb.set_message("TOTAL"))
 });
 
 pub(crate) static COPY_LOCAL_TOTAL_PROGRESS_BAR: Lazy<ProgressBar> = Lazy::new(|| {
-    vertical_progress_bar(0, ProgressKind::Copy)
+    vertical_progress_bar(0, ProgressKind::Copy, indicatif::ProgressFinish::AndLeave)
         .attach_to(&PROGRESS_BAR)
         .tap_mut(|pb| pb.set_message("TOTAL"))
 });
@@ -31,6 +31,7 @@ pub enum ProgressKind {
     Validate,
     Download,
     Copy,
+    Extract,
 }
 
 type ProgressBarPostAttach = Arc<dyn Fn(ProgressBar) -> ProgressBar + 'static>;
@@ -61,6 +62,7 @@ impl ProgressKind {
             ProgressKind::Validate => "yellow",
             ProgressKind::Download => "blue",
             ProgressKind::Copy => "cyan",
+            ProgressKind::Extract => "magenta",
         }
     }
     #[rustfmt::skip]
@@ -69,6 +71,7 @@ impl ProgressKind {
             ProgressKind::Validate => "[ validate ]",
             ProgressKind::Download => "[ download ]",
             ProgressKind::Copy =>     "[   copy   ]",
+            ProgressKind::Extract =>  "[  extract ]",
         }
     }
 }
@@ -86,13 +89,13 @@ impl ProgressKind {
     }
 }
 
-pub fn vertical_progress_bar(len: u64, kind: ProgressKind) -> LazyProgressBar {
+pub fn vertical_progress_bar(len: u64, kind: ProgressKind, with_finish: indicatif::ProgressFinish) -> LazyProgressBar {
     LazyProgressBar::new(len, move |mut pb| {
         // pb.enable_steady_tick(std::time::Duration::from_millis(800));
         kind.stylize(&mut pb);
         let prefix = kind.prefix();
         pb.set_prefix(prefix);
-        pb.with_finish(indicatif::ProgressFinish::AndClear)
+        pb.with_finish(with_finish.clone())
     })
 }
 

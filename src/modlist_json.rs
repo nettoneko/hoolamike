@@ -1,4 +1,5 @@
 use {
+    crate::utils::MaybeWindowsPath,
     serde::{Deserialize, Serialize},
     std::path::PathBuf,
 };
@@ -156,7 +157,7 @@ pub struct GoogleDriveState {
 pub struct GameFileSourceState {
     pub game_version: String,
     pub hash: String,
-    pub game_file: String,
+    pub game_file: MaybeWindowsPath,
     pub game: GameName,
 }
 
