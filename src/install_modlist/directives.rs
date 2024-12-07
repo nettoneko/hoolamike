@@ -51,7 +51,11 @@ pub mod from_archive {
             modlist_json::directive::FromArchiveDirective,
             progress_bars::{print_error, vertical_progress_bar, ProgressKind, PROGRESS_BAR},
         },
-        std::{convert::identity, path::Path},
+        std::{
+            convert::identity,
+            io::{Read, Write},
+            path::Path,
+        },
     };
 
     #[derive(Clone, Debug)]
@@ -70,16 +74,6 @@ pub mod from_archive {
                 archive_hash_path,
             }: FromArchiveDirective,
         ) -> Result<()> {
-            let (source_hash, source_path) = match archive_hash_path {
-                crate::modlist_json::directive::ArchiveHashPath::ArchiveHashAndPath((source_hash, source_path)) => (source_hash, source_path),
-                other => anyhow::bail!("not implemented: {other:#?}"),
-            };
-            let source_path = source_path.into_path();
-            let source = self
-                .download_summary
-                .get(&source_hash)
-                .with_context(|| format!("directive expected hash [{source_hash}], but no such item was produced"))?;
-            let source_file = source.inner.clone();
             let output_path = self.output_directory.join(to.into_path());
 
             if let Err(message) = validate_hash(output_path.clone(), hash).await {
@@ -90,20 +84,49 @@ pub mod from_archive {
                         .tap_mut(|pb| {
                             pb.set_message(output_path.display().to_string());
                         });
+                    let perform_copy = move |from: &mut dyn Read, to: &mut dyn Write| {
+                        std::io::copy(&mut pb.wrap_read(from), &mut std::io::BufWriter::new(to))
+                            .context("copying file from archive")
+                            .map(|_| ())
+                    };
 
-                    let output_file = create_file_all(&output_path)?;
-                    let mut archive = std::fs::OpenOptions::new()
-                        .read(true)
-                        .open(&source_file)
-                        .with_context(|| format!("opening [{}]", source_file.display()))
-                        .and_then(|file| {
-                            crate::compression::ArchiveHandle::guess(file)
-                                .map_err(|_file| anyhow::anyhow!("no compression algorithm matched file [{}]", source_file.display()))
-                        })?;
-                    archive
-                        .get_handle(Path::new(&source_path))
-                        .and_then(|file| std::io::copy(&mut pb.wrap_read(file), &mut std::io::BufWriter::new(output_file)).context("copying file from archive"))
-                        .map(|_| ())
+                    match archive_hash_path {
+                        crate::modlist_json::directive::ArchiveHashPath::ArchiveHashAndPath((source_hash, source_path)) => {
+                            let source_path = source_path.into_path();
+                            let source = self
+                                .download_summary
+                                .get(&source_hash)
+                                .with_context(|| format!("directive expected hash [{source_hash}], but no such item was produced"))?;
+                            let source_file = source.inner.clone();
+
+                            let mut output_file = create_file_all(&output_path)?;
+                            let mut archive = std::fs::OpenOptions::new()
+                                .read(true)
+                                .open(&source_file)
+                                .with_context(|| format!("opening [{}]", source_file.display()))
+                                .and_then(|file| {
+                                    crate::compression::ArchiveHandle::guess(file)
+                                        .map_err(|_file| anyhow::anyhow!("no compression algorithm matched file [{}]", source_file.display()))
+                                })?;
+                            archive
+                                .get_handle(Path::new(&source_path))
+                                .and_then(|mut file| perform_copy(&mut file, &mut output_file))
+                                .map(|_| ())
+                        }
+                        crate::modlist_json::directive::ArchiveHashPath::JustArchiveHash((source_hash,)) => {
+                            let source = self
+                                .download_summary
+                                .get(&source_hash)
+                                .with_context(|| format!("directive expected hash [{source_hash}], but no such item was produced"))?;
+                            let mut source_file = std::fs::OpenOptions::new()
+                                .read(true)
+                                .open(&source.inner)
+                                .with_context(|| format!("when opening [{}]", source.inner.display()))?;
+                            let mut output_file = create_file_all(&output_path)?;
+                            perform_copy(&mut source_file, &mut output_file)
+                        }
+                        other => anyhow::bail!("not implemented: {other:#?}"),
+                    }
                 })
                 .await
                 .context("thread crashed")

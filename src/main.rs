@@ -1,5 +1,5 @@
 #![allow(clippy::unit_arg)]
-
+#![feature(seek_stream_len)]
 use {
     anyhow::{Context, Result},
     clap::{Parser, Subcommand},
@@ -88,6 +88,7 @@ pub mod helpers;
 pub mod install_modlist;
 pub mod modlist_data;
 pub mod modlist_json;
+pub mod octadiff_reader;
 pub mod wabbajack_file {
     use {
         crate::{
