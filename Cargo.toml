@@ -28,6 +28,7 @@ futures-util = "0.3.31"
 hex = "0.4.3"
 indexmap = { version = "2.7.0", features = ["serde"] }
 indicatif = { version = "0.17.9", features = ["tokio", "improved_unicode"] }
+iter-read = "1.1.0"
 itertools = "0.13.0"
 nonempty = { version = "0.10.0", features = ["serde", "serialize"] }
 num = "0.4.3"
@@ -46,9 +47,7 @@ sevenz-rust = "0.6.1"
 tabled = "0.17.0"
 tap = "1.0.1"
 tempfile = "3.14.0"
-test-log = { version = "0.2.16", default-features = false, features = [
-  "trace",
-] }
+test-log = { version = "0.2.16", default-features = false, features = ["trace"] }
 tokio = { version = "1.41.1", features = ["full"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

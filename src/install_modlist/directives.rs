@@ -4,13 +4,14 @@ use {
         error::{MultiErrorCollectExt, TotalResult},
     },
     anyhow::{Context, Result},
-    futures::{FutureExt, StreamExt, TryStreamExt},
+    futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt},
     std::{
         collections::BTreeMap,
         path::{Path, PathBuf},
         sync::Arc,
     },
     tap::prelude::*,
+    tracing::{debug, info},
 };
 
 pub(crate) fn create_file_all(path: &Path) -> Result<std::fs::File> {
@@ -42,167 +43,11 @@ pub mod create_bsa {
 
 pub type DownloadSummary = Arc<BTreeMap<String, WithArchiveDescriptor<PathBuf>>>;
 
-pub mod from_archive {
-    use {
-        super::*,
-        crate::{
-            compression::ProcessArchive,
-            install_modlist::download_cache::validate_hash,
-            modlist_json::directive::FromArchiveDirective,
-            progress_bars::{print_error, vertical_progress_bar, ProgressKind, PROGRESS_BAR},
-        },
-        std::{
-            convert::identity,
-            io::{Read, Write},
-            path::Path,
-        },
-    };
+pub mod from_archive;
 
-    #[derive(Clone, Debug)]
-    pub struct FromArchiveHandler {
-        pub download_summary: DownloadSummary,
-        pub output_directory: PathBuf,
-    }
+pub mod inline_file;
 
-    impl FromArchiveHandler {
-        pub async fn handle(
-            self,
-            FromArchiveDirective {
-                hash,
-                size,
-                to,
-                archive_hash_path,
-            }: FromArchiveDirective,
-        ) -> Result<()> {
-            let output_path = self.output_directory.join(to.into_path());
-
-            if let Err(message) = validate_hash(output_path.clone(), hash).await {
-                print_error(output_path.display().to_string(), &message);
-                tokio::task::spawn_blocking(move || -> Result<_> {
-                    let pb = vertical_progress_bar(size, ProgressKind::Extract, indicatif::ProgressFinish::AndClear)
-                        .attach_to(&PROGRESS_BAR)
-                        .tap_mut(|pb| {
-                            pb.set_message(output_path.display().to_string());
-                        });
-                    let perform_copy = move |from: &mut dyn Read, to: &mut dyn Write| {
-                        std::io::copy(&mut pb.wrap_read(from), &mut std::io::BufWriter::new(to))
-                            .context("copying file from archive")
-                            .map(|_| ())
-                    };
-
-                    match archive_hash_path {
-                        crate::modlist_json::directive::ArchiveHashPath::ArchiveHashAndPath((source_hash, source_path)) => {
-                            let source_path = source_path.into_path();
-                            let source = self
-                                .download_summary
-                                .get(&source_hash)
-                                .with_context(|| format!("directive expected hash [{source_hash}], but no such item was produced"))?;
-                            let source_file = source.inner.clone();
-
-                            let mut output_file = create_file_all(&output_path)?;
-                            let mut archive = std::fs::OpenOptions::new()
-                                .read(true)
-                                .open(&source_file)
-                                .with_context(|| format!("opening [{}]", source_file.display()))
-                                .and_then(|file| {
-                                    crate::compression::ArchiveHandle::guess(file)
-                                        .map_err(|_file| anyhow::anyhow!("no compression algorithm matched file [{}]", source_file.display()))
-                                })?;
-                            archive
-                                .get_handle(Path::new(&source_path))
-                                .and_then(|mut file| perform_copy(&mut file, &mut output_file))
-                                .map(|_| ())
-                        }
-                        crate::modlist_json::directive::ArchiveHashPath::JustArchiveHash((source_hash,)) => {
-                            let source = self
-                                .download_summary
-                                .get(&source_hash)
-                                .with_context(|| format!("directive expected hash [{source_hash}], but no such item was produced"))?;
-                            let mut source_file = std::fs::OpenOptions::new()
-                                .read(true)
-                                .open(&source.inner)
-                                .with_context(|| format!("when opening [{}]", source.inner.display()))?;
-                            let mut output_file = create_file_all(&output_path)?;
-                            perform_copy(&mut source_file, &mut output_file)
-                        }
-                        other => anyhow::bail!("not implemented: {other:#?}"),
-                    }
-                })
-                .await
-                .context("thread crashed")
-                .and_then(identity)?;
-            }
-            Ok(())
-        }
-    }
-}
-
-pub mod inline_file {
-    use {
-        super::*,
-        crate::{
-            compression::ProcessArchive,
-            install_modlist::download_cache::validate_hash,
-            modlist_json::directive::InlineFileDirective,
-            progress_bars::{print_error, vertical_progress_bar, ProgressKind, PROGRESS_BAR},
-        },
-        std::{convert::identity, path::Path},
-    };
-
-    #[derive(Clone, Debug)]
-    pub struct InlineFileHandler {
-        pub wabbajack_file: WabbajackFileHandle,
-        pub output_directory: PathBuf,
-    }
-
-    impl InlineFileHandler {
-        pub async fn handle(
-            self,
-            InlineFileDirective {
-                hash,
-                size,
-                source_data_id,
-                to,
-            }: InlineFileDirective,
-        ) -> Result<()> {
-            let output_path = self.output_directory.join(to.into_path());
-            if let Err(message) = validate_hash(output_path.clone(), hash).await {
-                print_error(source_data_id.hyphenated().to_string(), &message);
-                let wabbajack_file = self.wabbajack_file.clone();
-                tokio::task::spawn_blocking(move || -> Result<_> {
-                    let pb = vertical_progress_bar(size, ProgressKind::Extract, indicatif::ProgressFinish::AndLeave)
-                        .attach_to(&PROGRESS_BAR)
-                        .tap_mut(|pb| pb.set_message(output_path.display().to_string()));
-
-                    let output_file = create_file_all(&output_path)?;
-
-                    let mut archive = wabbajack_file.blocking_lock();
-                    archive
-                        .get_handle(Path::new(&source_data_id.as_hyphenated().to_string()))
-                        .and_then(|file| std::io::copy(&mut pb.wrap_read(file), &mut std::io::BufWriter::new(output_file)).context("copying file from archive"))
-                        .map(|_| ())
-                })
-                .await
-                .context("thread crashed")
-                .and_then(identity)?;
-            }
-            Ok(())
-        }
-    }
-}
-
-pub mod patched_from_archive {
-    use {super::*, crate::modlist_json::directive::PatchedFromArchiveDirective};
-
-    #[derive(Clone, Debug)]
-    pub struct PatchedFromArchiveHandler {}
-
-    impl PatchedFromArchiveHandler {
-        pub fn handle(self, directive: PatchedFromArchiveDirective) -> Result<()> {
-            anyhow::bail!("[PatchedFromArchiveDirective ] {directive:#?} is not implemented")
-        }
-    }
-}
+pub mod patched_from_archive;
 
 pub mod remapped_inline_file {
     use {super::*, crate::modlist_json::directive::RemappedInlineFileDirective};
@@ -262,13 +107,17 @@ impl DirectivesHandler {
             create_bsa: create_bsa::CreateBSAHandler {},
             from_archive: from_archive::FromArchiveHandler {
                 output_directory: output_directory.clone(),
-                download_summary,
+                download_summary: download_summary.clone(),
             },
             inline_file: inline_file::InlineFileHandler {
-                wabbajack_file,
-                output_directory,
+                wabbajack_file: wabbajack_file.clone(),
+                output_directory: output_directory.clone(),
             },
-            patched_from_archive: patched_from_archive::PatchedFromArchiveHandler {},
+            patched_from_archive: patched_from_archive::PatchedFromArchiveHandler {
+                output_directory: output_directory.clone(),
+                wabbajack_file: wabbajack_file,
+                download_summary: download_summary.clone(),
+            },
             remapped_inline_file: remapped_inline_file::RemappedInlineFileHandler {},
             transformed_texture: transformed_texture::TransformedTextureHandler {},
         }
@@ -278,7 +127,7 @@ impl DirectivesHandler {
             Directive::CreateBSA(directive) => self.create_bsa.clone().handle(directive),
             Directive::FromArchive(directive) => self.from_archive.clone().handle(directive).await,
             Directive::InlineFile(directive) => self.inline_file.clone().handle(directive).await,
-            Directive::PatchedFromArchive(directive) => self.patched_from_archive.clone().handle(directive),
+            Directive::PatchedFromArchive(directive) => self.patched_from_archive.clone().handle(directive).await,
             Directive::RemappedInlineFile(directive) => self.remapped_inline_file.clone().handle(directive),
             Directive::TransformedTexture(directive) => self.transformed_texture.clone().handle(directive),
         }
@@ -289,9 +138,14 @@ impl DirectivesHandler {
             .pipe(futures::stream::iter)
             .then(|directive| {
                 let directive_debug = format!("{directive:#?}");
+                debug!("handling directive {directive_debug}");
                 self.clone()
                     .handle(directive)
-                    .map(move |r| r.with_context(|| format!("when handling directive: {directive_debug}")))
+                    .map({
+                        let directive_debug = directive_debug.clone();
+                        move |r| r.with_context(|| format!("when handling directive: {directive_debug}"))
+                    })
+                    .inspect_ok(move |_handled| info!("handled directive {directive_debug}"))
             })
             .map_err(|e| Err(e).expect("all directives must be handled"))
             .multi_error_collect()

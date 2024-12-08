@@ -1,5 +1,12 @@
+use std::io::{Cursor, Read, Seek};
+
+use anyhow::{Context, Result};
+use binrw::io::NoSeek;
+
+use crate::octadiff_reader::CommandSummary;
+
 fn log_delta_file(input: Vec<u8>) -> Vec<String> {
-	super::OctodiffMetadata::explain(&mut std::io::Cursor::new(input))
+	super::OctodiffMetadata::explain(&mut Cursor::new(input))
 		.map(|(_, explain)| {
 			explain.into_iter().map(|summary| summary.to_string()).collect()
 		})
@@ -7,8 +14,67 @@ fn log_delta_file(input: Vec<u8>) -> Vec<String> {
     
 }
 
+struct ZeroReader {
+	current: i64,
+	size: i64
+}
+
+impl ZeroReader {
+	pub fn new(size: i64) -> Self {
+		Self {
+		    current: 0,
+		    size,
+		}
+	}
+}
+
+impl Read for ZeroReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        for byte in buf.iter_mut() {
+            *byte = 0; // Fill buffer with zeros
+        }
+        Ok(buf.len()) // Simulate a full buffer
+    }
+}
+
+impl Seek for ZeroReader {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        match pos {
+            std::io::SeekFrom::Start(start) => self.current = start as _,
+            std::io::SeekFrom::End(end) => {self.current = self.size + end;},
+            std::io::SeekFrom::Current(offset) => {self.current += offset},
+        }
+        Ok(self.current as _)
+    }
+}
+
 fn decode_string(input: &str) -> Vec<u8> {
 	hex::decode(input).expect("not hex bytes")
+}
+
+fn test_works(bytes: &[u8]) -> Result<()> {
+	let mut dummy_original = ZeroReader::new(1024 * 1024 * 5);
+	let delta = || NoSeek::new(Cursor::new(bytes));
+	let size = {
+		let mut delta = delta();
+		let mut reader=  super::ApplyDetla::new_from_readers(&mut dummy_original, &mut delta)?.context("empty delta")?;
+		tracing::info!(metadata=?reader.metadata);
+		std::io::copy(&mut reader, &mut std::io::sink()).context("copying data")?
+	};
+
+	let expected_size = {
+		super::OctodiffMetadata::explain(&mut delta()).unwrap().1.into_iter().map(|e|match e {
+		    CommandSummary::Copy { start: _, length } => length as u64,
+		    CommandSummary::Write(write) => write.len() as u64,
+		}).sum::<u64>()
+	};
+	assert_eq!(expected_size, size);
+	Ok(())
+}
+
+#[test_log::test]
+fn test_example_1() {
+	test_works(include_bytes!("./example-1.octadiff-delta")).unwrap()
 }
 
 

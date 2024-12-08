@@ -5,6 +5,7 @@ use {
         prelude::*,
     },
     num::ToPrimitive,
+    serde::ser::Error,
     std::{
         fmt,
         io::{self, Read, Seek, SeekFrom},
@@ -55,9 +56,21 @@ pub struct LengthPrefixedString {
     bytes: Vec<u8>,
 }
 
+impl std::fmt::Debug for LengthPrefixedString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", String::from_utf8(self.bytes.clone()).map_err(fmt::Error::custom)?)
+    }
+}
+
 #[binrw::binrw]
 pub struct ConstantSizedString<const SIZE: usize> {
     bytes: [u8; SIZE],
+}
+
+impl<const SIZE: usize> std::fmt::Debug for ConstantSizedString<SIZE> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", String::from_utf8(self.bytes.to_vec()).map_err(fmt::Error::custom)?)
+    }
 }
 
 #[binrw::binrw]
@@ -71,33 +84,35 @@ where
     eof: BinaryEndOfMetadata,
 }
 
-#[extension_traits::extension(pub trait MaybeBinRead)]
-impl<T> T
-where
-    T: for<'a> BinRead<Args<'a> = ()> + ReadEndian,
-{
-    fn read_opt<R: Read + Seek>(mut reader: R) -> std::result::Result<Option<T>, binrw::Error> {
-        match reached_end_of_stream(&mut reader)? {
-            true => Ok(None),
-            false => {
-                let pos = reader.stream_position()?;
-                match T::read(&mut reader) {
-                    Err(binrw::Error::Io(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                        reader.seek(SeekFrom::Start(pos))?;
-                        Ok(None)
-                    }
-                    other => other.map(Some),
-                }
-            }
-        }
-    }
-}
+// #[extension_traits::extension(pub trait MaybeBinRead)]
+// impl<T> T
+// where
+//     T: for<'a> BinRead<Args<'a> = ()> + ReadEndian,
+// {
+//     fn read_opt<R: Read + Seek>(mut reader: R) -> std::result::Result<Option<T>, binrw::Error> {
+//         match reached_end_of_stream(&mut reader)? {
+//             true => Ok(None),
+//             false => {
+//                 let pos = reader.stream_position()?;
+//                 match T::read(&mut reader) {
+//                     Err(binrw::Error::Io(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+//                         reader.seek(SeekFrom::Start(pos))?;
+//                         Ok(None)
+//                     }
+//                     other => other.map(Some),
+//                 }
+//             }
+//         }
+//     }
+// }
 
 #[binrw::binrw]
+#[derive(Debug)]
 pub struct HashBytes(ConstantSizedString<DEFAULT_HASH_ALGORITHM_HASH_LEN>);
 
 #[binrw::binrw]
 #[brw(little, magic = b"OCTODELTA")]
+#[derive(Debug)]
 pub struct OctodiffMetadata {
     #[br(assert(version == BINARY_VERSION, "binary version missmatch"))]
     pub version: BinaryVersion,
@@ -128,10 +143,10 @@ pub struct WriteDataCommand {
 #[binrw::binrw]
 #[brw(little)]
 pub enum OctodiffCommand {
-    #[br(magic(0x60_u8))]
-    Copy(CopyDataCommand),
     #[br(magic(0x80_u8))]
     Write(WriteDataCommand),
+    #[br(magic(0x60_u8))]
+    Copy(CopyDataCommand),
 }
 
 pub struct ApplyDetla<S: Read + Seek, D: Read + Seek> {
@@ -161,20 +176,38 @@ fn must_be_non_zero_usize(value: i64) -> std::io::Result<NonZeroUsize> {
         .map_err(std::io::Error::other)
 }
 
-fn read_at_most<R: Seek + Read>(mut source: R, buf: &mut [u8], remaining_length: usize) -> std::io::Result<Option<NonZeroUsize>> {
-    remaining_length
-        .min(buf.len())
-        .pipe(|buffer_size| (&mut buf[..buffer_size]).pipe(|buf| source.read_exact(buf).map(|_| buffer_size)))
+fn read_at_most<R: Seek + Read>(mut source: R, mut buf: &mut [u8], remaining_length: usize) -> std::io::Result<Option<NonZeroUsize>> {
+    buf.take_mut(..remaining_length)
+        .unwrap_or(buf)
+        .pipe(|buf| source.read_exact(buf).map(|_| buf.len()))
         .map(NonZeroUsize::new)
+        .with_context(|| format!("reading remaining length [{remaining_length}]"))
+        .map_err(std::io::Error::other)
 }
 
-fn reached_end_of_stream<T: Seek + Read>(source: &mut T) -> std::io::Result<bool> {
-    let (position, len) = (source.stream_position()?, source.stream_len()?);
-    Ok(position == len)
-}
+// fn reached_end_of_stream<T: Seek + Read>(source: &mut T) -> std::io::Result<bool> {
+//     let (position, len) = (source.stream_position()?, source.stream_len()?);
+//     Ok(position == len)
+// }
 
 fn read_next_command<T: Read + Seek>(mut source: T) -> Result<Option<OctodiffCommand>> {
-    OctodiffCommand::read_opt(&mut source).context("reading next octodiff command")
+    use omnom::prelude::ReadExt;
+
+    let code = match ReadExt::read_le::<u8>(&mut source) {
+        Ok(code) => code,
+        Err(_err) => return Ok(None),
+    };
+    match code {
+        0x60 => CopyDataCommand::read_le(&mut source)
+            .map(OctodiffCommand::Copy)
+            .map(Some)
+            .context("reading copy"),
+        0x80 => WriteDataCommand::read_le(&mut source)
+            .map(OctodiffCommand::Write)
+            .map(Some)
+            .context("reading write"),
+        unknown => Err(anyhow::anyhow!("unknown command [{unknown:x}]")),
+    }
 }
 
 pub enum CommandSummary {
@@ -227,9 +260,11 @@ where
     S: Read + Seek,
     D: Read + Seek,
 {
-    pub fn new(source: S, mut delta: D) -> Result<Option<Self>> {
-        OctodiffMetadata::read_le(&mut delta)
-            .context("reading metadata of delta file")
+    pub fn new_from_readers(source: S, mut delta: D) -> Result<Option<Self>> {
+        WithEof::<OctodiffMetadata>::read_le(&mut delta)
+            .context("reading metadata of delta file with eof")
+            .map(|WithEof { inner, eof: _ }| inner)
+            .tap_ok(|metadata| tracing::info!(?metadata, "metadata parsed correctly"))
             .map(|metadata| Self {
                 metadata,
                 source,
@@ -246,8 +281,9 @@ where
                             })
                         })
                     })
-                    .context("preparing reader for first command")
+                    .context("preparing reader with first command")
             })
+            .context("creating a new instance of octodiff reader")
     }
 
     fn read_next_command(&mut self) -> std::io::Result<Option<OctodiffCommand>> {
@@ -255,21 +291,24 @@ where
     }
 
     fn read_next_command_progress(&mut self) -> std::io::Result<Option<OctodiffCommandProgress>> {
-        self.read_next_command().and_then(|next_command| {
-            next_command
-                .map(|next_command| match next_command {
-                    OctodiffCommand::Copy(CopyDataCommand { start, length }) => {
-                        let (start, length) = zip_results![Error = std::io::Error, must_be_u64(start), must_be_non_zero_usize(length)]?;
-                        self.source
-                            .seek(SeekFrom::Start(start))
-                            .map(|_| OctodiffCommandProgress::Copy { remaining_length: length })
-                    }
-                    OctodiffCommand::Write(WriteDataCommand { length }) => {
-                        must_be_non_zero_usize(length).map(|length| OctodiffCommandProgress::Write { remaining_length: length })
-                    }
-                })
-                .transpose()
-        })
+        self.read_next_command()
+            .and_then(|next_command| {
+                next_command
+                    .map(|next_command| match next_command {
+                        OctodiffCommand::Copy(CopyDataCommand { start, length }) => {
+                            let (start, length) = zip_results![Error = std::io::Error, must_be_u64(start), must_be_non_zero_usize(length)]?;
+                            self.source
+                                .seek(SeekFrom::Start(start))
+                                .map(|_| OctodiffCommandProgress::Copy { remaining_length: length })
+                        }
+                        OctodiffCommand::Write(WriteDataCommand { length }) => {
+                            must_be_non_zero_usize(length).map(|length| OctodiffCommandProgress::Write { remaining_length: length })
+                        }
+                    })
+                    .transpose()
+            })
+            .context("reading next command progress")
+            .map_err(std::io::Error::other)
     }
 
     fn handle_progress(
@@ -294,12 +333,19 @@ where
             })
         }
         match progress {
-            OctodiffCommandProgress::Copy { remaining_length } => read_with_progress(&mut self.source, buf, remaining_length).map(|progress| {
-                progress.map(|(progress, remaining)| (progress, remaining.map(|remaining_length| OctodiffCommandProgress::Copy { remaining_length })))
-            }),
-            OctodiffCommandProgress::Write { remaining_length } => read_with_progress(&mut self.delta, buf, remaining_length).map(|progress| {
-                progress.map(|(progress, remaining)| (progress, remaining.map(|remaining_length| OctodiffCommandProgress::Write { remaining_length })))
-            }),
+            OctodiffCommandProgress::Copy { remaining_length } => read_with_progress(&mut self.source, buf, remaining_length)
+                .map(|progress| {
+                    progress.map(|(progress, remaining)| (progress, remaining.map(|remaining_length| OctodiffCommandProgress::Copy { remaining_length })))
+                })
+                .context("performing copy command (original file)")
+                .map_err(std::io::Error::other),
+
+            OctodiffCommandProgress::Write { remaining_length } => read_with_progress(&mut self.delta, buf, remaining_length)
+                .map(|progress| {
+                    progress.map(|(progress, remaining)| (progress, remaining.map(|remaining_length| OctodiffCommandProgress::Write { remaining_length })))
+                })
+                .context("performing write command (delta file)")
+                .map_err(std::io::Error::other),
         }
     }
     pub fn continue_read(&mut self, buf: &mut [u8]) -> std::io::Result<Option<NonZeroUsize>> {

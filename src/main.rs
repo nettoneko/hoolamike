@@ -1,5 +1,6 @@
 #![allow(clippy::unit_arg)]
 #![feature(seek_stream_len)]
+#![feature(slice_take)]
 use {
     anyhow::{Context, Result},
     clap::{Parser, Subcommand},
@@ -154,9 +155,9 @@ fn setup_logging() {
             }
             // #[cfg(not(debug_assertions))]
             // {
-            //     registry.with(fmt::Layer::new().with_writer(std::io::stderr))
+            registry.with(fmt::Layer::new().with_writer(std::io::stderr))
             // }
-            registry
+            // registry
         });
     tracing::subscriber::set_global_default(subscriber)
         .context("Unable to set a global subscriber")
