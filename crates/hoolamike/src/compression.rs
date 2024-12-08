@@ -7,6 +7,7 @@ use {
         path::{Path, PathBuf},
     },
     tap::prelude::*,
+    wrapped_7zip::which,
 };
 
 pub mod compress_tools;
@@ -52,16 +53,28 @@ impl<T: ProcessArchive> FileHandleIterator<T> {
 pub enum ArchiveFileHandle<'a> {
     Zip(zip::ZipFile<'a>),
     CompressTools(compress_tools::CompressToolsFile),
+    Wrapped7Zip(wrapped_7zip::ArchiveFileHandle),
 }
 
 impl ArchiveHandle {
-    pub fn guess(file: std::fs::File) -> std::result::Result<Self, std::fs::File> {
+    pub fn guess(file: std::fs::File, path: &Path) -> std::result::Result<Self, std::fs::File> {
         Err(file)
+            .or_else(|file| {
+                ["7z", "7z.exe"]
+                    .into_iter()
+                    .find_map(|bin| which::which(bin).ok())
+                    .context("no 7z binary found")
+                    .and_then(|path| wrapped_7zip::Wrapped7Zip::new(&path))
+                    .and_then(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                    .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
+                    .map_err(|_| file)
+            })
             .or_else(|file| {
                 file.try_clone()
                     .context("cloning file")
                     .and_then(|file| compress_tools::CompressToolsArchive::new(file).context("reading zip"))
                     .map(Self::CompressTools)
+                    .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
                     .map_err(|_| file)
             })
             .or_else(|file| {
@@ -69,8 +82,10 @@ impl ArchiveHandle {
                     .context("cloning file")
                     .and_then(|file| zip::ZipArchive::new(file).context("reading zip"))
                     .map(Self::Zip)
+                    .tap_err(|message| tracing::trace!("could not open archive with zip: {message:?}"))
                     .map_err(|_| file)
             })
+            .tap_ok(|a| tracing::trace!("succesfully opened an archive: {a:?}"))
     }
 }
 
@@ -79,6 +94,7 @@ impl std::io::Read for ArchiveFileHandle<'_> {
         match self {
             ArchiveFileHandle::Zip(zip_file_seek) => zip_file_seek.read(buf),
             ArchiveFileHandle::CompressTools(compress_tools_seek) => compress_tools_seek.read(buf),
+            ArchiveFileHandle::Wrapped7Zip(wrapped_7zip) => wrapped_7zip.read(buf),
         }
     }
 }
@@ -87,7 +103,20 @@ impl std::io::Read for ArchiveFileHandle<'_> {
 pub trait ProcessArchiveFile {}
 
 #[enum_dispatch::enum_dispatch]
+#[derive(Debug)]
 pub enum ArchiveHandle {
     Zip(zip::ZipArchive),
     CompressTools(compress_tools::CompressToolsArchive),
+    Wrapped7Zip(wrapped_7zip::ArchiveHandle),
+}
+
+impl ProcessArchive for wrapped_7zip::ArchiveHandle {
+    fn list_paths(&mut self) -> Result<Vec<PathBuf>> {
+        self.list_files()
+            .map(|files| files.into_iter().map(|entry| entry.name).collect())
+    }
+
+    fn get_handle(&mut self, path: &Path) -> Result<self::ArchiveFileHandle<'_>> {
+        self.get_file(path).map(ArchiveFileHandle::Wrapped7Zip)
+    }
 }

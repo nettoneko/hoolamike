@@ -18,6 +18,7 @@
         overlays = [(import rust-overlay)];
         pkgs = import nixpkgs {
           inherit system overlays;
+          config.allowUnfree = true;
         };
       in
         with pkgs; {
@@ -31,6 +32,9 @@
                 cargo-make
                 trunk
                 libarchive
+                # compression
+                # p7zip
+                p7zip-rar
                 # mold-wrapped # couldn't get mold to work
                 # for tests
                 glib

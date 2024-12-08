@@ -14,6 +14,7 @@ impl std::io::Read for CompressToolsFile {
 }
 pub struct CompressToolsFile(tempfile::SpooledTempFile);
 
+#[derive(Debug)]
 pub struct CompressToolsArchive(std::fs::File);
 
 impl CompressToolsArchive {

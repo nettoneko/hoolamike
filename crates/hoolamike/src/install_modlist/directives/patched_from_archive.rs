@@ -73,16 +73,16 @@ impl PatchedFromArchiveHandler {
                             .get(&source_hash)
                             .with_context(|| format!("directive expected hash [{source_hash}], but no such item was produced"))?;
                         debug!(?source, "found source_file");
-                        let source_file = source.inner.clone();
+                        let source_file_path = source.inner.clone();
 
                         let mut output_file = create_file_all(&output_path)?;
                         let mut archive = std::fs::OpenOptions::new()
                             .read(true)
-                            .open(&source_file)
-                            .with_context(|| format!("opening [{}]", source_file.display()))
-                            .and_then(|file| {
-                                crate::compression::ArchiveHandle::guess(file)
-                                    .map_err(|_file| anyhow::anyhow!("no compression algorithm matched file [{}]", source_file.display()))
+                            .open(&source_file_path)
+                            .with_context(|| format!("opening [{}]", source_file_path.display()))
+                            .and_then(|source_file| {
+                                crate::compression::ArchiveHandle::guess(source_file, &source_file_path)
+                                    .map_err(|_file| anyhow::anyhow!("no compression algorithm matched file [{}]", source_file_path.display()))
                             })?;
                         archive
                             .get_handle(Path::new(&source_path))

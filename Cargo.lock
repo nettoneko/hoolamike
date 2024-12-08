@@ -754,6 +754,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "diff"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1183,6 +1189,71 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest",
+]
+
+[[package]]
+name = "home"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3d1354bf6b7235cb4a0576c2619fd4ed18183f689b12b006a0ee7329eeff9a5"
+dependencies = [
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "hoolamike"
+version = "0.1.4"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "binrw",
+ "bon",
+ "chrono",
+ "clap",
+ "compress-tools",
+ "console",
+ "console-subscriber",
+ "derivative",
+ "derive_more 1.0.0",
+ "enum-kinds",
+ "enum_dispatch",
+ "extension-traits",
+ "flate2",
+ "fs2",
+ "futures",
+ "futures-util",
+ "hex",
+ "indexmap 2.7.0",
+ "indicatif",
+ "iter-read",
+ "itertools",
+ "nonempty",
+ "num",
+ "num_cpus",
+ "omnom",
+ "once_cell",
+ "parking_lot",
+ "regex",
+ "reqwest",
+ "scraper",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "serde_yaml",
+ "sevenz-rust",
+ "tabled",
+ "tap",
+ "tempfile",
+ "test-log",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "transpare",
+ "url",
+ "uuid",
+ "wrapped-7zip",
+ "xxhash-rust",
+ "zip",
 ]
 
 [[package]]
@@ -2174,6 +2245,16 @@ name = "precomputed-hash"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
+
+[[package]]
+name = "pretty_assertions"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
+dependencies = [
+ "diff",
+ "yansi",
+]
 
 [[package]]
 name = "prettyplease"
@@ -3439,6 +3520,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "which"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9cad3279ade7346b96e38731a641d7343dd6a53d55083dd54eadfa5a1b38c6b"
+dependencies = [
+ "either",
+ "home",
+ "rustix",
+ "winsafe",
+]
+
+[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3582,62 +3675,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
-name = "wrapped-7zip"
-version = "0.1.4"
+name = "winsafe"
+version = "0.0.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
-name = "wrapper-7zip"
+name = "wrapped-7zip"
 version = "0.1.4"
 dependencies = [
  "anyhow",
- "base64 0.22.1",
- "binrw",
- "bon",
  "chrono",
- "clap",
- "compress-tools",
- "console",
- "console-subscriber",
- "derivative",
- "derive_more 1.0.0",
- "enum-kinds",
- "enum_dispatch",
  "extension-traits",
- "flate2",
- "fs2",
  "futures",
  "futures-util",
- "hex",
- "indexmap 2.7.0",
- "indicatif",
- "iter-read",
- "itertools",
- "nonempty",
- "num",
- "num_cpus",
- "omnom",
- "once_cell",
- "parking_lot",
- "regex",
- "reqwest",
- "scraper",
- "serde",
+ "pretty_assertions",
  "serde_json",
- "serde_urlencoded",
- "serde_yaml",
- "sevenz-rust",
- "tabled",
  "tap",
- "tempfile",
  "test-log",
  "tokio",
  "tracing",
- "tracing-subscriber",
- "transpare",
- "url",
- "uuid",
- "xxhash-rust",
- "zip",
+ "which",
 ]
 
 [[package]]
@@ -3657,6 +3715,12 @@ name = "xxhash-rust"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a5cbf750400958819fb6178eaa83bee5cd9c29a26a40cc241df8c70fdd46984"
+
+[[package]]
+name = "yansi"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "yoke"
