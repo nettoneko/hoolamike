@@ -8,3 +8,10 @@ readme.workspace = true
 edition.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+extension-traits.workspace = true
+futures.workspace = true
+futures-util.workspace = true
+tap.workspace = true
+tokio = { workspace = true, features = ["full"] }
+which = "7.0.0"
