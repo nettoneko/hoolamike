@@ -10,7 +10,7 @@ pub struct ListOutputEntry {
     pub time: chrono::NaiveTime,
     pub attr: String,
     pub size: u64,
-    pub compressed: u64,
+    pub compressed: Option<u64>,
     pub name: PathBuf,
 }
 
@@ -42,36 +42,64 @@ impl ListOutputEntry {
                         .context("could not parse value")
                 })
         }
-        Ok(ListOutputEntry {
-            date: entries.next().context("no date").and_then(|date| {
+
+        let mut parse_entry = || -> Result<_> {
+            let date = entries.next().context("no date").and_then(|date| {
                 date.pipe(next_entry)
                     .with_context(|| format!("bad date: '{date}'"))
-            })?,
-            time: entries.next().context("no time").and_then(|time| {
+            })?;
+            let time = entries.next().context("no time").and_then(|time| {
                 time.pipe(next_entry)
                     .with_context(|| format!("bad time: '{time}'"))
-            })?,
-            attr: entries.next().context("no attr").and_then(|attr| {
+            })?;
+            let attr = entries.next().context("no attr").and_then(|attr| {
                 attr.pipe(next_entry)
                     .with_context(|| format!("bad attr: '{attr}'"))
-            })?,
-            size: entries.next().context("no size").and_then(|size| {
+            })?;
+            let size = entries.next().context("no size").and_then(|size| {
                 size.pipe(next_entry)
                     .with_context(|| format!("bad size: '{size}'"))
-            })?,
-            compressed: entries
+            })?;
+
+            entries
                 .next()
-                .context("no compressed")
-                .and_then(|compressed| {
-                    compressed
-                        .pipe(next_entry)
-                        .with_context(|| format!("bad compressed: '{compressed}'"))
-                })?,
-            name: entries
-                .next()
-                .context("no file name")
-                .map(|e| PathBuf::from(e))?,
-        })
+                .context("no compressed/name")
+                .and_then(|maybe_compressed| -> Result<_> {
+                    match maybe_compressed
+                        .pipe(next_entry::<u64>)
+                        .map_err(|_| maybe_compressed)
+                    {
+                        Ok(compressed) => Ok(ListOutputEntry {
+                            date,
+                            time,
+                            attr,
+                            size,
+                            compressed: Some(compressed),
+                            name: entries
+                                .next()
+                                .context("no file name")
+                                .map(ToOwned::to_owned)
+                                .map(MaybeWindowsPath)
+                                .map(MaybeWindowsPath::into_path)?,
+                        }),
+                        Err(file_name) => Ok(ListOutputEntry {
+                            date,
+                            time,
+                            attr,
+                            size,
+                            compressed: None,
+                            name: file_name
+                                .pipe(ToOwned::to_owned)
+                                .pipe(MaybeWindowsPath)
+                                .pipe(MaybeWindowsPath::into_path),
+                        }),
+                    }
+                })
+        };
+
+        parse_entry()
+            .tap_err(|e| tracing::trace!("discarding\n{archive_line}\nreason:{e:#?}"))
+            .with_context(|| format!("when parsing line from\n'{archive_line}'"))
     }
 }
 
@@ -87,6 +115,7 @@ impl ListOutput {
             .collect::<Result<Vec<_>>>()
             .map(|entries| ListOutput { entries })
             .with_context(|| format!("parsing output\n{output}"))
+            .tap_ok(|entries| tracing::trace!("found entries: {entries:#?}\n\nn output: {output}"))
     }
 }
 

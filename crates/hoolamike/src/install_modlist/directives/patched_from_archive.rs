@@ -1,7 +1,7 @@
 use {
     super::*,
     crate::{
-        compression::{forward_only_seek::ForwardOnlySeek, ProcessArchive},
+        compression::{forward_only_seek::ForwardOnlySeek, ProcessArchive, SeekWithTempFileExt},
         install_modlist::download_cache::validate_hash,
         modlist_json::directive::{ArchiveHashPath, PatchedFromArchiveDirective},
         progress_bars::{print_error, vertical_progress_bar, ProgressKind, PROGRESS_BAR},
@@ -9,7 +9,7 @@ use {
     indicatif::ProgressBar,
     std::{
         convert::identity,
-        io::{Read, Write},
+        io::{Read, Seek, Write},
     },
 };
 
@@ -50,12 +50,12 @@ impl PatchedFromArchiveHandler {
 
                 fn perform_copy<S, D, T>(pb: ProgressBar, source: S, delta: D, target: T) -> Result<()>
                 where
-                    S: Read,
+                    S: Read + Seek,
                     D: Read,
                     T: Write,
                 {
                     // this applies delta on the fly
-                    let from = crate::octadiff_reader::ApplyDetla::new_from_readers(ForwardOnlySeek::new(source), ForwardOnlySeek::new(delta))
+                    let from = crate::octadiff_reader::ApplyDetla::new_from_readers(source, ForwardOnlySeek::new(delta))
                         .context("invalid delta")?
                         .context("delta is empty")?;
                     let mut writer = &mut std::io::BufWriter::new(target);
@@ -86,6 +86,7 @@ impl PatchedFromArchiveHandler {
                             })?;
                         archive
                             .get_handle(Path::new(&source_path))
+                            .and_then(|source_file| source_file.seek_with_temp_file())
                             .and_then(|mut source_file| perform_copy(pb, &mut source_file, delta_file, &mut output_file))
                             .map(|_| ())
                     }

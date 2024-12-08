@@ -1,5 +1,6 @@
 use {
     crate::utils::boxed_iter,
+    ::wrapped_7zip::which,
     anyhow::{Context, Result},
     std::{
         fs::File,
@@ -7,7 +8,6 @@ use {
         path::{Path, PathBuf},
     },
     tap::prelude::*,
-    wrapped_7zip::which,
 };
 
 pub mod compress_tools;
@@ -53,7 +53,7 @@ impl<T: ProcessArchive> FileHandleIterator<T> {
 pub enum ArchiveFileHandle<'a> {
     Zip(zip::ZipFile<'a>),
     CompressTools(compress_tools::CompressToolsFile),
-    Wrapped7Zip(wrapped_7zip::ArchiveFileHandle),
+    Wrapped7Zip(::wrapped_7zip::ArchiveFileHandle),
 }
 
 impl ArchiveHandle {
@@ -64,7 +64,7 @@ impl ArchiveHandle {
                     .into_iter()
                     .find_map(|bin| which::which(bin).ok())
                     .context("no 7z binary found")
-                    .and_then(|path| wrapped_7zip::Wrapped7Zip::new(&path))
+                    .and_then(|path| ::wrapped_7zip::Wrapped7Zip::new(&path))
                     .and_then(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
                     .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
                     .map_err(|_| file)
@@ -107,16 +107,18 @@ pub trait ProcessArchiveFile {}
 pub enum ArchiveHandle {
     Zip(zip::ZipArchive),
     CompressTools(compress_tools::CompressToolsArchive),
-    Wrapped7Zip(wrapped_7zip::ArchiveHandle),
+    Wrapped7Zip(::wrapped_7zip::ArchiveHandle),
 }
 
-impl ProcessArchive for wrapped_7zip::ArchiveHandle {
-    fn list_paths(&mut self) -> Result<Vec<PathBuf>> {
-        self.list_files()
-            .map(|files| files.into_iter().map(|entry| entry.name).collect())
-    }
+pub mod wrapped_7zip;
 
-    fn get_handle(&mut self, path: &Path) -> Result<self::ArchiveFileHandle<'_>> {
-        self.get_file(path).map(ArchiveFileHandle::Wrapped7Zip)
+#[extension_traits::extension(pub trait SeekWithTempFileExt)]
+impl<T: std::io::Read> T {
+    fn seek_with_temp_file(mut self) -> Result<tempfile::SpooledTempFile> {
+        tempfile::SpooledTempFile::new(128 * 1024 * 1024).pipe(|mut temp_file| {
+            std::io::copy(&mut self, &mut temp_file)
+                .context("creating a seekable temp file")
+                .map(|_| temp_file)
+        })
     }
 }

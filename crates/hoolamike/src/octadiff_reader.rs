@@ -84,28 +84,6 @@ where
     eof: BinaryEndOfMetadata,
 }
 
-// #[extension_traits::extension(pub trait MaybeBinRead)]
-// impl<T> T
-// where
-//     T: for<'a> BinRead<Args<'a> = ()> + ReadEndian,
-// {
-//     fn read_opt<R: Read + Seek>(mut reader: R) -> std::result::Result<Option<T>, binrw::Error> {
-//         match reached_end_of_stream(&mut reader)? {
-//             true => Ok(None),
-//             false => {
-//                 let pos = reader.stream_position()?;
-//                 match T::read(&mut reader) {
-//                     Err(binrw::Error::Io(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-//                         reader.seek(SeekFrom::Start(pos))?;
-//                         Ok(None)
-//                     }
-//                     other => other.map(Some),
-//                 }
-//             }
-//         }
-//     }
-// }
-
 #[binrw::binrw]
 #[derive(Debug)]
 pub struct HashBytes(ConstantSizedString<DEFAULT_HASH_ALGORITHM_HASH_LEN>);
@@ -156,24 +134,17 @@ pub struct ApplyDetla<S: Read + Seek, D: Read + Seek> {
     delta: D,
 }
 
-fn must_be_usize(value: i64) -> std::io::Result<usize> {
-    value
-        .to_usize()
-        .context("expected value to be usize")
-        .map_err(std::io::Error::other)
+fn must_be_usize(value: i64) -> Result<usize> {
+    value.to_usize().context("expected value to be usize")
 }
-fn must_be_u64(value: i64) -> std::io::Result<u64> {
-    value
-        .to_u64()
-        .context("expected value to be usize")
-        .map_err(std::io::Error::other)
+fn must_be_u64(value: i64) -> Result<u64> {
+    value.to_u64().context("expected value to be usize")
 }
 
-fn must_be_non_zero_usize(value: i64) -> std::io::Result<NonZeroUsize> {
+fn must_be_non_zero_usize(value: i64) -> Result<NonZeroUsize> {
     must_be_usize(value)
         .context("not even a usize")
         .and_then(|value| NonZeroUsize::new(value).context("must be non-zero"))
-        .map_err(std::io::Error::other)
 }
 
 fn read_at_most<R: Seek + Read>(mut source: R, mut buf: &mut [u8], remaining_length: usize) -> std::io::Result<Option<NonZeroUsize>> {
@@ -286,19 +257,21 @@ where
             .context("creating a new instance of octodiff reader")
     }
 
-    fn read_next_command(&mut self) -> std::io::Result<Option<OctodiffCommand>> {
-        read_next_command(&mut self.delta).map_err(std::io::Error::other)
+    fn read_next_command(&mut self) -> Result<Option<OctodiffCommand>> {
+        read_next_command(&mut self.delta).context("reading next command")
     }
 
-    fn read_next_command_progress(&mut self) -> std::io::Result<Option<OctodiffCommandProgress>> {
+    fn read_next_command_progress(&mut self) -> Result<Option<OctodiffCommandProgress>> {
         self.read_next_command()
             .and_then(|next_command| {
                 next_command
                     .map(|next_command| match next_command {
                         OctodiffCommand::Copy(CopyDataCommand { start, length }) => {
-                            let (start, length) = zip_results![Error = std::io::Error, must_be_u64(start), must_be_non_zero_usize(length)]?;
+                            let (start, length) =
+                                zip_results![Error = anyhow::Error, must_be_u64(start), must_be_non_zero_usize(length)].context("validating next command")?;
                             self.source
                                 .seek(SeekFrom::Start(start))
+                                .context("seeking")
                                 .map(|_| OctodiffCommandProgress::Copy { remaining_length: length })
                         }
                         OctodiffCommand::Write(WriteDataCommand { length }) => {
@@ -308,47 +281,40 @@ where
                     .transpose()
             })
             .context("reading next command progress")
-            .map_err(std::io::Error::other)
     }
 
-    fn handle_progress(
-        &mut self,
-        buf: &mut [u8],
-        progress: OctodiffCommandProgress,
-    ) -> std::io::Result<Option<(NonZeroUsize, Option<OctodiffCommandProgress>)>> {
+    fn handle_progress(&mut self, buf: &mut [u8], progress: OctodiffCommandProgress) -> Result<Option<(NonZeroUsize, Option<OctodiffCommandProgress>)>> {
         fn read_with_progress<T: Read + Seek>(
             mut source: T,
             buf: &mut [u8],
             remaining_length: NonZeroUsize,
-        ) -> std::io::Result<Option<(NonZeroUsize, Option<NonZeroUsize>)>> {
-            read_at_most(&mut source, buf, remaining_length.get()).and_then(|read| {
-                read.and_then(|read| remaining_length.get().checked_sub(read.get()))
-                    .context("read too much")
-                    .map_err(std::io::Error::other)
-                    .map(|new_remaining_length| {
-                        new_remaining_length
-                            .pipe(NonZeroUsize::new)
-                            .pipe(|remaining_length| (read.map(|read| (read, remaining_length))))
-                    })
-            })
+        ) -> Result<Option<(NonZeroUsize, Option<NonZeroUsize>)>> {
+            read_at_most(&mut source, buf, remaining_length.get())
+                .with_context(|| format!("reading at most [{remaining_length}] bytes"))
+                .and_then(|read| {
+                    read.and_then(|read| remaining_length.get().checked_sub(read.get()))
+                        .context("read too much")
+                        .map(|new_remaining_length| {
+                            new_remaining_length
+                                .pipe(NonZeroUsize::new)
+                                .pipe(|remaining_length| (read.map(|read| (read, remaining_length))))
+                        })
+                })
         }
         match progress {
             OctodiffCommandProgress::Copy { remaining_length } => read_with_progress(&mut self.source, buf, remaining_length)
                 .map(|progress| {
                     progress.map(|(progress, remaining)| (progress, remaining.map(|remaining_length| OctodiffCommandProgress::Copy { remaining_length })))
                 })
-                .context("performing copy command (original file)")
-                .map_err(std::io::Error::other),
-
+                .context("performing copy command (original file)"),
             OctodiffCommandProgress::Write { remaining_length } => read_with_progress(&mut self.delta, buf, remaining_length)
                 .map(|progress| {
                     progress.map(|(progress, remaining)| (progress, remaining.map(|remaining_length| OctodiffCommandProgress::Write { remaining_length })))
                 })
-                .context("performing write command (delta file)")
-                .map_err(std::io::Error::other),
+                .context("performing write command (delta file)"),
         }
     }
-    pub fn continue_read(&mut self, buf: &mut [u8]) -> std::io::Result<Option<NonZeroUsize>> {
+    pub fn continue_read(&mut self, buf: &mut [u8]) -> Result<Option<NonZeroUsize>> {
         match self
             .current_command
             .take()
@@ -391,6 +357,7 @@ where
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.continue_read(buf)
+            .map_err(std::io::Error::other)
             .map(|read| read.map(NonZeroUsize::get).unwrap_or(0))
     }
 }

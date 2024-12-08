@@ -28,14 +28,6 @@ fn check_exists(file: &Path) -> Result<&Path> {
         .with_context(|| format!("checking if file exists: [{}]", file.display()))
 }
 
-// async fn check_exists_async(file: &Path) -> Result<&Path> {
-//     try_exists(file)
-//         .await
-//         .context("checking file existance")
-//         .and_then(|exists| exists.then_some(file).context("file does not exists"))
-//         .with_context(|| format!("checking if file [{}] exists", file.display()))
-// }
-
 impl Wrapped7Zip {
     pub fn new(path: &Path) -> Result<Self> {
         check_exists(path)
@@ -205,6 +197,24 @@ impl Read for ArchiveFileHandle {
 }
 
 mod list_output;
+
+#[derive(Debug, PartialEq, PartialOrd, Hash)]
+pub struct MaybeWindowsPath(pub String);
+
+impl MaybeWindowsPath {
+    pub fn into_path(self) -> PathBuf {
+        let s = self.0;
+        let s = match s.contains("\\\\") {
+            true => s.split("\\\\").collect::<Vec<_>>().join("/"),
+            false => s,
+        };
+        let s = match s.contains("\\") {
+            true => s.split("\\").collect::<Vec<_>>().join("/"),
+            false => s,
+        };
+        PathBuf::from(s)
+    }
+}
 
 impl ArchiveHandle {
     pub fn list_files(&self) -> Result<Vec<ListOutputEntry>> {
