@@ -9,7 +9,7 @@ use {
     indicatif::ProgressBar,
     std::{
         convert::identity,
-        io::{Read, Seek, Write},
+        io::{Read, Write},
     },
 };
 
@@ -28,7 +28,7 @@ impl PatchedFromArchiveHandler {
             size,
             to,
             archive_hash_path,
-            from_hash,
+            from_hash: _,
             patch_id,
         }: PatchedFromArchiveDirective,
     ) -> Result<()> {

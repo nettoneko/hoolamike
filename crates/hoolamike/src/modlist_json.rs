@@ -500,7 +500,7 @@ pub mod parsing_helpers {
         fn test_wasteland_reborn() -> anyhow::Result<()> {
             use super::*;
 
-            include_str!("../../wasteland-reborn/test/modlist").pipe(validate_modlist_file)
+            include_str!("../../../../wasteland-reborn/test/modlist").pipe(validate_modlist_file)
         }
     }
 

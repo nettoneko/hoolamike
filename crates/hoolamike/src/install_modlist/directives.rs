@@ -115,7 +115,7 @@ impl DirectivesHandler {
             },
             patched_from_archive: patched_from_archive::PatchedFromArchiveHandler {
                 output_directory: output_directory.clone(),
-                wabbajack_file: wabbajack_file,
+                wabbajack_file,
                 download_summary: download_summary.clone(),
             },
             remapped_inline_file: remapped_inline_file::RemappedInlineFileHandler {},

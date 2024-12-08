@@ -2,7 +2,7 @@ use {
     super::{ProcessArchive, *},
     ::compress_tools::*,
     anyhow::{Context, Result},
-    io::{Seek, SeekFrom},
+    io::Seek,
     std::path::PathBuf,
     tracing::{debug, info},
 };
