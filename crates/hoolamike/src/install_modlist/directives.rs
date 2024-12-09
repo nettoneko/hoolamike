@@ -2,6 +2,7 @@ use {
     crate::{
         downloaders::WithArchiveDescriptor,
         error::{MultiErrorCollectExt, TotalResult},
+        modlist_json::DirectiveKind,
     },
     anyhow::{Context, Result},
     futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt},
@@ -95,6 +96,21 @@ pub struct DirectivesHandler {
     pub transformed_texture: transformed_texture::TransformedTextureHandler,
 }
 
+impl DirectiveKind {
+    /// directives are not supposed to be executed in order, BSA directives expect stuff to be there up front no matter
+    /// what their position in the list is
+    pub fn priority(self) -> u8 {
+        match self {
+            DirectiveKind::InlineFile => 10,
+            DirectiveKind::FromArchive => 11,
+            DirectiveKind::PatchedFromArchive => 12,
+            DirectiveKind::RemappedInlineFile => 13,
+            DirectiveKind::TransformedTexture => 240,
+            DirectiveKind::CreateBSA => 250,
+        }
+    }
+}
+
 impl DirectivesHandler {
     #[allow(clippy::new_without_default)]
     pub fn new(wabbajack_file: WabbajackFileHandle, output_directory: PathBuf, sync_summary: Vec<WithArchiveDescriptor<PathBuf>>) -> Self {
@@ -135,6 +151,9 @@ impl DirectivesHandler {
     #[allow(clippy::unnecessary_literal_unwrap)]
     pub async fn handle_directives(self: Arc<Self>, directives: Vec<Directive>) -> TotalResult<()> {
         directives
+            .tap_mut(|directives| {
+                directives.sort_unstable_by_key(|directive| DirectiveKind::from(directive).priority());
+            })
             .pipe(futures::stream::iter)
             .then(|directive| {
                 let directive_debug = format!("{directive:#?}");

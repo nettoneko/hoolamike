@@ -9,6 +9,7 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+ba2 = "3.0.0"
 base64.workspace = true
 binrw.workspace = true
 bon.workspace = true

@@ -3,7 +3,7 @@ use {
     crate::{
         compression::ProcessArchive,
         install_modlist::download_cache::validate_hash,
-        modlist_json::directive::FromArchiveDirective,
+        modlist_json::directive::{ArchiveHashPath, FromArchiveDirective},
         progress_bars::{print_error, vertical_progress_bar, ProgressKind, PROGRESS_BAR},
     },
     std::{
@@ -48,7 +48,7 @@ impl FromArchiveHandler {
                 };
 
                 match archive_hash_path {
-                    crate::modlist_json::directive::ArchiveHashPath::ArchiveHashAndPath((source_hash, source_path)) => {
+                    ArchiveHashPath::ArchiveHashAndPath((source_hash, source_path)) => {
                         let source_path = source_path.into_path();
                         let source = self
                             .download_summary
@@ -71,7 +71,7 @@ impl FromArchiveHandler {
                             .and_then(|mut file| perform_copy(&mut file, &mut output_file))
                             .map(|_| ())
                     }
-                    crate::modlist_json::directive::ArchiveHashPath::JustArchiveHash((source_hash,)) => {
+                    ArchiveHashPath::JustArchiveHash((source_hash,)) => {
                         let source = self
                             .download_summary
                             .get(&source_hash)
