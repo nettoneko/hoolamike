@@ -69,13 +69,13 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
                         file.iter()
                             .map(|chunk| {
                                 (match chunk.is_decompressed() {
-                                    true => vec![].pipe(|mut out| {
+                                    false => vec![].pipe(|mut out| {
                                         chunk
                                             .decompress_into(&mut out, &Default::default())
                                             .map(|_| out)
                                             .tap_err(|e| tracing::error!("decompression failed: {e:#?}"))
                                     }),
-                                    false => chunk.as_bytes().to_vec().pipe(Ok),
+                                    true => chunk.as_bytes().to_vec().pipe(Ok),
                                 })
                                 .map_err(std::io::Error::other)
                             })
