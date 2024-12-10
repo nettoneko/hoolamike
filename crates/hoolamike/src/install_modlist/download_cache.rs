@@ -71,9 +71,28 @@ fn to_base_64(input: &[u8]) -> String {
     use base64::prelude::*;
     BASE64_STANDARD.encode(input)
 }
+fn from_base_64(input: impl AsRef<[u8]>) -> Result<Vec<u8>> {
+    use base64::prelude::*;
+    BASE64_STANDARD
+        .decode(input)
+        .context("decoding input as u64")
+}
 
-fn to_base_64_from_u64(input: u64) -> String {
+pub fn to_base_64_from_u64(input: u64) -> String {
     u64::to_ne_bytes(input).pipe(|bytes| to_base_64(&bytes))
+}
+
+pub fn to_u64_from_base_64(input: String) -> Result<u64> {
+    from_base_64(&input)
+        .and_then(|input| {
+            input
+                .as_slice()
+                .try_conv::<[u8; 8]>()
+                .context("invalid size")
+        })
+        .map(u64::from_ne_bytes)
+        .context(input)
+        .context("decoding string as hashed bytes")
 }
 
 pub async fn validate_hash(path: PathBuf, expected_hash: String) -> Result<PathBuf> {

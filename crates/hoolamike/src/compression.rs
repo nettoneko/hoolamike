@@ -2,6 +2,8 @@ use {
     crate::utils::boxed_iter,
     ::wrapped_7zip::which,
     anyhow::{Context, Result},
+    bethesda_archive::BethesdaArchiveFile,
+    indicatif::ProgressBar,
     std::{
         fs::File,
         io::{self},
@@ -10,6 +12,7 @@ use {
     tap::prelude::*,
 };
 
+pub mod bethesda_archive;
 pub mod compress_tools;
 pub mod sevenz;
 pub mod zip;
@@ -22,7 +25,7 @@ pub trait ProcessArchive: Sized {
     fn get_handle(&mut self, path: &Path) -> Result<self::ArchiveFileHandle<'_>>;
 }
 
-impl ArchiveHandle {
+impl ArchiveHandle<'_> {
     pub fn iter_mut(mut self) -> Result<FileHandleIterator<Self>> {
         self.list_paths().map(|paths| FileHandleIterator {
             paths: paths.into_iter().pipe(boxed_iter),
@@ -54,11 +57,20 @@ pub enum ArchiveFileHandle<'a> {
     Zip(zip::ZipFile<'a>),
     CompressTools(compress_tools::CompressToolsFile),
     Wrapped7Zip(::wrapped_7zip::ArchiveFileHandle),
+    Bethesda(self::bethesda_archive::BethesdaArchiveFile<'a>),
 }
 
-impl ArchiveHandle {
+impl ArchiveHandle<'_> {
     pub fn guess(file: std::fs::File, path: &Path) -> std::result::Result<Self, std::fs::File> {
         Err(file)
+            .or_else(|file| {
+                file.try_clone()
+                    .context("cloning file")
+                    .and_then(|_file| bethesda_archive::BethesdaArchive::open(path).context("reading zip"))
+                    .map(Self::Bethesda)
+                    .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
+                    .map_err(|_| file)
+            })
             .or_else(|file| {
                 ["7z", "7z.exe"]
                     .into_iter()
@@ -95,6 +107,9 @@ impl std::io::Read for ArchiveFileHandle<'_> {
             ArchiveFileHandle::Zip(zip_file_seek) => zip_file_seek.read(buf),
             ArchiveFileHandle::CompressTools(compress_tools_seek) => compress_tools_seek.read(buf),
             ArchiveFileHandle::Wrapped7Zip(wrapped_7zip) => wrapped_7zip.read(buf),
+            ArchiveFileHandle::Bethesda(bethesda_archive_file) => match bethesda_archive_file {
+                BethesdaArchiveFile::Fallout4(fo4) => fo4.read(buf),
+            },
         }
     }
 }
@@ -104,21 +119,30 @@ pub trait ProcessArchiveFile {}
 
 #[enum_dispatch::enum_dispatch]
 #[derive(Debug)]
-pub enum ArchiveHandle {
+pub enum ArchiveHandle<'a> {
     Zip(zip::ZipArchive),
     CompressTools(compress_tools::CompressToolsArchive),
     Wrapped7Zip(::wrapped_7zip::ArchiveHandle),
+    Bethesda(bethesda_archive::BethesdaArchive<'a>),
 }
 
 pub mod wrapped_7zip;
 
 #[extension_traits::extension(pub trait SeekWithTempFileExt)]
 impl<T: std::io::Read> T {
-    fn seek_with_temp_file(mut self) -> Result<tempfile::SpooledTempFile> {
-        tempfile::SpooledTempFile::new(128 * 1024 * 1024).pipe(|mut temp_file| {
-            std::io::copy(&mut self, &mut temp_file)
-                .context("creating a seekable temp file")
-                .map(|_| temp_file)
-        })
+    fn seek_with_temp_file(mut self, pb: ProgressBar) -> Result<(tempfile::NamedTempFile, File)> {
+        tempfile::NamedTempFile::new()
+            .context("creating a tempfile")
+            .and_then(|mut temp_file| {
+                std::io::copy(&mut self, &mut pb.wrap_write(&mut temp_file))
+                    .context("creating a seekable temp file")
+                    .map(|_| temp_file)
+                    .and_then(|file| {
+                        file.as_file()
+                            .try_clone()
+                            .context("cloning file handle")
+                            .map(|file_handle| (file, file_handle))
+                    })
+            })
     }
 }

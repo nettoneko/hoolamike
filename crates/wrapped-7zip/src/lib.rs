@@ -85,17 +85,11 @@ impl Wrapped7Zip {
         command
     }
     pub fn query_file_info(&self, path: &Path) -> Result<String> {
-        check_exists(path)
-            .map(|path| {
-                self.command(|c| {
-                    c
-                        // actual command
-                        .arg("l")
-                        .arg(path)
-                })
-            })
+        path.try_exists()
+            .context("checking for file existence")
+            .and_then(|exists| exists.then_some(path).context("path does not exist"))
+            .map(|path| self.command(|c| c.arg("l").arg(path)))
             .and_then(|command| command.read_stdout_ok())
-            .with_context(|| format!("statting file [{}]", path.display()))
     }
     pub fn open_file(&self, archive: &Path) -> Result<ArchiveHandle> {
         self.query_file_info(archive)
@@ -153,46 +147,26 @@ fn spawn_watcher(error_callback: Sender<anyhow::Error>, child: Child) {
 pub struct ArchiveFileHandle {
     error_callback: Receiver<anyhow::Error>,
     reader: BufReader<ChildStdout>,
-    error: Option<anyhow::Error>,
+    finished: bool,
 }
 
 impl Read for ArchiveFileHandle {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        match self.error_callback.try_recv() {
-            Ok(error_occurred) => Some(error_occurred),
-            Err(err) => match &err {
-                mpsc::TryRecvError::Empty => None,
-                mpsc::TryRecvError::Disconnected => Some(anyhow::anyhow!("task disconnected")),
-            },
+        if self.finished {
+            return Ok(0);
         }
-        .map(|error| {
-            if self.error.is_none() {
-                self.error = Some(error);
+
+        let n = self.reader.read(buf)?;
+
+        if n == 0 {
+            // EOF reached. Check for errors
+            self.finished = true;
+            if let Ok(error) = self.error_callback.try_recv() {
+                return Err(std::io::Error::other(error));
             }
-        });
-        self.reader
-            .read(buf)
-            .pipe(|read| match read {
-                Ok(0) => self
-                    .error
-                    .take()
-                    .map(std::io::Error::other)
-                    .map(Err)
-                    .unwrap_or(Ok(0)),
-                other => other,
-            })
-            .pipe(|read_error| {
-                read_error.context({
-                    self.error
-                        .take()
-                        .context("unknown error")
-                        .pipe(|e| match e {
-                            Ok(e) => e,
-                            Err(e) => e,
-                        })
-                })
-            })
-            .map_err(std::io::Error::other)
+        }
+
+        Ok(n)
     }
 }
 
@@ -219,7 +193,12 @@ impl MaybeWindowsPath {
 impl ArchiveHandle {
     pub fn list_files(&self) -> Result<Vec<ListOutputEntry>> {
         self.binary
-            .command(|c| c.arg("l").arg(&self.archive))
+            .command(|c| {
+                c.arg("l")
+                    // more parsing-friendly output
+                    .arg("-slt")
+                    .arg(&self.archive)
+            })
             .read_stdout_ok()
             .and_then(|o| list_output::ListOutput::from_str(&o).with_context(|| format!("unexpected output from list command:\n{o}")))
             .map(|ListOutput { entries }| entries)
@@ -229,10 +208,10 @@ impl ArchiveHandle {
             .and_then(|files| {
                 files
                     .iter()
-                    .map(|e| &e.name)
+                    .map(|e| &e.path)
                     .any(|e| e.eq(&file.to_owned()))
                     .then_some(file)
-                    .with_context(|| format!("file not found in {files:#?}"))
+                    .with_context(|| format!("file not found in {:#?}", files.into_iter().map(|file| file.path).collect::<Vec<_>>()))
             })
             .and_then(|file| {
                 self.binary
@@ -261,7 +240,7 @@ impl ArchiveHandle {
                 ArchiveFileHandle {
                     error_callback: rx,
                     reader: stdout.pipe(BufReader::new),
-                    error: None,
+                    finished: false,
                 }
             })
             .with_context(|| format!("when initializing read from archive file [{}]", file.display()))

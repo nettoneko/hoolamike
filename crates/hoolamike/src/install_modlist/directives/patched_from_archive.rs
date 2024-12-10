@@ -2,9 +2,10 @@ use {
     super::*,
     crate::{
         compression::{forward_only_seek::ForwardOnlySeek, ProcessArchive, SeekWithTempFileExt},
-        install_modlist::download_cache::validate_hash,
+        install_modlist::download_cache::{to_u64_from_base_64, validate_hash},
         modlist_json::directive::{ArchiveHashPath, PatchedFromArchiveDirective},
         progress_bars::{print_error, vertical_progress_bar, ProgressKind, PROGRESS_BAR},
+        read_wrappers::ReadExt,
     },
     indicatif::ProgressBar,
     std::{
@@ -34,7 +35,7 @@ impl PatchedFromArchiveHandler {
     ) -> Result<()> {
         let output_path = self.output_directory.join(to.into_path());
 
-        if let Err(message) = validate_hash(output_path.clone(), hash).await {
+        if let Err(message) = validate_hash(output_path.clone(), hash.clone()).await {
             print_error(output_path.display().to_string(), &message);
             tokio::task::spawn_blocking(move || -> Result<_> {
                 let pb = vertical_progress_bar(size, ProgressKind::Extract, indicatif::ProgressFinish::AndClear)
@@ -48,7 +49,7 @@ impl PatchedFromArchiveHandler {
                     .get_handle(Path::new(&patch_id.hyphenated().to_string()))
                     .with_context(|| format!("patch {patch_id:?} does not exist"))?;
 
-                fn perform_copy<S, D, T>(pb: ProgressBar, source: S, delta: D, target: T) -> Result<()>
+                fn perform_copy<S, D, T>(pb: ProgressBar, source: S, delta: D, target: T, expected_size: u64, expected_hash: String) -> Result<()>
                 where
                     S: Read + Seek,
                     D: Read,
@@ -59,10 +60,16 @@ impl PatchedFromArchiveHandler {
                         .context("invalid delta")?
                         .context("delta is empty")?;
                     let mut writer = &mut std::io::BufWriter::new(target);
-                    std::io::copy(&mut pb.wrap_read(from), &mut writer)
-                        .context("copying file from archive")
-                        .and_then(|_| writer.flush().context("flushing"))
-                        .map(|_| ())
+                    std::io::copy(
+                        &mut pb
+                            .wrap_read(from)
+                            .and_validate_size(expected_size)
+                            .and_validate_hash(to_u64_from_base_64(expected_hash)?),
+                        &mut writer,
+                    )
+                    .context("copying file from archive")
+                    .and_then(|_| writer.flush().context("flushing"))
+                    .map(|_| ())
                 }
 
                 match archive_hash_path {
@@ -86,8 +93,16 @@ impl PatchedFromArchiveHandler {
                             })?;
                         archive
                             .get_handle(Path::new(&source_path))
-                            .and_then(|source_file| source_file.seek_with_temp_file())
-                            .and_then(|mut source_file| perform_copy(pb, &mut source_file, delta_file, &mut output_file))
+                            .and_then(|source_file| {
+                                source_file.seek_with_temp_file(
+                                    vertical_progress_bar(size, ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)
+                                        .attach_to(&PROGRESS_BAR)
+                                        .tap_mut(|pb| {
+                                            pb.set_message(source_path.display().to_string());
+                                        }),
+                                )
+                            })
+                            .and_then(|(mut source_file, _)| perform_copy(pb, &mut source_file, delta_file, &mut output_file, size, hash))
                             .map(|_| ())
                     }
                     ArchiveHashPath::JustArchiveHash((source_hash,)) => {
@@ -101,7 +116,7 @@ impl PatchedFromArchiveHandler {
                             .open(&source.inner)
                             .with_context(|| format!("when opening [{}]", source.inner.display()))?;
                         let mut output_file = create_file_all(&output_path)?;
-                        perform_copy(pb, &mut source_file, delta_file, &mut output_file)
+                        perform_copy(pb, &mut source_file, delta_file, &mut output_file, size, hash)
                     }
                     other => anyhow::bail!("not implemented: {other:#?}"),
                 }

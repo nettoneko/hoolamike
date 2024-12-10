@@ -32,6 +32,8 @@ pub enum ProgressKind {
     Download,
     Copy,
     Extract,
+    InstallDirectives,
+    ExtractTemporaryFile,
 }
 
 type ProgressBarPostAttach = Arc<dyn Fn(ProgressBar) -> ProgressBar + 'static>;
@@ -63,15 +65,19 @@ impl ProgressKind {
             ProgressKind::Download => "blue",
             ProgressKind::Copy => "cyan",
             ProgressKind::Extract => "magenta",
+            ProgressKind::InstallDirectives => "green",
+            ProgressKind::ExtractTemporaryFile => "white",
         }
     }
     #[rustfmt::skip]
     pub fn prefix(self) -> &'static str {
         match self {
-            ProgressKind::Validate => "[ validate ]",
-            ProgressKind::Download => "[ download ]",
-            ProgressKind::Copy =>     "[   copy   ]",
-            ProgressKind::Extract =>  "[  extract ]",
+            ProgressKind::Validate =>             "[ validate   ]",
+            ProgressKind::Download =>             "[ download   ]",
+            ProgressKind::Copy =>                 "[ copy       ]",
+            ProgressKind::Extract =>              "[ extract    ]",
+            ProgressKind::InstallDirectives =>    "[ directive  ]",
+            ProgressKind::ExtractTemporaryFile => "[ temp extr. ]",
         }
     }
 }

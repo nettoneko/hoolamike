@@ -10,7 +10,7 @@ use {
     tap::prelude::*,
     tracing::info,
 };
-pub const BUFFER_SIZE: usize = 1024 * 128;
+pub const BUFFER_SIZE: usize = 1024 * 64;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -50,6 +50,7 @@ enum Commands {
     PrintDefaultConfig,
 }
 
+pub mod read_wrappers;
 pub mod utils {
     use {
         itertools::Itertools,
@@ -57,7 +58,7 @@ pub mod utils {
         std::path::PathBuf,
     };
 
-    #[derive(Debug, Serialize, Deserialize, PartialEq, PartialOrd, Hash, derive_more::Display)]
+    #[derive(Debug, Serialize, Deserialize, PartialEq, PartialOrd, Hash, derive_more::Display, Clone)]
     pub struct MaybeWindowsPath(pub String);
 
     impl MaybeWindowsPath {

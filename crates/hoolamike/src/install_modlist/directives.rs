@@ -3,11 +3,15 @@ use {
         downloaders::WithArchiveDescriptor,
         error::{MultiErrorCollectExt, TotalResult},
         modlist_json::DirectiveKind,
+        progress_bars::{print_error, vertical_progress_bar, ProgressKind, PROGRESS_BAR},
     },
     anyhow::{Context, Result},
     futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt},
+    rand::seq::SliceRandom,
     std::{
         collections::BTreeMap,
+        future::ready,
+        ops::Div,
         path::{Path, PathBuf},
         sync::Arc,
     },
@@ -150,12 +154,31 @@ impl DirectivesHandler {
     }
     #[allow(clippy::unnecessary_literal_unwrap)]
     pub async fn handle_directives(self: Arc<Self>, directives: Vec<Directive>) -> TotalResult<()> {
+        let pb = vertical_progress_bar(
+            directives.iter().map(directive_size).sum(),
+            ProgressKind::InstallDirectives,
+            indicatif::ProgressFinish::AndClear,
+        )
+        .attach_to(&PROGRESS_BAR);
+
+        fn directive_size(d: &Directive) -> u64 {
+            match d {
+                Directive::CreateBSA(directive) => directive.size,
+                Directive::FromArchive(directive) => directive.size,
+                Directive::InlineFile(directive) => directive.size,
+                Directive::PatchedFromArchive(directive) => directive.size,
+                Directive::RemappedInlineFile(directive) => directive.size,
+                Directive::TransformedTexture(directive) => directive.size,
+            }
+        }
         directives
             .tap_mut(|directives| {
+                directives.shuffle(&mut rand::thread_rng());
                 directives.sort_unstable_by_key(|directive| DirectiveKind::from(directive).priority());
             })
             .pipe(futures::stream::iter)
-            .then(|directive| {
+            .map(|directive| {
+                let directive_size = directive_size(&directive);
                 let directive_debug = format!("{directive:#?}");
                 debug!("handling directive {directive_debug}");
                 self.clone()
@@ -165,9 +188,21 @@ impl DirectivesHandler {
                         move |r| r.with_context(|| format!("when handling directive: {directive_debug}"))
                     })
                     .inspect_ok(move |_handled| info!("handled directive {directive_debug}"))
+                    .map_ok(move |_| directive_size)
             })
-            .map_err(|e| Err(e).expect("all directives must be handled"))
-            .multi_error_collect()
+            .map(Ok)
+            .try_buffer_unordered(num_cpus::get().div(2).saturating_sub(1).max(1))
+            .try_for_each(|size| {
+                pb.inc(size);
+                ready(Ok(()))
+            })
             .await
+            .pipe(|r| match r {
+                Ok(_) => Ok(vec![()]),
+                Err(e) => {
+                    print_error("directive".into(), &e);
+                    Err(vec![e])
+                }
+            })
     }
 }
