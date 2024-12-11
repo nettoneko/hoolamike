@@ -41,7 +41,7 @@ impl FromArchiveHandler {
                         pb.set_message(output_path.display().to_string());
                     });
                 let perform_copy = move |from: &mut dyn Read, to: &mut dyn Write| {
-                    let mut writer = std::io::BufWriter::new(to);
+                    let mut writer = to;
                     std::io::copy(
                         &mut pb
                             .wrap_read(from)

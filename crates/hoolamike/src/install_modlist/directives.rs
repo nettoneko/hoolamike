@@ -173,7 +173,7 @@ impl DirectivesHandler {
         }
         directives
             .tap_mut(|directives| {
-                directives.shuffle(&mut rand::thread_rng());
+                // directives.shuffle(&mut rand::thread_rng());
                 directives.sort_unstable_by_key(|directive| DirectiveKind::from(directive).priority());
             })
             .pipe(futures::stream::iter)

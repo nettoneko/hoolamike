@@ -57,7 +57,7 @@ pub enum ArchiveFileHandle<'a> {
     Zip(zip::ZipFile<'a>),
     CompressTools(compress_tools::CompressToolsFile),
     Wrapped7Zip(::wrapped_7zip::ArchiveFileHandle),
-    Bethesda(self::bethesda_archive::BethesdaArchiveFile<'a>),
+    Bethesda(self::bethesda_archive::BethesdaArchiveFile),
 }
 
 impl ArchiveHandle<'_> {

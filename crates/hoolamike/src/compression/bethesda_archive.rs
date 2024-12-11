@@ -1,9 +1,12 @@
 use {
     super::ProcessArchive,
-    crate::utils::boxed_iter,
+    crate::{
+        progress_bars::{vertical_progress_bar, PROGRESS_BAR},
+        utils::boxed_iter,
+    },
     anyhow::{Context, Result},
     ba2::{
-        fo4::{self, ChunkCompressionOptionsBuilder},
+        fo4::{self, ChunkCompressionOptionsBuilder, FileWriteOptionsBuilder},
         prelude::*,
         BString,
         ByteSlice,
@@ -54,6 +57,13 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
     }
 
     fn get_handle(&mut self, path: &Path) -> Result<super::ArchiveFileHandle<'_>> {
+        let mut output = tempfile::SpooledTempFile::new(256 * 1024 * 1024);
+        let options = FileWriteOptionsBuilder::new()
+            .compression_format(self.1.compression_format())
+            .build();
+        let pb = vertical_progress_bar(0, crate::progress_bars::ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndLeave)
+            .attach_to(&PROGRESS_BAR)
+            .tap_mut(|pb| pb.set_message(path.display().to_string()));
         self.list_paths_with_originals()?
             .pipe(|paths| {
                 paths
@@ -65,22 +75,10 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
                             .get(&fo4::ArchiveKey::from(bethesda_path.clone()))
                             .context("could not read file")
                     })
-                    .map(|file| {
-                        file.iter()
-                            .map(|chunk| {
-                                (match chunk.is_decompressed() {
-                                    false => vec![].pipe(|mut out| {
-                                        chunk
-                                            .decompress_into(&mut out, &Default::default())
-                                            .map(|_| out)
-                                            .tap_err(|e| tracing::error!("decompression failed: {e:#?}"))
-                                    }),
-                                    true => chunk.as_bytes().to_vec().pipe(Ok),
-                                })
-                                .map_err(std::io::Error::other)
-                            })
-                            .pipe(boxed_iter)
-                            .pipe(iter_read::IterRead::new)
+                    .and_then(|file| {
+                        file.write(&mut pb.wrap_write(&mut output), &options)
+                            .context("extracting fallout 4 bsa")
+                            .map(|_| output)
                     })
                     .map(BethesdaArchiveFile::Fallout4)
                     .map(super::ArchiveFileHandle::Bethesda)
@@ -129,11 +127,11 @@ impl BethesdaArchive<'_> {
 
 type BytesIterator<'a> = iter_read::IterRead<std::io::Result<Vec<u8>>, Box<dyn Iterator<Item = std::io::Result<Vec<u8>>> + 'a>>;
 
-pub enum BethesdaArchiveFile<'a> {
-    Fallout4(BytesIterator<'a>),
+pub enum BethesdaArchiveFile {
+    Fallout4(tempfile::SpooledTempFile),
 }
 
-impl Read for BethesdaArchiveFile<'_> {
+impl Read for BethesdaArchiveFile {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self {
             BethesdaArchiveFile::Fallout4(file) => file.read(buf),
