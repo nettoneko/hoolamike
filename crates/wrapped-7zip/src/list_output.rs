@@ -7,6 +7,7 @@ use {
 #[derive(Debug, PartialEq, Eq)]
 pub struct ListOutputEntry {
     pub modified: chrono::NaiveDateTime,
+    pub original_path: String,
     pub created: Option<chrono::NaiveDateTime>,
     pub size: u64,
     pub path: PathBuf,
@@ -47,6 +48,7 @@ impl ListOutput {
                                     fn parse_date(input: &str) -> Result<NaiveDateTime> {
                                         NaiveDateTime::parse_from_str(input, "%Y-%m-%d %H:%M:%S").context(input.to_string())
                                     }
+                                    let path = entry.remove("Path").context("no such field")?.to_string();
                                     Ok(ListOutputEntry {
                                         created: entry
                                             .remove("Created")
@@ -63,13 +65,10 @@ impl ListOutput {
                                             .context("no such field")
                                             .and_then(|v| v.parse().context("bad value"))
                                             .context("Size")?,
-                                        path: entry
-                                            .remove("Path")
-                                            .context("no such field")
-                                            .and_then(|v| v.parse().context("bad value"))
-                                            .map(MaybeWindowsPath)
-                                            .map(MaybeWindowsPath::into_path)
-                                            .context("Path")?,
+                                        original_path: path.clone(),
+                                        path: path
+                                            .pipe(MaybeWindowsPath)
+                                            .pipe(MaybeWindowsPath::into_path),
                                     })
                                 })
                                 .context(entry.to_string())

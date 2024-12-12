@@ -7,9 +7,10 @@ use {
     },
     anyhow::{Context, Result},
     futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt},
+    itertools::Itertools,
     rand::seq::SliceRandom,
     std::{
-        collections::BTreeMap,
+        collections::{BTreeMap, HashSet},
         future::ready,
         ops::Div,
         path::{Path, PathBuf},
@@ -92,6 +93,7 @@ impl WabbajackFileHandle {
 }
 
 pub struct DirectivesHandler {
+    pub config: DirectivesHandlerConfig,
     pub create_bsa: create_bsa::CreateBSAHandler,
     pub from_archive: from_archive::FromArchiveHandler,
     pub inline_file: inline_file::InlineFileHandler,
@@ -115,15 +117,28 @@ impl DirectiveKind {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct DirectivesHandlerConfig {
+    pub failed_directives_whitelist: HashSet<String>,
+    pub wabbajack_file: WabbajackFileHandle,
+    pub output_directory: PathBuf,
+}
+
 impl DirectivesHandler {
     #[allow(clippy::new_without_default)]
-    pub fn new(wabbajack_file: WabbajackFileHandle, output_directory: PathBuf, sync_summary: Vec<WithArchiveDescriptor<PathBuf>>) -> Self {
+    pub fn new(config: DirectivesHandlerConfig, sync_summary: Vec<WithArchiveDescriptor<PathBuf>>) -> Self {
+        let DirectivesHandlerConfig {
+            failed_directives_whitelist,
+            wabbajack_file,
+            output_directory,
+        } = config.clone();
         let download_summary = sync_summary
             .into_iter()
             .map(|s| (s.descriptor.hash.clone(), s))
             .collect::<BTreeMap<_, _>>()
             .pipe(Arc::new);
         Self {
+            config,
             create_bsa: create_bsa::CreateBSAHandler {},
             from_archive: from_archive::FromArchiveHandler {
                 output_directory: output_directory.clone(),
@@ -171,23 +186,50 @@ impl DirectivesHandler {
                 Directive::TransformedTexture(directive) => directive.size,
             }
         }
+
+        let whitelist_failed_directives = self
+            .config
+            .failed_directives_whitelist
+            .clone()
+            .pipe(Arc::new);
         directives
+            .into_iter()
+            .collect_vec()
             .tap_mut(|directives| {
                 // directives.shuffle(&mut rand::thread_rng());
                 directives.sort_unstable_by_key(|directive| DirectiveKind::from(directive).priority());
             })
             .pipe(futures::stream::iter)
-            .map(|directive| {
+            .map(move |directive| {
+                let directive_hash = directive.directive_hash();
                 let directive_size = directive_size(&directive);
-                let directive_debug = format!("{directive:#?}");
+                let directive_debug = format!("{directive:#?}").pipe(Arc::new);
                 debug!("handling directive {directive_debug}");
                 self.clone()
                     .handle(directive)
                     .map({
                         let directive_debug = directive_debug.clone();
-                        move |r| r.with_context(|| format!("when handling directive: {directive_debug}"))
+                        let directive_hash = directive_hash.clone();
+                        move |r| {
+                            r.with_context(|| format!("when handling directive: {directive_debug}"))
+                                .with_context(|| format!("directive with hash [{directive_hash}] failed, provide it in support ticket"))
+                        }
                     })
-                    .inspect_ok(move |_handled| info!("handled directive {directive_debug}"))
+                    .inspect_ok({
+                        let directive_debug = directive_debug.clone();
+                        move |_handled| info!("handled directive {directive_debug}")
+                    })
+                    .map({
+                        let whitelist_failed_directives = whitelist_failed_directives.clone();
+                        let directive_debug = directive_debug.clone();
+                        move |res| match res {
+                            Err(e) if whitelist_failed_directives.contains(&directive_hash) => {
+                                tracing::warn!("directive\n[{directive_debug}]\nfailed with\n{e:?}\nbut is whitelisted\n\n");
+                                Ok(())
+                            }
+                            other => other,
+                        }
+                    })
                     .map_ok(move |_| directive_size)
             })
             .map(Ok)

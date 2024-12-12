@@ -1,6 +1,5 @@
 [workspace]
 resolver = "2"
-default-members = ["crates/hoolamike"]
 members = ["crates/hoolamike", "crates/wrapped-7zip"]
 
 [workspace.package]

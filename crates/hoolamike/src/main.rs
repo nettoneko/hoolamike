@@ -29,6 +29,15 @@ struct Cli {
     command: Commands,
 }
 
+#[derive(clap::Args, Default)]
+pub struct DebugHelpers {
+    /// skip verification (used mostly for developing the tool)
+    #[arg(long)]
+    skip_verify_and_downloads: bool,
+    #[arg(long)]
+    start_from_directive: Option<String>,
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// tests the modlist parser
@@ -42,44 +51,15 @@ enum Commands {
         path: PathBuf,
     },
     Install {
-        /// skip verification (used mostly for developing the tool)
-        #[arg(long)]
-        skip_verify_and_downloads: bool,
+        #[command(flatten)]
+        debug: DebugHelpers,
     },
     /// prints prints default config. save it and modify to your liking
     PrintDefaultConfig,
 }
 
 pub mod read_wrappers;
-pub mod utils {
-    use {
-        itertools::Itertools,
-        serde::{Deserialize, Serialize},
-        std::path::PathBuf,
-    };
-
-    #[derive(Debug, Serialize, Deserialize, PartialEq, PartialOrd, Hash, derive_more::Display, Clone)]
-    pub struct MaybeWindowsPath(pub String);
-
-    impl MaybeWindowsPath {
-        pub fn into_path(self) -> PathBuf {
-            let s = self.0;
-            let s = match s.contains("\\\\") {
-                true => s.split("\\\\").join("/"),
-                false => s,
-            };
-            let s = match s.contains("\\") {
-                true => s.split("\\").join("/"),
-                false => s,
-            };
-            PathBuf::from(s)
-        }
-    }
-
-    pub fn boxed_iter<'a, T: 'a>(iter: impl Iterator<Item = T> + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
-        Box::new(iter)
-    }
-}
+pub mod utils;
 
 pub mod error;
 
@@ -177,17 +157,15 @@ async fn main() -> Result<()> {
             .context("reading test file")
             .and_then(|input| modlist_json::parsing_helpers::validate_modlist_file(&input))
             .with_context(|| format!("testing file {}", path.display())),
-        Commands::ModlistInfo { path } => tokio::fs::read_to_string(&path)
-            .await
+        Commands::ModlistInfo { path } => wabbajack_file::WabbajackFile::load(path)
             .context("reading modlist")
-            .and_then(|m| serde_json::from_str::<modlist_json::Modlist>(&m).context("parsing modlist"))
-            .map(|modlist| ModlistSummary::new(&modlist))
+            .map(|(_, modlist)| ModlistSummary::new(&modlist.modlist))
             .map(|modlist| modlist.print())
-            .map(|modlist| info!("\n{modlist}")),
+            .map(|modlist| println!("\n{modlist}")),
         Commands::PrintDefaultConfig => config_file::HoolamikeConfig::default()
             .write()
             .map(|config| println!("{config}")),
-        Commands::Install { skip_verify_and_downloads } => install_modlist::install_modlist(config, skip_verify_and_downloads)
+        Commands::Install { debug } => install_modlist::install_modlist(config, debug)
             .await
             .map_err(|errors| {
                 errors

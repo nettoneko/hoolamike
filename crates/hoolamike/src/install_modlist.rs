@@ -6,9 +6,10 @@ use {
         modlist_json::{Archive, Modlist},
         progress_bars::VALIDATE_TOTAL_PROGRESS_BAR,
         wabbajack_file::WabbajackFile,
+        DebugHelpers,
     },
     anyhow::Context,
-    directives::DirectivesHandler,
+    directives::{DirectivesHandler, DirectivesHandlerConfig},
     downloads::Synchronizers,
     futures::{FutureExt, TryFutureExt},
     itertools::Itertools,
@@ -27,13 +28,18 @@ pub mod directives;
 pub async fn install_modlist(
     HoolamikeConfig {
         downloaders,
-        installation: InstallationConfig {
-            wabbajack_file_path: modlist_file,
-            installation_path,
-        },
+        installation:
+            InstallationConfig {
+                whitelist_failed_directives,
+                wabbajack_file_path: modlist_file,
+                installation_path,
+            },
         games,
     }: HoolamikeConfig,
-    skip_verify_and_downloads: bool,
+    DebugHelpers {
+        skip_verify_and_downloads,
+        start_from_directive,
+    }: DebugHelpers,
 ) -> TotalResult<()> {
     let synchronizers = Synchronizers::new(downloaders, games)
         .context("setting up downloaders")
@@ -98,9 +104,29 @@ pub async fn install_modlist(
                         .boxed_local(),
                     false => synchronizers.clone().sync_downloads(archives).boxed_local(),
                 }
-                .map_ok(|summary| DirectivesHandler::new(wabbajack_file_handle, installation_path, summary))
+                .map_ok(|summary| {
+                    DirectivesHandler::new(
+                        DirectivesHandlerConfig {
+                            wabbajack_file: wabbajack_file_handle,
+                            output_directory: installation_path,
+                            failed_directives_whitelist: whitelist_failed_directives,
+                        },
+                        summary,
+                    )
+                })
                 .map_ok(Arc::new)
-                .and_then(|directives_handler| directives_handler.handle_directives(directives))
+                .and_then(move |directives_handler| {
+                    directives_handler.handle_directives(directives.tap_mut(|directives| {
+                        if let Some(run_only_directive) = start_from_directive {
+                            tracing::warn!("runing only a single directive");
+                            *directives = directives
+                                .pipe(std::mem::take)
+                                .drain(..)
+                                .skip_while(|d| d.directive_hash() != run_only_directive)
+                                .collect_vec();
+                        }
+                    }))
+                })
             },
         )
         .await

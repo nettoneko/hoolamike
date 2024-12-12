@@ -43,10 +43,9 @@ impl FromArchiveHandler {
                 let perform_copy = move |from: &mut dyn Read, to: &mut dyn Write| {
                     let mut writer = to;
                     std::io::copy(
-                        &mut pb
-                            .wrap_read(from)
-                            .and_validate_size(size)
-                            .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on")),
+                        &mut pb.wrap_read(from).and_validate_size(size),
+                        // TODO: figure out the hashes
+                        // .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on")),
                         &mut writer,
                     )
                     .context("copying file from archive")

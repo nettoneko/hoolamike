@@ -2,7 +2,7 @@ use {
     super::ProcessArchive,
     crate::{
         progress_bars::{vertical_progress_bar, PROGRESS_BAR},
-        utils::boxed_iter,
+        utils::{boxed_iter, ReadableCatchUnwindExt},
     },
     anyhow::{Context, Result},
     ba2::{
@@ -15,12 +15,15 @@ use {
     itertools::Itertools,
     std::{
         borrow::Cow,
-        io::Read,
+        convert::identity,
+        io::{Read, Seek},
+        panic::catch_unwind,
         path::{Path, PathBuf},
     },
     tap::prelude::*,
     wrapped_7zip::MaybeWindowsPath,
 };
+
 type Fallout4Archive<'a> = (ba2::fo4::Archive<'a>, ba2::fo4::ArchiveOptions);
 
 fn bethesda_path_to_path(bethesda_path: &[u8]) -> Result<PathBuf> {
@@ -50,6 +53,9 @@ impl Fallout4Archive<'_> {
     }
 }
 
+#[cfg(test)]
+mod integration_tests;
+
 impl super::ProcessArchive for Fallout4Archive<'_> {
     fn list_paths(&mut self) -> Result<Vec<PathBuf>> {
         self.list_paths_with_originals()
@@ -61,7 +67,7 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
         let options = FileWriteOptionsBuilder::new()
             .compression_format(self.1.compression_format())
             .build();
-        let pb = vertical_progress_bar(0, crate::progress_bars::ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndLeave)
+        let pb = vertical_progress_bar(0, crate::progress_bars::ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)
             .attach_to(&PROGRESS_BAR)
             .tap_mut(|pb| pb.set_message(path.display().to_string()));
         self.list_paths_with_originals()?
@@ -71,14 +77,27 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
                     .find_map(|(entry, repr)| entry.eq(path).then_some(repr))
                     .with_context(|| format!("[{}] not found in [{paths:?}]", path.display()))
                     .and_then(|bethesda_path| {
-                        self.0
-                            .get(&fo4::ArchiveKey::from(bethesda_path.clone()))
-                            .context("could not read file")
+                        catch_unwind(|| {
+                            self.0
+                                .get(&fo4::ArchiveKey::from(bethesda_path.clone()))
+                                .context("could not read file")
+                        })
+                        .for_anyhow()
+                        .and_then(identity)
+                        .context("reading archive entry")
                     })
                     .and_then(|file| {
-                        file.write(&mut pb.wrap_write(&mut output), &options)
-                            .context("extracting fallout 4 bsa")
-                            .map(|_| output)
+                        catch_unwind(|| {
+                            pb.set_length(file.iter().map(|chunk| chunk.len() as u64).sum());
+                            pb.tick();
+                            file.write(&mut pb.wrap_write(&mut output), &options)
+                                // file.write(&mut output, &options)
+                                .context("extracting fallout 4 bsa")
+                                .and_then(|_| output.rewind().context("rewinding file").map(|_| output))
+                        })
+                        .for_anyhow()
+                        .and_then(identity)
+                        .context("extracting fallout 4 bsa")
                     })
                     .map(BethesdaArchiveFile::Fallout4)
                     .map(super::ArchiveFileHandle::Bethesda)

@@ -1,12 +1,13 @@
 use {
-    crate::utils::boxed_iter,
+    crate::utils::{boxed_iter, ReadableCatchUnwindExt},
     ::wrapped_7zip::which,
     anyhow::{Context, Result},
     bethesda_archive::BethesdaArchiveFile,
     indicatif::ProgressBar,
     std::{
+        convert::identity,
         fs::File,
-        io::{self},
+        io::{self, Seek},
         path::{Path, PathBuf},
     },
     tap::prelude::*,
@@ -61,43 +62,49 @@ pub enum ArchiveFileHandle<'a> {
 }
 
 impl ArchiveHandle<'_> {
-    pub fn guess(file: std::fs::File, path: &Path) -> std::result::Result<Self, std::fs::File> {
-        Err(file)
-            .or_else(|file| {
-                file.try_clone()
-                    .context("cloning file")
-                    .and_then(|_file| bethesda_archive::BethesdaArchive::open(path).context("reading zip"))
-                    .map(Self::Bethesda)
-                    .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
-                    .map_err(|_| file)
-            })
-            .or_else(|file| {
-                ["7z", "7z.exe"]
-                    .into_iter()
-                    .find_map(|bin| which::which(bin).ok())
-                    .context("no 7z binary found")
-                    .and_then(|path| ::wrapped_7zip::Wrapped7Zip::new(&path))
-                    .and_then(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
-                    .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
-                    .map_err(|_| file)
-            })
-            .or_else(|file| {
-                file.try_clone()
-                    .context("cloning file")
-                    .and_then(|file| compress_tools::CompressToolsArchive::new(file).context("reading zip"))
-                    .map(Self::CompressTools)
-                    .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
-                    .map_err(|_| file)
-            })
-            .or_else(|file| {
-                file.try_clone()
-                    .context("cloning file")
-                    .and_then(|file| zip::ZipArchive::new(file).context("reading zip"))
-                    .map(Self::Zip)
-                    .tap_err(|message| tracing::trace!("could not open archive with zip: {message:?}"))
-                    .map_err(|_| file)
-            })
-            .tap_ok(|a| tracing::trace!("succesfully opened an archive: {a:?}"))
+    pub fn guess(file: std::fs::File, path: &Path) -> anyhow::Result<Self> {
+        std::panic::catch_unwind(|| {
+            Err(file)
+                .or_else(|file| {
+                    file.try_clone()
+                        .context("cloning file")
+                        .and_then(|_file| bethesda_archive::BethesdaArchive::open(path).context("reading zip"))
+                        .map(Self::Bethesda)
+                        .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
+                        .map_err(|_| file)
+                })
+                .or_else(|file| {
+                    ["7z", "7z.exe"]
+                        .into_iter()
+                        .find_map(|bin| which::which(bin).ok())
+                        .context("no 7z binary found")
+                        .and_then(|path| ::wrapped_7zip::Wrapped7Zip::new(&path))
+                        .and_then(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                        .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
+                        .map_err(|_| file)
+                })
+                .or_else(|file| {
+                    file.try_clone()
+                        .context("cloning file")
+                        .and_then(|file| compress_tools::CompressToolsArchive::new(file).context("reading zip"))
+                        .map(Self::CompressTools)
+                        .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
+                        .map_err(|_| file)
+                })
+                .or_else(|file| {
+                    file.try_clone()
+                        .context("cloning file")
+                        .and_then(|file| zip::ZipArchive::new(file).context("reading zip"))
+                        .map(Self::Zip)
+                        .tap_err(|message| tracing::trace!("could not open archive with zip: {message:?}"))
+                        .map_err(|_| file)
+                })
+                .tap_ok(|a| tracing::trace!("succesfully opened an archive: {a:?}"))
+                .map_err(|_| anyhow::anyhow!("no defined archive handler could handle this file"))
+        })
+        .for_anyhow()
+        .context("unexpected panic")
+        .and_then(identity)
     }
 }
 
@@ -142,6 +149,11 @@ impl<T: std::io::Read> T {
                             .try_clone()
                             .context("cloning file handle")
                             .map(|file_handle| (file, file_handle))
+                            .and_then(|(mut a, mut b)| -> Result<_> {
+                                a.rewind()?;
+                                b.rewind()?;
+                                Ok((a, b))
+                            })
                     })
             })
     }

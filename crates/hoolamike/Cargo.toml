@@ -9,7 +9,8 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-ba2 = "3.0.0"
+# ba2 = { git = "https://github.com/Ryan-rsm-McKenzie/bsa-rs", rev = "6368933bf4f828864470cbb65baaf72c7caf7def" }
+ba2 = { path = "/home/niedzwiedz/Games/modding/bsa-rs" }
 base64.workspace = true
 binrw.workspace = true
 bon.workspace = true
@@ -44,6 +45,7 @@ parking_lot.workspace = true
 rand = "0.8.5"
 regex.workspace = true
 reqwest.workspace = true
+ringbuffer = "0.15.0"
 scraper.workspace = true
 serde.workspace = true
 serde_json.workspace = true

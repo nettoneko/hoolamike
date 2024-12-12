@@ -208,9 +208,15 @@ impl ArchiveHandle {
             .and_then(|files| {
                 files
                     .iter()
-                    .map(|e| &e.path)
-                    .any(|e| e.eq(&file.to_owned()))
-                    .then_some(file)
+                    .find_map(
+                        |ListOutputEntry {
+                             modified,
+                             original_path,
+                             created,
+                             size,
+                             path,
+                         }| { path.as_path().eq(file).then(|| original_path.clone()) },
+                    )
                     .with_context(|| format!("file not found in {:#?}", files.into_iter().map(|file| file.path).collect::<Vec<_>>()))
             })
             .and_then(|file| {
@@ -220,7 +226,7 @@ impl ArchiveHandle {
                             // extract
                             .arg("x")
                             .arg(&self.archive)
-                            .arg(file)
+                            .arg(&file)
                             // write data to stdout
                             .arg("-so")
                     })

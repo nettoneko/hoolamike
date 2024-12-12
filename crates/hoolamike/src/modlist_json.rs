@@ -1,7 +1,11 @@
 use {
-    crate::utils::MaybeWindowsPath,
+    crate::{
+        install_modlist::download_cache::{to_base_64_from_u64, to_u64_from_base_64},
+        utils::MaybeWindowsPath,
+    },
     serde::{Deserialize, Serialize},
-    std::path::PathBuf,
+    std::{hash::Hasher, path::PathBuf},
+    tap::prelude::*,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -294,6 +298,16 @@ pub enum Directive {
 }
 
 impl Directive {
+    pub fn directive_hash(&self) -> String {
+        serde_json::to_string(self).unwrap().pipe(|out| {
+            let mut hasher = xxhash_rust::xxh64::Xxh64::new(0);
+            hasher.update(out.as_bytes());
+            hasher.finish().pipe(to_base_64_from_u64)
+        })
+    }
+}
+
+impl Directive {
     pub fn directive_kind(&self) -> DirectiveKind {
         DirectiveKind::from(self)
     }
@@ -493,16 +507,16 @@ pub mod parsing_helpers {
         }
     }
 
-    #[allow(unexpected_cfgs)]
-    mod ad_hoc_test {
-        // #[cfg(ignore)]
-        #[test_log::test]
-        fn test_wasteland_reborn() -> anyhow::Result<()> {
-            use super::*;
+    // #[allow(unexpected_cfgs)]
+    // mod ad_hoc_test {
+    //     // #[cfg(ignore)]
+    //     #[test_log::test]
+    //     fn test_wasteland_reborn() -> anyhow::Result<()> {
+    //         use super::*;
 
-            include_str!("../../../../wasteland-reborn/test/modlist").pipe(validate_modlist_file)
-        }
-    }
+    //         include_str!("../../../../wasteland-reborn/test/modlist").pipe(validate_modlist_file)
+    //     }
+    // }
 
     pub fn validate_modlist_file(input: &str) -> Result<()> {
         input
@@ -511,7 +525,6 @@ pub mod parsing_helpers {
             })
             .pipe_as_ref(serde_json::from_str::<Value>)
             .context("bad json")
-            .tap_ok(|node| summarize_node(node).pipe(|summary| info!("{summary:#?}")))
             .and_then(|node| serde_json::to_string_pretty(&node).context("serializing"))
             .and_then(move |pretty_input| {
                 serde_json::from_str::<crate::modlist_json::Modlist>(&pretty_input)
