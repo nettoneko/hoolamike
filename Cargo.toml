@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/hoolamike", "crates/wrapped-7zip"]
+members = ["crates/bsa-cli", "crates/hoolamike", "crates/wrapped-7zip"]
 
 [workspace.package]
 version = "0.1.4"

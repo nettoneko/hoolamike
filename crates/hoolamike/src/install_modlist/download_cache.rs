@@ -108,7 +108,7 @@ pub async fn validate_hash(path: PathBuf, expected_hash: String) -> Result<PathB
         .with_context(|| format!("validating hash for [{}]", path.display()))
 }
 
-async fn validate_file_size(path: PathBuf, expected_size: u64) -> Result<PathBuf> {
+pub async fn validate_file_size(path: PathBuf, expected_size: u64) -> Result<PathBuf> {
     read_file_size(&path).await.and_then(move |found_size| {
         found_size
             .eq(&expected_size)

@@ -9,13 +9,13 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-# ba2 = { git = "https://github.com/Ryan-rsm-McKenzie/bsa-rs", rev = "6368933bf4f828864470cbb65baaf72c7caf7def" }
-ba2 = { path = "/home/niedzwiedz/Games/modding/bsa-rs" }
+ba2 = { git = "https://github.com/Ryan-rsm-McKenzie/bsa-rs", rev = "6d8aa2d369fdb9f9667ac93342c3ebae2f8f9b31" }
+# ba2 = { path = "/home/niedzwiedz/Games/modding/bsa-rs" }
 base64.workspace = true
 binrw.workspace = true
 bon.workspace = true
 chrono.workspace = true
-clap.workspace = true
+clap = { workspace = true, features = ["derive", "cargo", "env"] }
 compress-tools.workspace = true
 console.workspace = true
 console-subscriber.workspace = true

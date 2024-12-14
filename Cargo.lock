@@ -230,6 +230,7 @@ dependencies = [
 [[package]]
 name = "ba2"
 version = "3.0.0"
+source = "git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?branch=main#6d8aa2d369fdb9f9667ac93342c3ebae2f8f9b31"
 dependencies = [
  "bitflags",
  "bstr",
@@ -238,7 +239,20 @@ dependencies = [
  "lzzzz",
  "memmap2",
  "thiserror 1.0.69",
- "tracing",
+]
+
+[[package]]
+name = "ba2"
+version = "3.0.0"
+source = "git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?rev=6d8aa2d369fdb9f9667ac93342c3ebae2f8f9b31#6d8aa2d369fdb9f9667ac93342c3ebae2f8f9b31"
+dependencies = [
+ "bitflags",
+ "bstr",
+ "directxtex",
+ "flate2",
+ "lzzzz",
+ "memmap2",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -345,6 +359,19 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 2.0.89",
+]
+
+[[package]]
+name = "bsa-cli"
+version = "0.1.4"
+dependencies = [
+ "anyhow",
+ "ba2 3.0.0 (git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?branch=main)",
+ "clap",
+ "derive_more 1.0.0",
+ "tap",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -838,9 +865,9 @@ dependencies = [
 
 [[package]]
 name = "directxtex"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "410c427e5599ba8e0e94ac2d69bc81baaa2405191fe1b14e6b31437084376227"
+checksum = "515c37206e36366b013b26a62011a19335dda74f0a740f8b220251180b07a205"
 dependencies = [
  "bitflags",
  "cc",
@@ -1282,7 +1309,7 @@ name = "hoolamike"
 version = "0.1.4"
 dependencies = [
  "anyhow",
- "ba2",
+ "ba2 3.0.0 (git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?rev=6d8aa2d369fdb9f9667ac93342c3ebae2f8f9b31)",
  "base64 0.22.1",
  "binrw",
  "bon",

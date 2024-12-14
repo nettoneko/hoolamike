@@ -1,16 +1,6 @@
 use {super::*, nonempty::NonEmpty};
 
-/// typically starts with an archive hash and then goes on recursively
-/// with paths within those archives
-/// BONUS_POINTS: try working with it without fully  extracting the nested archives
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum ArchiveHashPath {
-    JustArchiveHash((String,)),
-    ArchiveHashAndPath((String, MaybeWindowsPath)),
-    ArchiveHashAndTwoPaths((String, MaybeWindowsPath, MaybeWindowsPath)),
-    Long(NonEmpty<String>),
-}
+pub mod archive_hash_path;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -43,6 +33,7 @@ pub struct CreateBSADirective {
     pub state: DirectiveState,
 }
 
+pub use archive_hash_path::ArchiveHashPath;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]

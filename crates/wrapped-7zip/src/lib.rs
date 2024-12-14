@@ -139,7 +139,7 @@ fn run_watcher(error_callback: Sender<anyhow::Error>, mut child: Child) {
     }
 }
 fn spawn_watcher(error_callback: Sender<anyhow::Error>, child: Child) {
-    std::thread::spawn(move || {
+    tokio::task::spawn_blocking(move || {
         run_watcher(error_callback, child);
     });
 }

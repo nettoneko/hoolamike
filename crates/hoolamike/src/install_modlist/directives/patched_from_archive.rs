@@ -16,9 +16,9 @@ use {
 
 #[derive(Clone, Debug)]
 pub struct PatchedFromArchiveHandler {
+    pub nested_archive_service: Arc<Mutex<NestedArchivesService>>,
     pub wabbajack_file: WabbajackFileHandle,
     pub output_directory: PathBuf,
-    pub download_summary: Arc<BTreeMap<String, WithArchiveDescriptor<PathBuf>>>,
 }
 
 impl PatchedFromArchiveHandler {
@@ -37,6 +37,14 @@ impl PatchedFromArchiveHandler {
 
         if let Err(message) = validate_hash(output_path.clone(), hash.clone()).await {
             print_error(output_path.display().to_string(), &message);
+            let source_file = self
+                .nested_archive_service
+                .lock()
+                .await
+                .get(archive_hash_path.clone())
+                .await
+                .context("could not get a handle to archive")?;
+
             tokio::task::spawn_blocking(move || -> Result<_> {
                 let pb = vertical_progress_bar(size, ProgressKind::Extract, indicatif::ProgressFinish::AndClear)
                     .attach_to(&PROGRESS_BAR)
@@ -45,9 +53,6 @@ impl PatchedFromArchiveHandler {
                     });
 
                 let mut wabbajack_file = self.wabbajack_file.blocking_lock();
-                let delta_file = wabbajack_file
-                    .get_handle(Path::new(&patch_id.hyphenated().to_string()))
-                    .with_context(|| format!("patch {patch_id:?} does not exist"))?;
 
                 fn perform_copy<S, D, T>(pb: ProgressBar, source: S, delta: D, target: T, expected_size: u64, expected_hash: String) -> Result<()>
                 where
@@ -71,55 +76,23 @@ impl PatchedFromArchiveHandler {
                     .and_then(|_| writer.flush().context("flushing"))
                     .map(|_| ())
                 }
+                let delta_file = wabbajack_file
+                    .get_handle(Path::new(&patch_id.hyphenated().to_string()))
+                    .with_context(|| format!("patch {patch_id:?} does not exist"))?;
 
-                match archive_hash_path {
-                    ArchiveHashPath::ArchiveHashAndPath((source_hash, source_path)) => {
-                        let source_path = source_path.into_path();
-                        let source = self
-                            .download_summary
-                            .get(&source_hash)
-                            .with_context(|| format!("directive expected hash [{source_hash}], but no such item was produced"))?;
-                        debug!(?source, "found source_file");
-                        let source_file_path = source.inner.clone();
-
-                        let mut output_file = create_file_all(&output_path)?;
-                        let mut archive = std::fs::OpenOptions::new()
-                            .read(true)
-                            .open(&source_file_path)
-                            .with_context(|| format!("opening [{}]", source_file_path.display()))
-                            .and_then(|source_file| {
-                                crate::compression::ArchiveHandle::guess(source_file, &source_file_path)
-                                    .map_err(|_file| anyhow::anyhow!("no compression algorithm matched file [{}]", source_file_path.display()))
-                            })?;
-                        archive
-                            .get_handle(Path::new(&source_path))
-                            .and_then(|source_file| {
-                                source_file.seek_with_temp_file(
-                                    vertical_progress_bar(size, ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)
-                                        .attach_to(&PROGRESS_BAR)
-                                        .tap_mut(|pb| {
-                                            pb.set_message(source_path.display().to_string());
-                                        }),
-                                )
-                            })
-                            .and_then(|(mut source_file, _)| perform_copy(pb, &mut source_file, delta_file, &mut output_file, size, hash))
-                            .map(|_| ())
-                    }
-                    ArchiveHashPath::JustArchiveHash((source_hash,)) => {
-                        let source = self
-                            .download_summary
-                            .get(&source_hash)
-                            .with_context(|| format!("directive expected hash [{source_hash}], but no such item was produced"))?;
-                        debug!(?source, "found source_file");
-                        let mut source_file = std::fs::OpenOptions::new()
-                            .read(true)
-                            .open(&source.inner)
-                            .with_context(|| format!("when opening [{}]", source.inner.display()))?;
-                        let mut output_file = create_file_all(&output_path)?;
-                        perform_copy(pb, &mut source_file, delta_file, &mut output_file, size, hash)
-                    }
-                    other => anyhow::bail!("not implemented: {other:#?}"),
+                match source_file {
+                    nested_archive_manager::HandleKind::Cached(file) => file.1.try_clone().context("cloning file"),
+                    nested_archive_manager::HandleKind::JustHashPath(source_file_path) => std::fs::OpenOptions::new()
+                        .read(true)
+                        .open(&source_file_path)
+                        .with_context(|| format!("opening [{}]", source_file_path.display())),
                 }
+                .and_then(|mut final_source| {
+                    create_file_all(&output_path).and_then(|mut output_file| {
+                        perform_copy(pb, &mut final_source, delta_file, &mut output_file, size, hash)
+                            .with_context(|| format!("when extracting from [{:?}] to [{}]", archive_hash_path, output_path.display()))
+                    })
+                })
             })
             .await
             .context("thread crashed")

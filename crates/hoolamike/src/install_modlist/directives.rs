@@ -1,4 +1,5 @@
 use {
+    super::download_cache,
     crate::{
         downloaders::WithArchiveDescriptor,
         error::{MultiErrorCollectExt, TotalResult},
@@ -8,15 +9,18 @@ use {
     anyhow::{Context, Result},
     futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt},
     itertools::Itertools,
+    nested_archive_manager::NestedArchivesService,
     rand::seq::SliceRandom,
     std::{
         collections::{BTreeMap, HashSet},
         future::ready,
-        ops::Div,
+        ops::{Div, Mul},
         path::{Path, PathBuf},
         sync::Arc,
+        time::Duration,
     },
     tap::prelude::*,
+    tokio::sync::Mutex,
     tracing::{debug, info},
 };
 
@@ -124,6 +128,19 @@ pub struct DirectivesHandlerConfig {
     pub output_directory: PathBuf,
 }
 
+pub mod nested_archive_manager;
+
+fn concurrency() -> usize {
+    #[cfg(not(debug_assertions))]
+    {
+        num_cpus::get().div(10).mul(8).saturating_sub(1).max(1)
+    }
+    #[cfg(debug_assertions)]
+    {
+        1
+    }
+}
+
 impl DirectivesHandler {
     #[allow(clippy::new_without_default)]
     pub fn new(config: DirectivesHandlerConfig, sync_summary: Vec<WithArchiveDescriptor<PathBuf>>) -> Self {
@@ -132,17 +149,21 @@ impl DirectivesHandler {
             wabbajack_file,
             output_directory,
         } = config.clone();
-        let download_summary = sync_summary
+        let download_summary: DownloadSummary = sync_summary
             .into_iter()
             .map(|s| (s.descriptor.hash.clone(), s))
             .collect::<BTreeMap<_, _>>()
+            .pipe(Arc::new);
+
+        let nested_archive_service = NestedArchivesService::new(download_summary.clone(), concurrency() * 3)
+            .pipe(Mutex::new)
             .pipe(Arc::new);
         Self {
             config,
             create_bsa: create_bsa::CreateBSAHandler {},
             from_archive: from_archive::FromArchiveHandler {
                 output_directory: output_directory.clone(),
-                download_summary: download_summary.clone(),
+                nested_archive_service: nested_archive_service.clone(),
             },
             inline_file: inline_file::InlineFileHandler {
                 wabbajack_file: wabbajack_file.clone(),
@@ -151,7 +172,7 @@ impl DirectivesHandler {
             patched_from_archive: patched_from_archive::PatchedFromArchiveHandler {
                 output_directory: output_directory.clone(),
                 wabbajack_file,
-                download_summary: download_summary.clone(),
+                nested_archive_service,
             },
             remapped_inline_file: remapped_inline_file::RemappedInlineFileHandler {},
             transformed_texture: transformed_texture::TransformedTextureHandler {},
@@ -174,7 +195,11 @@ impl DirectivesHandler {
             ProgressKind::InstallDirectives,
             indicatif::ProgressFinish::AndClear,
         )
-        .attach_to(&PROGRESS_BAR);
+        .attach_to(&PROGRESS_BAR)
+        .tap_mut(|pb| {
+            pb.set_message("TOTAL");
+            pb.enable_steady_tick(Duration::from_secs(2));
+        });
 
         fn directive_size(d: &Directive) -> u64 {
             match d {
@@ -187,11 +212,11 @@ impl DirectivesHandler {
             }
         }
 
-        let whitelist_failed_directives = self
-            .config
-            .failed_directives_whitelist
-            .clone()
-            .pipe(Arc::new);
+        // let whitelist_failed_directives = self
+        //     .config
+        //     .failed_directives_whitelist
+        //     .clone()
+        //     .pipe(Arc::new);
         directives
             .into_iter()
             .collect_vec()
@@ -219,21 +244,21 @@ impl DirectivesHandler {
                         let directive_debug = directive_debug.clone();
                         move |_handled| info!("handled directive {directive_debug}")
                     })
-                    .map({
-                        let whitelist_failed_directives = whitelist_failed_directives.clone();
-                        let directive_debug = directive_debug.clone();
-                        move |res| match res {
-                            Err(e) if whitelist_failed_directives.contains(&directive_hash) => {
-                                tracing::warn!("directive\n[{directive_debug}]\nfailed with\n{e:?}\nbut is whitelisted\n\n");
-                                Ok(())
-                            }
-                            other => other,
-                        }
-                    })
+                    // .map({
+                    //     let whitelist_failed_directives = whitelist_failed_directives.clone();
+                    //     let directive_debug = directive_debug.clone();
+                    //     move |res| match res {
+                    //         Err(e) if whitelist_failed_directives.contains(&directive_hash) => {
+                    //             tracing::warn!("directive\n[{directive_debug}]\nfailed with\n{e:?}\nbut is whitelisted\n\n");
+                    //             Ok(())
+                    //         }
+                    //         other => other,
+                    //     }
+                    // })
                     .map_ok(move |_| directive_size)
             })
             .map(Ok)
-            .try_buffer_unordered(num_cpus::get().div(2).saturating_sub(1).max(1))
+            .try_buffered(concurrency())
             .try_for_each(|size| {
                 pb.inc(size);
                 ready(Ok(()))

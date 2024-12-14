@@ -1,7 +1,8 @@
 use {
+    anyhow::Context,
     itertools::Itertools,
     serde::{Deserialize, Serialize},
-    std::path::PathBuf,
+    std::{io::Write, path::PathBuf},
     tap::prelude::*,
 };
 
@@ -26,7 +27,7 @@ impl Box<dyn std::any::Any + Send> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, PartialOrd, Hash, derive_more::Display, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Hash, derive_more::Display, Clone, Ord)]
 pub struct MaybeWindowsPath(pub String);
 
 impl MaybeWindowsPath {

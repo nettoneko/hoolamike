@@ -107,6 +107,8 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
     }
 }
 
+struct FileRead {}
+
 #[derive(Debug)]
 pub enum BethesdaArchive<'a> {
     Fallout4(Fallout4Archive<'a>),
@@ -128,23 +130,23 @@ impl ProcessArchive for BethesdaArchive<'_> {
 
 impl BethesdaArchive<'_> {
     pub fn open(file: &Path) -> Result<Self> {
-        let format = std::fs::OpenOptions::new()
+        std::fs::OpenOptions::new()
             .read(true)
             .open(file)
             .context("opening bethesda archive")
-            .and_then(|mut archive| ba2::guess_format(&mut archive).context("unrecognized format"))
-            .with_context(|| format!("guessing format of [{}]", file.display()))?;
-        match format {
-            ba2::FileFormat::FO4 => ba2::fo4::Archive::read(file)
-                .context("opening fo4")
-                .map(BethesdaArchive::Fallout4),
-            ba2::FileFormat::TES3 => todo!(),
-            ba2::FileFormat::TES4 => todo!(),
-        }
+            .and_then(|mut archive| {
+                ba2::guess_format(&mut archive)
+                    .context("unrecognized format")
+                    .and_then(|format| match format {
+                        ba2::FileFormat::FO4 => ba2::fo4::Archive::read(file)
+                            .context("opening fo4")
+                            .map(BethesdaArchive::Fallout4),
+                        ba2::FileFormat::TES3 => todo!(),
+                        ba2::FileFormat::TES4 => todo!(),
+                    })
+            })
     }
 }
-
-type BytesIterator<'a> = iter_read::IterRead<std::io::Result<Vec<u8>>, Box<dyn Iterator<Item = std::io::Result<Vec<u8>>> + 'a>>;
 
 pub enum BethesdaArchiveFile {
     Fallout4(tempfile::SpooledTempFile),

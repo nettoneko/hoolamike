@@ -117,12 +117,12 @@ pub async fn install_modlist(
                 .map_ok(Arc::new)
                 .and_then(move |directives_handler| {
                     directives_handler.handle_directives(directives.tap_mut(|directives| {
-                        if let Some(run_only_directive) = start_from_directive {
+                        if let Some(start_from_directive) = start_from_directive {
                             tracing::warn!("runing only a single directive");
                             *directives = directives
                                 .pipe(std::mem::take)
                                 .drain(..)
-                                .skip_while(|d| d.directive_hash() != run_only_directive)
+                                .skip_while(|d| d.directive_hash() != start_from_directive)
                                 .collect_vec();
                         }
                     }))
