@@ -58,6 +58,7 @@ tempfile.workspace = true
 test-log.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+tracing-indicatif = "0.3.8"
 tracing-subscriber.workspace = true
 transpare.workspace = true
 url.workspace = true

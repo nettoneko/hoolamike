@@ -55,6 +55,7 @@ pub enum HandleKind {
 }
 
 impl NestedArchivesService {
+    #[tracing::instrument(skip_all)]
     async fn init(&mut self, archive_hash_path: ArchiveHashPath) -> Result<(ArchiveHashPath, HandleKind)> {
         let pb = vertical_progress_bar(0, ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)
             .attach_to(&super::PROGRESS_BAR)
@@ -111,6 +112,7 @@ impl NestedArchivesService {
         }
         .map(|handle| (archive_hash_path, handle))
     }
+    #[tracing::instrument(skip(self))]
     pub async fn get(&mut self, nested_archive: ArchiveHashPath) -> Result<HandleKind> {
         match self.cache.get(&nested_archive) {
             Some(exists) => {

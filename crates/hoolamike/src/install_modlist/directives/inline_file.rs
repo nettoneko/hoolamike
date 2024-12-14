@@ -2,10 +2,9 @@ use {
     super::*,
     crate::{
         compression::ProcessArchive,
-        install_modlist::download_cache::{to_u64_from_base_64, validate_hash},
+        install_modlist::download_cache::validate_hash,
         modlist_json::directive::InlineFileDirective,
-        progress_bars::{print_error, vertical_progress_bar, ProgressKind, PROGRESS_BAR},
-        read_wrappers::ReadExt,
+        progress_bars::{vertical_progress_bar, ProgressKind, PROGRESS_BAR},
     },
     std::{convert::identity, io::Write, path::Path},
 };
@@ -17,6 +16,7 @@ pub struct InlineFileHandler {
 }
 
 impl InlineFileHandler {
+    #[tracing::instrument]
     pub async fn handle(
         self,
         InlineFileDirective {
@@ -28,7 +28,6 @@ impl InlineFileHandler {
     ) -> Result<()> {
         let output_path = self.output_directory.join(to.into_path());
         if let Err(message) = validate_hash(output_path.clone(), hash.clone()).await {
-            print_error(source_data_id.hyphenated().to_string(), &message);
             let wabbajack_file = self.wabbajack_file.clone();
             tokio::task::spawn_blocking(move || -> Result<_> {
                 let pb = vertical_progress_bar(size, ProgressKind::Extract, indicatif::ProgressFinish::AndClear)

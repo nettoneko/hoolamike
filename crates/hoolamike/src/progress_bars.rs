@@ -105,26 +105,26 @@ pub fn vertical_progress_bar(len: u64, kind: ProgressKind, with_finish: indicati
     })
 }
 
-pub fn print_success(for_target: String, message: &str) {
-    PROGRESS_BAR
-        .println(format!("{} {}", style(for_target).bold().dim().green(), message))
-        .ok();
-}
+// pub fn print_success(for_target: String, message: &str) {
+//     PROGRESS_BAR
+//         .println(format!("{} {}", style(for_target).bold().dim().green(), message))
+//         .ok();
+// }
 
-pub fn print_error(for_target: String, message: &anyhow::Error) {
-    let message = message
-        .chain()
-        .enumerate()
-        .try_fold(String::new(), |mut acc, (idx, next)| {
-            use std::fmt::Write;
-            acc.pipe_ref_mut(|acc| writeln!(acc, "{idx}. {next}", idx = idx + 1))
-                .map(|_| acc)
-        })
-        .unwrap_or_else(|_| format!("{message:?}"));
-    PROGRESS_BAR
-        .println(format!("{} {}", style(for_target).bold().dim().red(), message))
-        .ok();
-}
+// pub fn print_error(for_target: String, message: &anyhow::Error) {
+//     let message = message
+//         .chain()
+//         .enumerate()
+//         .try_fold(String::new(), |mut acc, (idx, next)| {
+//             use std::fmt::Write;
+//             acc.pipe_ref_mut(|acc| writeln!(acc, "{idx}. {next}", idx = idx + 1))
+//                 .map(|_| acc)
+//         })
+//         .unwrap_or_else(|_| format!("{message:?}"));
+//     PROGRESS_BAR
+//         .println(format!("{} {}", style(for_target).bold().dim().red(), message))
+//         .ok();
+// }
 // pub fn print_warn(for_target: &str, message: &anyhow::Error) {
 //     PROGRESS_BAR
 //         .println(format!("{} {message}", style(for_target).bold().dim().yellow(),))

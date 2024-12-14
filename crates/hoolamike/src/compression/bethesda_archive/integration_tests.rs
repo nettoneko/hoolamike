@@ -1,5 +1,6 @@
 use {
     super::*,
+    tap::prelude::*,
     tracing::{info, info_span},
 };
 const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");

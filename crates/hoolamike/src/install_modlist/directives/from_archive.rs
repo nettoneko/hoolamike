@@ -1,12 +1,10 @@
 use {
     super::*,
     crate::{
-        compression::{ProcessArchive, SeekWithTempFileExt},
         install_modlist::download_cache::{to_u64_from_base_64, validate_file_size, validate_hash},
-        modlist_json::directive::{ArchiveHashPath, FromArchiveDirective},
-        progress_bars::{print_error, vertical_progress_bar, ProgressKind, PROGRESS_BAR},
-        read_wrappers::{validate_size, ReadExt},
-        utils::MaybeWindowsPath,
+        modlist_json::directive::FromArchiveDirective,
+        progress_bars::{vertical_progress_bar, ProgressKind, PROGRESS_BAR},
+        read_wrappers::ReadExt,
     },
     nested_archive_manager::NestedArchivesService,
     std::{
@@ -46,6 +44,7 @@ async fn validate_hash_with_overrides(path: PathBuf, hash: String, size: u64) ->
 }
 
 impl FromArchiveHandler {
+    #[tracing::instrument]
     pub async fn handle(
         self,
         FromArchiveDirective {
@@ -58,7 +57,6 @@ impl FromArchiveHandler {
         let output_path = self.output_directory.join(to.into_path());
 
         if let Err(message) = validate_hash_with_overrides(output_path.clone(), hash.clone(), size).await {
-            print_error(output_path.display().to_string(), &message);
             let source_file = self
                 .nested_archive_service
                 .lock()

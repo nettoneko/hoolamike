@@ -5,9 +5,7 @@ use {
     anyhow::{Context, Result},
     clap::{Parser, Subcommand},
     modlist_data::ModlistSummary,
-    progress_bars::print_success,
     std::path::PathBuf,
-    tap::prelude::*,
     tracing::info,
 };
 pub const BUFFER_SIZE: usize = 1024 * 64;
@@ -125,21 +123,26 @@ pub(crate) mod progress_bars;
 
 #[allow(unused_imports)]
 fn setup_logging() {
-    use tracing_subscriber::{fmt, prelude::__tracing_subscriber_SubscriberExt, EnvFilter};
-
+    use {
+        tracing_indicatif::IndicatifLayer,
+        tracing_subscriber::{fmt, layer::SubscriberExt, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter},
+    };
+    let indicatif_layer = IndicatifLayer::new();
     let subscriber = tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
-        .pipe(|registry| {
-            // #[cfg(debug_assertions)]
-            {
-                // registry.with(console_subscriber::spawn())
-            }
-            // #[cfg(not(debug_assertions))]
-            // {
-            registry.with(fmt::Layer::new().with_writer(std::io::stderr))
-            // }
-            // registry
-        });
+        .with(tracing_subscriber::fmt::layer().with_writer(indicatif_layer.get_stderr_writer()))
+        .with(indicatif_layer);
+    // .pipe(|registry| {
+    //     // #[cfg(debug_assertions)]
+    //     {
+    //         // registry.with(console_subscriber::spawn())
+    //     }
+    //     // #[cfg(not(debug_assertions))]
+    //     // {
+    //     // registry.with(fmt::Layer::new().with_writer(std::io::stderr))
+    //     // }
+    //     // registry
+    // });
     tracing::subscriber::set_global_default(subscriber)
         .context("Unable to set a global subscriber")
         .expect("logging failed");
@@ -149,7 +152,7 @@ async fn main() -> Result<()> {
     setup_logging();
     let Cli { command, hoolamike_config } = Cli::parse();
     let (config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
-    print_success("hoolamike".into(), &format!("found config at [{}]", config_path.display()));
+    tracing::info!("found config at [{}]", config_path.display());
 
     match command {
         Commands::ValidateModlist { path } => tokio::fs::read_to_string(&path)

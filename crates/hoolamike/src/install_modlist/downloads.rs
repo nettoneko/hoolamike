@@ -15,15 +15,7 @@ use {
         },
         error::{MultiErrorCollectExt, TotalResult},
         modlist_json::{Archive, GoogleDriveState, HttpState, ManualState, NexusState, State},
-        progress_bars::{
-            print_error,
-            print_success,
-            vertical_progress_bar,
-            ProgressKind,
-            COPY_LOCAL_TOTAL_PROGRESS_BAR,
-            DOWNLOAD_TOTAL_PROGRESS_BAR,
-            PROGRESS_BAR,
-        },
+        progress_bars::{vertical_progress_bar, ProgressKind, COPY_LOCAL_TOTAL_PROGRESS_BAR, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR},
     },
     anyhow::Result,
     futures::{FutureExt, StreamExt, TryStreamExt},
@@ -328,9 +320,9 @@ impl Synchronizers {
                 }
                 .inspect_err({
                     let name = name.clone();
-                    move |message| print_error(name, message)
+                    move |message| tracing::error!(?name, ?message)
                 })
-                .inspect_ok(move |_| print_success(name, "[OK]"))
+                .inspect_ok(move |_| tracing::info!(name, "[OK]"))
                 .pipe(tokio::task::spawn)
                 .map_context("task crashed")
                 .and_then(ready)

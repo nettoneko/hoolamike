@@ -1,10 +1,10 @@
 use {
     super::*,
     crate::{
-        compression::{forward_only_seek::ForwardOnlySeek, ProcessArchive, SeekWithTempFileExt},
+        compression::{forward_only_seek::ForwardOnlySeek, ProcessArchive},
         install_modlist::download_cache::{to_u64_from_base_64, validate_hash},
-        modlist_json::directive::{ArchiveHashPath, PatchedFromArchiveDirective},
-        progress_bars::{print_error, vertical_progress_bar, ProgressKind, PROGRESS_BAR},
+        modlist_json::directive::PatchedFromArchiveDirective,
+        progress_bars::{vertical_progress_bar, ProgressKind, PROGRESS_BAR},
         read_wrappers::ReadExt,
     },
     indicatif::ProgressBar,
@@ -22,6 +22,7 @@ pub struct PatchedFromArchiveHandler {
 }
 
 impl PatchedFromArchiveHandler {
+    #[tracing::instrument]
     pub async fn handle(
         self,
         PatchedFromArchiveDirective {
@@ -36,7 +37,6 @@ impl PatchedFromArchiveHandler {
         let output_path = self.output_directory.join(to.into_path());
 
         if let Err(message) = validate_hash(output_path.clone(), hash.clone()).await {
-            print_error(output_path.display().to_string(), &message);
             let source_file = self
                 .nested_archive_service
                 .lock()

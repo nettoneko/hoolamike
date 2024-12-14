@@ -2,25 +2,21 @@ use {
     super::ProcessArchive,
     crate::{
         progress_bars::{vertical_progress_bar, PROGRESS_BAR},
-        utils::{boxed_iter, ReadableCatchUnwindExt},
+        utils::ReadableCatchUnwindExt,
     },
     anyhow::{Context, Result},
     ba2::{
-        fo4::{self, ChunkCompressionOptionsBuilder, FileWriteOptionsBuilder},
-        prelude::*,
+        fo4::{self, FileWriteOptionsBuilder},
         BString,
         ByteSlice,
         Reader,
     },
-    itertools::Itertools,
     std::{
-        borrow::Cow,
         convert::identity,
         io::{Read, Seek},
         panic::catch_unwind,
         path::{Path, PathBuf},
     },
-    tap::prelude::*,
     wrapped_7zip::MaybeWindowsPath,
 };
 
@@ -63,6 +59,8 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
     }
 
     fn get_handle(&mut self, path: &Path) -> Result<super::ArchiveFileHandle<'_>> {
+        use tap::prelude::*;
+
         let mut output = tempfile::SpooledTempFile::new(256 * 1024 * 1024);
         let options = FileWriteOptionsBuilder::new()
             .compression_format(self.1.compression_format())
@@ -106,8 +104,6 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
             .context("getting fallout4 archive handle")
     }
 }
-
-struct FileRead {}
 
 #[derive(Debug)]
 pub enum BethesdaArchive<'a> {

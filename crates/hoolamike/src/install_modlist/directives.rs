@@ -1,16 +1,14 @@
 use {
-    super::download_cache,
     crate::{
         downloaders::WithArchiveDescriptor,
-        error::{MultiErrorCollectExt, TotalResult},
+        error::TotalResult,
         modlist_json::DirectiveKind,
-        progress_bars::{print_error, vertical_progress_bar, ProgressKind, PROGRESS_BAR},
+        progress_bars::{vertical_progress_bar, ProgressKind, PROGRESS_BAR},
     },
     anyhow::{Context, Result},
     futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt},
     itertools::Itertools,
     nested_archive_manager::NestedArchivesService,
-    rand::seq::SliceRandom,
     std::{
         collections::{BTreeMap, HashSet},
         future::ready,
@@ -21,7 +19,7 @@ use {
     },
     tap::prelude::*,
     tokio::sync::Mutex,
-    tracing::{debug, info},
+    tracing::{debug, info, trace},
 };
 
 pub(crate) fn create_file_all(path: &Path) -> Result<std::fs::File> {
@@ -133,6 +131,8 @@ pub mod nested_archive_manager;
 fn concurrency() -> usize {
     #[cfg(not(debug_assertions))]
     {
+        use std::ops::{Div, Mul};
+
         num_cpus::get().div(10).mul(8).saturating_sub(1).max(1)
     }
     #[cfg(debug_assertions)]
@@ -178,6 +178,7 @@ impl DirectivesHandler {
             transformed_texture: transformed_texture::TransformedTextureHandler {},
         }
     }
+    #[tracing::instrument(skip(self))]
     pub async fn handle(self: Arc<Self>, directive: Directive) -> Result<()> {
         match directive {
             Directive::CreateBSA(directive) => self.create_bsa.clone().handle(directive),
@@ -229,7 +230,6 @@ impl DirectivesHandler {
                 let directive_hash = directive.directive_hash();
                 let directive_size = directive_size(&directive);
                 let directive_debug = format!("{directive:#?}").pipe(Arc::new);
-                debug!("handling directive {directive_debug}");
                 self.clone()
                     .handle(directive)
                     .map({
@@ -242,7 +242,7 @@ impl DirectivesHandler {
                     })
                     .inspect_ok({
                         let directive_debug = directive_debug.clone();
-                        move |_handled| info!("handled directive {directive_debug}")
+                        move |_handled| trace!("handled directive {directive_debug}")
                     })
                     // .map({
                     //     let whitelist_failed_directives = whitelist_failed_directives.clone();
@@ -263,13 +263,11 @@ impl DirectivesHandler {
                 pb.inc(size);
                 ready(Ok(()))
             })
+            .inspect_err(|message| tracing::error!(?message))
             .await
             .pipe(|r| match r {
                 Ok(_) => Ok(vec![()]),
-                Err(e) => {
-                    print_error("directive".into(), &e);
-                    Err(vec![e])
-                }
+                Err(e) => Err(vec![e]),
             })
     }
 }

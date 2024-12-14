@@ -7,7 +7,7 @@ use {
     std::{
         convert::identity,
         fs::File,
-        io::{self, Seek},
+        io::{self, Seek, Write},
         path::{Path, PathBuf},
     },
     tap::prelude::*,
@@ -136,24 +136,40 @@ pub enum ArchiveHandle<'a> {
 pub mod wrapped_7zip;
 
 #[extension_traits::extension(pub trait SeekWithTempFileExt)]
-impl<T: std::io::Read> T {
+impl<T: std::io::Read> T
+where
+    Self: Sized,
+{
     fn seek_with_temp_file(mut self, pb: ProgressBar) -> Result<(tempfile::NamedTempFile, File)> {
         tempfile::NamedTempFile::new()
             .context("creating a tempfile")
             .and_then(|mut temp_file| {
+                let _ = tracing::debug_span!("seek_with_temp_file", temp_file=?temp_file).entered();
                 std::io::copy(&mut self, &mut pb.wrap_write(&mut temp_file))
                     .context("creating a seekable temp file")
-                    .map(|_| temp_file)
-                    .and_then(|file| {
-                        file.as_file()
-                            .try_clone()
-                            .context("cloning file handle")
-                            .map(|file_handle| (file, file_handle))
-                            .and_then(|(mut a, mut b)| -> Result<_> {
-                                a.rewind()?;
-                                b.rewind()?;
-                                Ok((a, b))
-                            })
+                    .map(|wrote_size| {
+                        match wrote_size {
+                            0 => {
+                                tracing::error!("wrote 0 bytes")
+                            }
+                            other => {
+                                tracing::debug!("wrote {other} bytes")
+                            }
+                        }
+                        temp_file
+                    })
+                    .and_then(|mut file| {
+                        file.flush().context("flushing file").and_then(|_| {
+                            file.as_file()
+                                .try_clone()
+                                .context("cloning file handle")
+                                .map(|file_handle| (file, file_handle))
+                                .and_then(|(mut a, mut b)| -> Result<_> {
+                                    a.rewind()?;
+                                    b.rewind()?;
+                                    Ok((a, b))
+                                })
+                        })
                     })
             })
     }
