@@ -81,7 +81,12 @@ impl PatchedFromArchiveHandler {
                     .with_context(|| format!("patch {patch_id:?} does not exist"))?;
 
                 match source_file {
-                    nested_archive_manager::HandleKind::Cached(file) => file.1.try_clone().context("cloning file"),
+                    nested_archive_manager::HandleKind::Cached(file) => file
+                        .inner
+                        .1
+                        .try_clone()
+                        .context("cloning file")
+                        .and_then(|mut f| f.rewind().context("rewinding").map(|_| f)),
                     nested_archive_manager::HandleKind::JustHashPath(source_file_path) => std::fs::OpenOptions::new()
                         .read(true)
                         .open(&source_file_path)

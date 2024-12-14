@@ -1,16 +1,24 @@
 use {
-    crate::utils::{boxed_iter, ReadableCatchUnwindExt},
-    ::wrapped_7zip::which,
+    crate::{
+        install_modlist::directives::nested_archive_manager::{WithPermit, OPEN_FILE_PERMITS},
+        utils::{boxed_iter, ReadableCatchUnwindExt},
+    },
+    ::wrapped_7zip::{which, WRAPPED_7ZIP},
     anyhow::{Context, Result},
     bethesda_archive::BethesdaArchiveFile,
+    futures::TryFutureExt,
     indicatif::ProgressBar,
     std::{
+        borrow::BorrowMut,
         convert::identity,
         fs::File,
         io::{self, Seek, Write},
         path::{Path, PathBuf},
+        pin::Pin,
+        sync::Arc,
     },
     tap::prelude::*,
+    tokio::sync::Mutex,
 };
 
 pub mod bethesda_archive;
@@ -23,7 +31,7 @@ pub mod forward_only_seek;
 #[enum_dispatch::enum_dispatch(ArchiveHandle)]
 pub trait ProcessArchive: Sized {
     fn list_paths(&mut self) -> Result<Vec<PathBuf>>;
-    fn get_handle(&mut self, path: &Path) -> Result<self::ArchiveFileHandle<'_>>;
+    fn get_handle(&mut self, path: &Path) -> Result<self::ArchiveFileHandle>;
 }
 
 impl ArchiveHandle<'_> {
@@ -54,12 +62,17 @@ impl<T: ProcessArchive> FileHandleIterator<T> {
 
 #[allow(clippy::large_enum_variant)]
 #[enum_dispatch::enum_dispatch]
-pub enum ArchiveFileHandle<'a> {
-    Zip(zip::ZipFile<'a>),
+pub enum ArchiveFileHandle {
     CompressTools(compress_tools::CompressToolsFile),
     Wrapped7Zip(::wrapped_7zip::ArchiveFileHandle),
     Bethesda(self::bethesda_archive::BethesdaArchiveFile),
 }
+
+// static_assertions::assert_impl_all!(zip::ZipFile<'static>: Send, Sync);
+static_assertions::assert_impl_all!(compress_tools::CompressToolsFile: Send, Sync);
+static_assertions::assert_impl_all!(::wrapped_7zip::ArchiveFileHandle: Send, Sync);
+static_assertions::assert_impl_all!(self::bethesda_archive::BethesdaArchiveFile: Send, Sync);
+static_assertions::assert_impl_all!(ArchiveFileHandle: Send , Sync);
 
 impl ArchiveHandle<'_> {
     pub fn guess(file: std::fs::File, path: &Path) -> anyhow::Result<Self> {
@@ -74,12 +87,8 @@ impl ArchiveHandle<'_> {
                         .map_err(|_| file)
                 })
                 .or_else(|file| {
-                    ["7z", "7z.exe"]
-                        .into_iter()
-                        .find_map(|bin| which::which(bin).ok())
-                        .context("no 7z binary found")
-                        .and_then(|path| ::wrapped_7zip::Wrapped7Zip::new(&path))
-                        .and_then(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                    WRAPPED_7ZIP
+                        .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
                         .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
                         .map_err(|_| file)
                 })
@@ -91,14 +100,6 @@ impl ArchiveHandle<'_> {
                         .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
                         .map_err(|_| file)
                 })
-                .or_else(|file| {
-                    file.try_clone()
-                        .context("cloning file")
-                        .and_then(|file| zip::ZipArchive::new(file).context("reading zip"))
-                        .map(Self::Zip)
-                        .tap_err(|message| tracing::trace!("could not open archive with zip: {message:?}"))
-                        .map_err(|_| file)
-                })
                 .tap_ok(|a| tracing::trace!("succesfully opened an archive: {a:?}"))
                 .map_err(|_| anyhow::anyhow!("no defined archive handler could handle this file"))
         })
@@ -108,10 +109,9 @@ impl ArchiveHandle<'_> {
     }
 }
 
-impl std::io::Read for ArchiveFileHandle<'_> {
+impl std::io::Read for ArchiveFileHandle {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self {
-            ArchiveFileHandle::Zip(zip_file_seek) => zip_file_seek.read(buf),
             ArchiveFileHandle::CompressTools(compress_tools_seek) => compress_tools_seek.read(buf),
             ArchiveFileHandle::Wrapped7Zip(wrapped_7zip) => wrapped_7zip.read(buf),
             ArchiveFileHandle::Bethesda(bethesda_archive_file) => match bethesda_archive_file {
@@ -127,7 +127,6 @@ pub trait ProcessArchiveFile {}
 #[enum_dispatch::enum_dispatch]
 #[derive(Debug)]
 pub enum ArchiveHandle<'a> {
-    Zip(zip::ZipArchive),
     CompressTools(compress_tools::CompressToolsArchive),
     Wrapped7Zip(::wrapped_7zip::ArchiveHandle),
     Bethesda(bethesda_archive::BethesdaArchive<'a>),
@@ -135,42 +134,47 @@ pub enum ArchiveHandle<'a> {
 
 pub mod wrapped_7zip;
 
-#[extension_traits::extension(pub trait SeekWithTempFileExt)]
-impl<T: std::io::Read> T
+#[extension_traits::extension(pub(crate) trait SeekWithTempFileExt)]
+impl<T: std::io::Read + Sync + 'static> T
 where
-    Self: Sized,
+    Self: Sized + Sync + Send + 'static,
 {
-    fn seek_with_temp_file(mut self, pb: ProgressBar) -> Result<(tempfile::NamedTempFile, File)> {
-        tempfile::NamedTempFile::new()
-            .context("creating a tempfile")
-            .and_then(|mut temp_file| {
-                let _ = tracing::debug_span!("seek_with_temp_file", temp_file=?temp_file).entered();
-                std::io::copy(&mut self, &mut pb.wrap_write(&mut temp_file))
-                    .context("creating a seekable temp file")
-                    .map(|wrote_size| {
-                        match wrote_size {
-                            0 => {
-                                tracing::error!("wrote 0 bytes")
+    async fn seek_with_temp_file(self, pb: ProgressBar) -> Result<Arc<WithPermit<(tempfile::NamedTempFile, File)>>> {
+        let reader = Arc::new(std::sync::Mutex::new(self));
+        WithPermit::new_blocking(&OPEN_FILE_PERMITS, move || {
+            tempfile::NamedTempFile::new()
+                .context("creating a tempfile")
+                .and_then(|mut temp_file| {
+                    let _ = tracing::debug_span!("seek_with_temp_file", temp_file=?temp_file).entered();
+                    std::io::copy(&mut *reader.lock().unwrap(), &mut pb.wrap_write(&mut temp_file))
+                        .context("creating a seekable temp file")
+                        .map(|wrote_size| {
+                            match wrote_size {
+                                0 => {
+                                    tracing::error!("wrote 0 bytes")
+                                }
+                                other => {
+                                    tracing::debug!("wrote {other} bytes")
+                                }
                             }
-                            other => {
-                                tracing::debug!("wrote {other} bytes")
-                            }
-                        }
-                        temp_file
-                    })
-                    .and_then(|mut file| {
-                        file.flush().context("flushing file").and_then(|_| {
-                            file.as_file()
-                                .try_clone()
-                                .context("cloning file handle")
-                                .map(|file_handle| (file, file_handle))
-                                .and_then(|(mut a, mut b)| -> Result<_> {
-                                    a.rewind()?;
-                                    b.rewind()?;
-                                    Ok((a, b))
-                                })
+                            temp_file
                         })
-                    })
-            })
+                        .and_then(|mut file| {
+                            file.flush().context("flushing file").and_then(|_| {
+                                file.as_file()
+                                    .try_clone()
+                                    .context("cloning file handle")
+                                    .map(|file_handle| (file, file_handle))
+                                    .and_then(|(mut a, mut b)| -> Result<_> {
+                                        a.rewind()?;
+                                        b.rewind()?;
+                                        Ok((a, b))
+                                    })
+                            })
+                        })
+                })
+        })
+        .map_ok(Arc::new)
+        .await
     }
 }

@@ -4,6 +4,7 @@ pub use which;
 use {
     anyhow::{anyhow, Context, Result},
     list_output::{ListOutput, ListOutputEntry},
+    parking_lot::Mutex,
     std::{
         convert::identity,
         io::{BufReader, Read},
@@ -144,8 +145,22 @@ fn spawn_watcher(error_callback: Sender<anyhow::Error>, child: Child) {
     });
 }
 
+impl Wrapped7Zip {
+    pub fn find_bin() -> Result<Self> {
+        ["7z", "7z.exe"]
+            .into_iter()
+            .find_map(|bin| which::which(bin).ok())
+            .context("no 7z binary")
+            .and_then(|path| Self::new(&path))
+    }
+}
+
+thread_local! {
+    pub static WRAPPED_7ZIP: Arc<Wrapped7Zip> = Arc::new(Wrapped7Zip::find_bin().expect("no 7z found, fix your dependencies"));
+}
+
 pub struct ArchiveFileHandle {
-    error_callback: Receiver<anyhow::Error>,
+    error_callback: Arc<Mutex<Receiver<anyhow::Error>>>,
     reader: BufReader<ChildStdout>,
     finished: bool,
 }
@@ -161,7 +176,7 @@ impl Read for ArchiveFileHandle {
         if n == 0 {
             // EOF reached. Check for errors
             self.finished = true;
-            if let Ok(error) = self.error_callback.try_recv() {
+            if let Ok(error) = self.error_callback.lock().try_recv() {
                 return Err(std::io::Error::other(error));
             }
         }
@@ -244,7 +259,7 @@ impl ArchiveHandle {
                 let (tx, rx) = mpsc::channel();
                 spawn_watcher(tx, child);
                 ArchiveFileHandle {
-                    error_callback: rx,
+                    error_callback: rx.pipe(Mutex::new).pipe(Arc::new),
                     reader: stdout.pipe(BufReader::new),
                     finished: false,
                 }

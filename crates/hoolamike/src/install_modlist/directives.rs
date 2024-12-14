@@ -8,7 +8,7 @@ use {
     anyhow::{Context, Result},
     futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt},
     itertools::Itertools,
-    nested_archive_manager::NestedArchivesService,
+    nested_archive_manager::{max_open_files, NestedArchivesService},
     std::{
         collections::{BTreeMap, HashSet},
         future::ready,
@@ -85,11 +85,11 @@ pub mod transformed_texture {
 
 use crate::modlist_json::Directive;
 
-pub type WabbajackFileHandle = Arc<tokio::sync::Mutex<crate::compression::zip::ZipArchive>>;
+pub type WabbajackFileHandle = Arc<tokio::sync::Mutex<crate::compression::wrapped_7zip::ArchiveHandle>>;
 
 #[extension_traits::extension(pub trait WabbajackFileHandleExt)]
 impl WabbajackFileHandle {
-    fn from_archive(archive: crate::compression::zip::ZipArchive) -> Self {
+    fn from_archive(archive: crate::compression::wrapped_7zip::ArchiveHandle) -> Self {
         Arc::new(tokio::sync::Mutex::new(archive))
     }
 }
@@ -155,7 +155,7 @@ impl DirectivesHandler {
             .collect::<BTreeMap<_, _>>()
             .pipe(Arc::new);
 
-        let nested_archive_service = NestedArchivesService::new(download_summary.clone(), concurrency() * 3)
+        let nested_archive_service = NestedArchivesService::new(download_summary.clone(), max_open_files())
             .pipe(Mutex::new)
             .pipe(Arc::new);
         Self {
@@ -258,7 +258,7 @@ impl DirectivesHandler {
                     .map_ok(move |_| directive_size)
             })
             .map(Ok)
-            .try_buffered(concurrency())
+            .try_buffer_unordered(concurrency())
             .try_for_each(|size| {
                 pb.inc(size);
                 ready(Ok(()))

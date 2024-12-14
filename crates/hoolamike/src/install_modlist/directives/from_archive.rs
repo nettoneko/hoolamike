@@ -9,7 +9,7 @@ use {
     nested_archive_manager::NestedArchivesService,
     std::{
         convert::identity,
-        io::{Read, Write},
+        io::{Read, Seek, Write},
         path::Path,
     },
     tokio::sync::Mutex,
@@ -44,7 +44,7 @@ async fn validate_hash_with_overrides(path: PathBuf, hash: String, size: u64) ->
 }
 
 impl FromArchiveHandler {
-    #[tracing::instrument]
+    #[tracing::instrument(skip(self))]
     pub async fn handle(
         self,
         FromArchiveDirective {
@@ -64,6 +64,7 @@ impl FromArchiveHandler {
                 .get(archive_hash_path.clone())
                 .await
                 .context("could not get a handle to archive")?;
+
             tokio::task::spawn_blocking(move || -> Result<_> {
                 let pb = vertical_progress_bar(size, ProgressKind::Extract, indicatif::ProgressFinish::AndClear)
                     .attach_to(&PROGRESS_BAR)
@@ -92,7 +93,12 @@ impl FromArchiveHandler {
                 };
 
                 match source_file {
-                    nested_archive_manager::HandleKind::Cached(file) => file.1.try_clone().context("cloning file"),
+                    nested_archive_manager::HandleKind::Cached(file) => file
+                        .inner
+                        .1
+                        .try_clone()
+                        .context("cloning file")
+                        .and_then(|mut f| f.rewind().context("rewinding").map(|_| f)),
                     nested_archive_manager::HandleKind::JustHashPath(source_file_path) => std::fs::OpenOptions::new()
                         .read(true)
                         .open(&source_file_path)

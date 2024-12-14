@@ -13,7 +13,7 @@ use {
     },
     std::{
         convert::identity,
-        io::{Read, Seek},
+        io::{Read, Seek, Write},
         panic::catch_unwind,
         path::{Path, PathBuf},
     },
@@ -33,7 +33,7 @@ fn bethesda_path_to_path(bethesda_path: &[u8]) -> Result<PathBuf> {
 
 #[extension_traits::extension(pub trait BethesdaArchiveCompat)]
 impl Fallout4Archive<'_> {
-    fn list_paths_with_originals(&mut self) -> Result<Vec<(PathBuf, BString)>> {
+    fn list_paths_with_originals(&self) -> Result<Vec<(PathBuf, fo4::ArchiveKey<'_>)>> {
         self.0
             .iter()
             .map(|(key, _file)| {
@@ -42,7 +42,7 @@ impl Fallout4Archive<'_> {
                     .context("name is not a valid string")
                     .map(|s| s.as_bytes())
                     .and_then(bethesda_path_to_path)
-                    .map(|path| (path, key.name().to_owned()))
+                    .map(|path| (path, key.to_owned()))
             })
             .collect::<Result<Vec<_>>>()
             .context("listing paths for bethesda archive")
@@ -57,8 +57,8 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
         self.list_paths_with_originals()
             .map(|paths| paths.into_iter().map(|(p, _)| p).collect())
     }
-
-    fn get_handle(&mut self, path: &Path) -> Result<super::ArchiveFileHandle<'_>> {
+    #[tracing::instrument(skip(self))]
+    fn get_handle(&mut self, path: &Path) -> Result<super::ArchiveFileHandle> {
         use tap::prelude::*;
 
         let mut output = tempfile::SpooledTempFile::new(256 * 1024 * 1024);
@@ -75,23 +75,26 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
                     .find_map(|(entry, repr)| entry.eq(path).then_some(repr))
                     .with_context(|| format!("[{}] not found in [{paths:?}]", path.display()))
                     .and_then(|bethesda_path| {
-                        catch_unwind(|| {
-                            self.0
-                                .get(&fo4::ArchiveKey::from(bethesda_path.clone()))
-                                .context("could not read file")
-                        })
-                        .for_anyhow()
-                        .and_then(identity)
-                        .context("reading archive entry")
+                        catch_unwind(|| self.0.get(bethesda_path).context("could not read file"))
+                            .for_anyhow()
+                            .and_then(identity)
+                            .context("reading archive entry")
                     })
                     .and_then(|file| {
                         catch_unwind(|| {
                             pb.set_length(file.iter().map(|chunk| chunk.len() as u64).sum());
                             pb.tick();
-                            file.write(&mut pb.wrap_write(&mut output), &options)
+                            let mut writer = pb.wrap_write(&mut output);
+                            file.write(&mut writer, &options)
                                 // file.write(&mut output, &options)
                                 .context("extracting fallout 4 bsa")
-                                .and_then(|_| output.rewind().context("rewinding file").map(|_| output))
+                                .and_then(|_| {
+                                    output.rewind().context("rewinding file").and_then(|_| {
+                                        let wrote = writer.progress.length().unwrap_or(0);
+                                        tracing::debug!(%wrote, "finished dumping bethesda archive");
+                                        output.flush().context("flushing").map(|_| output)
+                                    })
+                                })
                         })
                         .for_anyhow()
                         .and_then(identity)
@@ -117,7 +120,7 @@ impl ProcessArchive for BethesdaArchive<'_> {
         }
     }
 
-    fn get_handle(&mut self, path: &Path) -> Result<super::ArchiveFileHandle<'_>> {
+    fn get_handle(&mut self, path: &Path) -> Result<super::ArchiveFileHandle> {
         match self {
             BethesdaArchive::Fallout4(fo4) => fo4.get_handle(path),
         }

@@ -2,8 +2,7 @@ use super::*;
 
 #[test]
 fn test_stat_example_file() -> Result<()> {
-    let file = which::which("7z").context("checking binary path")?;
-    let output = Wrapped7Zip::new(&file)?.query_file_info(Path::new("./test-data/example-1.rar"))?;
+    let output = Wrapped7Zip::find_bin()?.query_file_info(Path::new("./test-data/example-1.rar"))?;
     println!("{output}");
     assert!(output.contains("20:58:56"));
     Ok(())
@@ -11,8 +10,7 @@ fn test_stat_example_file() -> Result<()> {
 
 #[test]
 fn extract_example_file() -> Result<()> {
-    let file = which::which("7z").context("checking binary path")?;
-    let archive = Wrapped7Zip::new(&file)?.open_file(Path::new("./test-data/example-1.rar"))?;
+    let archive = Wrapped7Zip::find_bin()?.open_file(Path::new("./test-data/example-1.rar"))?;
     let files = archive.list_files()?;
     let mut file = archive.get_file(&files[0].path)?;
     let mut out = Vec::new();

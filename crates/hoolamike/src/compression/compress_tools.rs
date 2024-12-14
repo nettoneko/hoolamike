@@ -64,7 +64,7 @@ impl ProcessArchive for CompressToolsArchive {
             .and_then(|out| self.0.rewind().context("rewinding file").map(|_| out))
     }
 
-    fn get_handle<'this>(&'this mut self, path: &Path) -> Result<super::ArchiveFileHandle<'this>> {
+    fn get_handle<'this>(&mut self, path: &Path) -> Result<super::ArchiveFileHandle> {
         self.get_handle(path)
             .map(super::ArchiveFileHandle::CompressTools)
     }

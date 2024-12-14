@@ -94,11 +94,9 @@ pub mod wabbajack_file {
             let pb = indicatif::ProgressBar::new_spinner()
                 .with_prefix(path.display().to_string())
                 .tap_mut(|pb| crate::progress_bars::ProgressKind::Validate.stylize(pb));
-            std::fs::OpenOptions::new()
-                .read(true)
-                .open(&path)
-                .context("opening file")
-                .and_then(|file| crate::compression::zip::ZipArchive::new(file).context("reading archive"))
+            crate::compression::wrapped_7zip::WRAPPED_7ZIP
+                .with(|w| w.open_file(&path))
+                .context("reading archive")
                 .and_then(|mut archive| {
                     archive.list_paths().and_then(|entries| {
                         archive
