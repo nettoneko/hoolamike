@@ -12,6 +12,7 @@ use {
         convert::identity,
         io::{Read, Seek, Write},
     },
+    tracing::Instrument,
 };
 
 #[derive(Clone, Debug)]
@@ -22,7 +23,7 @@ pub struct PatchedFromArchiveHandler {
 }
 
 impl PatchedFromArchiveHandler {
-    #[tracing::instrument]
+    #[tracing::instrument(skip(self), level = "INFO")]
     pub async fn handle(
         self,
         PatchedFromArchiveDirective {
@@ -33,7 +34,7 @@ impl PatchedFromArchiveHandler {
             from_hash: _,
             patch_id,
         }: PatchedFromArchiveDirective,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         let output_path = self.output_directory.join(to.into_path());
 
         if let Err(message) = validate_hash(output_path.clone(), hash.clone()).await {
@@ -53,7 +54,7 @@ impl PatchedFromArchiveHandler {
                     });
 
                 let mut wabbajack_file = self.wabbajack_file.blocking_lock();
-
+                #[tracing::instrument(skip(pb, source, delta, target), level = "INFO")]
                 fn perform_copy<S, D, T>(pb: ProgressBar, source: S, delta: D, target: T, expected_size: u64, expected_hash: String) -> Result<()>
                 where
                     S: Read + Seek,
@@ -83,6 +84,7 @@ impl PatchedFromArchiveHandler {
                 match source_file {
                     nested_archive_manager::HandleKind::Cached(file) => file
                         .inner
+                        .blocking_lock()
                         .1
                         .try_clone()
                         .context("cloning file")
@@ -99,10 +101,11 @@ impl PatchedFromArchiveHandler {
                     })
                 })
             })
+            .instrument(tracing::Span::current())
             .await
             .context("thread crashed")
             .and_then(identity)?;
         }
-        Ok(())
+        Ok(size)
     }
 }

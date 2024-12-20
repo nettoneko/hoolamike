@@ -25,7 +25,7 @@ impl InlineFileHandler {
             source_data_id,
             to,
         }: InlineFileDirective,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         let output_path = self.output_directory.join(to.into_path());
         if let Err(message) = validate_hash(output_path.clone(), hash.clone()).await {
             let wabbajack_file = self.wabbajack_file.clone();
@@ -57,6 +57,6 @@ impl InlineFileHandler {
             .context("thread crashed")
             .and_then(identity)?;
         }
-        Ok(())
+        Ok(size)
     }
 }

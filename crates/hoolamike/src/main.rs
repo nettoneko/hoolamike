@@ -175,7 +175,7 @@ async fn main() -> Result<()> {
                     .for_each(|(idx, reason)| eprintln!("{idx}. {reason:?}", idx = idx + 1));
                 anyhow::anyhow!("could not finish installation due to [{}] errors", errors.len())
             })
-            .map(|count| info!("successfully installed [{}] mods", count.len())),
+            .map(|count| println!("successfully installed [{}] mods", count.len())),
     }
     .with_context(|| {
         format!(

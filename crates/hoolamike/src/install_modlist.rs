@@ -2,7 +2,7 @@ use {
     crate::{
         config_file::{HoolamikeConfig, InstallationConfig},
         downloaders::WithArchiveDescriptor,
-        error::TotalResult,
+        error::{MultiErrorCollectExt, TotalResult},
         modlist_json::{Archive, Modlist},
         progress_bars::VALIDATE_TOTAL_PROGRESS_BAR,
         wabbajack_file::WabbajackFile,
@@ -11,7 +11,7 @@ use {
     anyhow::Context,
     directives::{DirectivesHandler, DirectivesHandlerConfig},
     downloads::Synchronizers,
-    futures::{FutureExt, TryFutureExt},
+    futures::{FutureExt, TryFutureExt, TryStreamExt},
     itertools::Itertools,
     std::{convert::identity, future::ready, sync::Arc},
     tap::prelude::*,
@@ -116,16 +116,18 @@ pub async fn install_modlist(
                 })
                 .map_ok(Arc::new)
                 .and_then(move |directives_handler| {
-                    directives_handler.handle_directives(directives.tap_mut(|directives| {
-                        if let Some(start_from_directive) = start_from_directive {
-                            tracing::warn!("runing only a single directive");
-                            *directives = directives
-                                .pipe(std::mem::take)
-                                .drain(..)
-                                .skip_while(|d| d.directive_hash() != start_from_directive)
-                                .collect_vec();
-                        }
-                    }))
+                    directives_handler
+                        .handle_directives(directives.tap_mut(|directives| {
+                            if let Some(start_from_directive) = start_from_directive {
+                                tracing::warn!("runing only a single directive");
+                                *directives = directives
+                                    .pipe(std::mem::take)
+                                    .drain(..)
+                                    .skip_while(|d| d.directive_hash() != start_from_directive)
+                                    .collect_vec();
+                            }
+                        }))
+                        .multi_error_collect()
                 })
             },
         )

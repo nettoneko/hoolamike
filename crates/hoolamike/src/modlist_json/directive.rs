@@ -34,7 +34,7 @@ pub struct CreateBSADirective {
 }
 
 pub use archive_hash_path::ArchiveHashPath;
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
 pub struct FromArchiveDirective {
@@ -79,7 +79,7 @@ pub struct InlineFileDirective {
     pub to: MaybeWindowsPath,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
 pub struct PatchedFromArchiveDirective {

@@ -139,7 +139,7 @@ impl<T: std::io::Read + Sync + 'static> T
 where
     Self: Sized + Sync + Send + 'static,
 {
-    async fn seek_with_temp_file(self, pb: ProgressBar) -> Result<Arc<WithPermit<(tempfile::NamedTempFile, File)>>> {
+    async fn seek_with_temp_file(self, pb: ProgressBar) -> Result<Arc<WithPermit<Mutex<(tempfile::NamedTempFile, File)>>>> {
         let reader = Arc::new(std::sync::Mutex::new(self));
         WithPermit::new_blocking(&OPEN_FILE_PERMITS, move || {
             tempfile::NamedTempFile::new()
@@ -168,7 +168,7 @@ where
                                     .and_then(|(mut a, mut b)| -> Result<_> {
                                         a.rewind()?;
                                         b.rewind()?;
-                                        Ok((a, b))
+                                        Ok(Mutex::new((a, b)))
                                     })
                             })
                         })

@@ -2,15 +2,29 @@ use {
     crate::{
         downloaders::WithArchiveDescriptor,
         error::TotalResult,
-        modlist_json::DirectiveKind,
+        install_modlist::download_cache::validate_hash,
+        modlist_json::{
+            directive::{
+                ArchiveHashPath,
+                CreateBSADirective,
+                FromArchiveDirective,
+                InlineFileDirective,
+                PatchedFromArchiveDirective,
+                RemappedInlineFileDirective,
+                TransformedTextureDirective,
+            },
+            DirectiveKind,
+        },
         progress_bars::{vertical_progress_bar, ProgressKind, PROGRESS_BAR},
+        utils::MaybeWindowsPath,
     },
     anyhow::{Context, Result},
-    futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt},
+    futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt},
     itertools::Itertools,
     nested_archive_manager::{max_open_files, NestedArchivesService},
     std::{
         collections::{BTreeMap, HashSet},
+        convert::identity,
         future::ready,
         ops::{Div, Mul},
         path::{Path, PathBuf},
@@ -19,7 +33,7 @@ use {
     },
     tap::prelude::*,
     tokio::sync::Mutex,
-    tracing::{debug, info, trace},
+    tracing::{debug, info, info_span, trace, Instrument},
 };
 
 pub(crate) fn create_file_all(path: &Path) -> Result<std::fs::File> {
@@ -43,7 +57,7 @@ pub mod create_bsa {
     pub struct CreateBSAHandler {}
 
     impl CreateBSAHandler {
-        pub fn handle(self, directive: CreateBSADirective) -> Result<()> {
+        pub async fn handle(self, directive: CreateBSADirective) -> Result<u64> {
             anyhow::bail!("[CreateBSADirective] {directive:#?} is not implemented")
         }
     }
@@ -64,7 +78,7 @@ pub mod remapped_inline_file {
     pub struct RemappedInlineFileHandler {}
 
     impl RemappedInlineFileHandler {
-        pub fn handle(self, directive: RemappedInlineFileDirective) -> Result<()> {
+        pub async fn handle(self, directive: RemappedInlineFileDirective) -> Result<u64> {
             anyhow::bail!("[RemappedInlineFileDirective ] {directive:#?} is not implemented")
         }
     }
@@ -77,7 +91,7 @@ pub mod transformed_texture {
     pub struct TransformedTextureHandler {}
 
     impl TransformedTextureHandler {
-        pub fn handle(self, directive: TransformedTextureDirective) -> Result<()> {
+        pub async fn handle(self, directive: TransformedTextureDirective) -> Result<u64> {
             anyhow::bail!("[TransformedTextureDirective ] {directive:#?} is not implemented")
         }
     }
@@ -102,6 +116,7 @@ pub struct DirectivesHandler {
     pub patched_from_archive: patched_from_archive::PatchedFromArchiveHandler,
     pub remapped_inline_file: remapped_inline_file::RemappedInlineFileHandler,
     pub transformed_texture: transformed_texture::TransformedTextureHandler,
+    pub nested_archive_manager: Arc<Mutex<nested_archive_manager::NestedArchivesService>>,
 }
 
 impl DirectiveKind {
@@ -127,6 +142,7 @@ pub struct DirectivesHandlerConfig {
 }
 
 pub mod nested_archive_manager;
+pub mod nested_archive_manager_v2;
 
 fn concurrency() -> usize {
     #[cfg(not(debug_assertions))]
@@ -139,6 +155,58 @@ fn concurrency() -> usize {
     {
         1
     }
+}
+
+#[extension_traits::extension(pub trait StreamTryFlatMapExt)]
+impl<'iter, T, E, I> I
+where
+    E: 'iter,
+    T: 'iter,
+    I: Stream<Item = Result<T, E>> + 'iter,
+{
+    fn try_flat_map<U, NewStream, F>(self, try_flat_map: F) -> impl Stream<Item = Result<U, E>> + 'iter
+    where
+        U: 'iter,
+        NewStream: Stream<Item = Result<U, E>> + 'iter,
+        F: FnOnce(T) -> NewStream + 'iter + Clone,
+    {
+        self.flat_map(move |e| match e {
+            Ok(value) => value.pipe(try_flat_map.clone()).boxed_local(),
+            Err(e) => e
+                .pipe(Err)
+                .pipe(ready)
+                .pipe(futures::stream::once)
+                .boxed_local(),
+        })
+    }
+}
+
+const EXTENSION_HASH_WHITELIST: &[&str] = &[
+    // hashes won't match because headers are also hashed in wabbajack
+    "dds",
+];
+
+fn is_whitelisted_by_path(path: &Path) -> bool {
+    matches!(
+        path
+            .extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .as_deref(),
+        Some(ext) if EXTENSION_HASH_WHITELIST.contains(&ext)
+    )
+}
+
+pub async fn validate_hash_with_overrides(path: PathBuf, hash: String, size: u64) -> Result<PathBuf> {
+    match is_whitelisted_by_path(&path) {
+        true => super::download_cache::validate_file_size(path, size).await,
+        false => validate_hash(path, hash).await,
+    }
+}
+macro_rules! cloned {
+    ($($es:ident),+) => {$(
+        #[allow(unused_mut)]
+        let mut $es = $es.clone();
+    )*}
 }
 
 impl DirectivesHandler {
@@ -172,25 +240,16 @@ impl DirectivesHandler {
             patched_from_archive: patched_from_archive::PatchedFromArchiveHandler {
                 output_directory: output_directory.clone(),
                 wabbajack_file,
-                nested_archive_service,
+                nested_archive_service: nested_archive_service.clone(),
             },
             remapped_inline_file: remapped_inline_file::RemappedInlineFileHandler {},
             transformed_texture: transformed_texture::TransformedTextureHandler {},
+            nested_archive_manager: nested_archive_service,
         }
     }
-    #[tracing::instrument(skip(self))]
-    pub async fn handle(self: Arc<Self>, directive: Directive) -> Result<()> {
-        match directive {
-            Directive::CreateBSA(directive) => self.create_bsa.clone().handle(directive),
-            Directive::FromArchive(directive) => self.from_archive.clone().handle(directive).await,
-            Directive::InlineFile(directive) => self.inline_file.clone().handle(directive).await,
-            Directive::PatchedFromArchive(directive) => self.patched_from_archive.clone().handle(directive).await,
-            Directive::RemappedInlineFile(directive) => self.remapped_inline_file.clone().handle(directive),
-            Directive::TransformedTexture(directive) => self.transformed_texture.clone().handle(directive),
-        }
-    }
+
     #[allow(clippy::unnecessary_literal_unwrap)]
-    pub async fn handle_directives(self: Arc<Self>, directives: Vec<Directive>) -> TotalResult<()> {
+    pub fn handle_directives(self: Arc<Self>, directives: Vec<Directive>) -> impl Stream<Item = Result<()>> {
         let pb = vertical_progress_bar(
             directives.iter().map(directive_size).sum(),
             ProgressKind::InstallDirectives,
@@ -213,61 +272,202 @@ impl DirectivesHandler {
             }
         }
 
-        // let whitelist_failed_directives = self
-        //     .config
-        //     .failed_directives_whitelist
-        //     .clone()
-        //     .pipe(Arc::new);
+        let manager = self.clone();
+        let nested_archive_manager = self.nested_archive_manager.clone();
+        let check_completed = {
+            let output_directory = self.from_archive.output_directory.clone();
+            move |directive: &Directive| {
+                let kind = DirectiveKind::from(directive);
+                match directive {
+                    Directive::CreateBSA(CreateBSADirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
+                    Directive::FromArchive(FromArchiveDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
+                    Directive::InlineFile(InlineFileDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
+                    Directive::PatchedFromArchive(PatchedFromArchiveDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
+                    Directive::RemappedInlineFile(RemappedInlineFileDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
+                    Directive::TransformedTexture(TransformedTextureDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
+                }
+                .pipe(|(hash, size, to)| (hash, size, output_directory.join(to.into_path())))
+                .pipe(move |(hash, size, to)| {
+                    validate_hash_with_overrides(to.clone(), hash, *size).map(move |res| {
+                        res.tap_err(|reason| tracing::warn!(%kind, ?reason, ?to, "directive will be recomputed"))
+                            .is_err()
+                    })
+                })
+            }
+        };
         directives
-            .into_iter()
-            .collect_vec()
-            .tap_mut(|directives| {
-                // directives.shuffle(&mut rand::thread_rng());
-                directives.sort_unstable_by_key(|directive| DirectiveKind::from(directive).priority());
-            })
             .pipe(futures::stream::iter)
-            .map(move |directive| {
-                let directive_hash = directive.directive_hash();
-                let directive_size = directive_size(&directive);
-                let directive_debug = format!("{directive:#?}").pipe(Arc::new);
-                self.clone()
-                    .handle(directive)
-                    .map({
-                        let directive_debug = directive_debug.clone();
-                        let directive_hash = directive_hash.clone();
-                        move |r| {
-                            r.with_context(|| format!("when handling directive: {directive_debug}"))
-                                .with_context(|| format!("directive with hash [{directive_hash}] failed, provide it in support ticket"))
+            .map(move |directive| check_completed(&directive).map(move |validated| validated.then_some(directive)))
+            .buffer_unordered(concurrency())
+            .filter_map(ready)
+            .collect::<Vec<_>>()
+            .then(|directives| {
+                (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new())
+                    .pipe(
+                        |(mut create_bsa, mut from_archive, mut inline_file, mut patched_from_archive, mut remapped_inline_file, mut transformed_texture)| {
+                            directives
+                                .into_iter()
+                                .for_each(|directive| match directive {
+                                    Directive::CreateBSA(create_bsadirective) => create_bsa.push(create_bsadirective),
+                                    Directive::FromArchive(from_archive_directive) => from_archive.push(from_archive_directive),
+                                    Directive::InlineFile(inline_file_directive) => inline_file.push(inline_file_directive),
+                                    Directive::PatchedFromArchive(patched_from_archive_directive) => patched_from_archive.push(patched_from_archive_directive),
+                                    Directive::RemappedInlineFile(remapped_inline_file_directive) => remapped_inline_file.push(remapped_inline_file_directive),
+                                    Directive::TransformedTexture(transformed_texture_directive) => transformed_texture.push(transformed_texture_directive),
+                                })
+                                .pipe(|_| {
+                                    (
+                                        create_bsa,
+                                        from_archive,
+                                        inline_file,
+                                        patched_from_archive,
+                                        remapped_inline_file,
+                                        transformed_texture,
+                                    )
+                                })
+                        },
+                    )
+                    .pipe(ready)
+            })
+            .into_stream()
+            .flat_map(
+                move |(create_bsa, from_archive, inline_file, patched_from_archive, remapped_inline_file, transformed_texture)| {
+                    #[derive(derive_more::From, Clone)]
+                    enum ArchivePathDirective {
+                        FromArchive(FromArchiveDirective),
+                        PatchedFromArchive(PatchedFromArchiveDirective),
+                    }
+
+                    impl ArchivePathDirective {
+                        fn archive_path(&self) -> &ArchiveHashPath {
+                            match self {
+                                ArchivePathDirective::FromArchive(f) => &f.archive_hash_path,
+                                ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => &patched_from_archive_directive.archive_hash_path,
+                            }
                         }
-                    })
-                    .inspect_ok({
-                        let directive_debug = directive_debug.clone();
-                        move |_handled| trace!("handled directive {directive_debug}")
-                    })
-                    // .map({
-                    //     let whitelist_failed_directives = whitelist_failed_directives.clone();
-                    //     let directive_debug = directive_debug.clone();
-                    //     move |res| match res {
-                    //         Err(e) if whitelist_failed_directives.contains(&directive_hash) => {
-                    //             tracing::warn!("directive\n[{directive_debug}]\nfailed with\n{e:?}\nbut is whitelisted\n\n");
-                    //             Ok(())
-                    //         }
-                    //         other => other,
-                    //     }
-                    // })
-                    .map_ok(move |_| directive_size)
-            })
-            .map(Ok)
-            .try_buffer_unordered(concurrency())
-            .try_for_each(|size| {
-                pb.inc(size);
-                ready(Ok(()))
-            })
-            .inspect_err(|message| tracing::error!(?message))
-            .await
-            .pipe(|r| match r {
-                Ok(_) => Ok(vec![()]),
-                Err(e) => Err(vec![e]),
-            })
+                    }
+
+                    futures::stream::empty()
+                        .chain(
+                            inline_file
+                                .pipe(futures::stream::iter)
+                                .map({
+                                    cloned![manager];
+                                    move |directive| manager.clone().inline_file.clone().handle(directive)
+                                })
+                                .buffered(concurrency()),
+                        )
+                        .chain(
+                            std::iter::empty()
+                                .chain(
+                                    patched_from_archive
+                                        .into_iter()
+                                        .map(ArchivePathDirective::from),
+                                )
+                                .chain(from_archive.into_iter().map(ArchivePathDirective::from))
+                                .sorted_unstable_by_key(|a| a.archive_path().clone())
+                                .chunk_by(|a| a.archive_path().clone().parent().map(|(path, _)| path))
+                                .into_iter()
+                                .map(|(parent_archive, chunk)| (parent_archive, chunk.into_iter().collect_vec()))
+                                .collect_vec()
+                                .pipe(futures::stream::iter)
+                                .map({
+                                    cloned![nested_archive_manager];
+                                    cloned![manager];
+                                    move |(parent_archive, chunk)| {
+                                        let preheat = {
+                                            cloned![parent_archive];
+                                            cloned![nested_archive_manager];
+                                            move || {
+                                                match parent_archive.clone() {
+                                                    Some(parent) => {
+                                                        cloned![nested_archive_manager];
+                                                        async move { nested_archive_manager.lock().await.preheat(parent).await }
+                                                    }
+                                                    .boxed(),
+                                                    None => ready(Ok(())).boxed(),
+                                                }
+                                                .instrument(info_span!("preheating_archive", ?parent_archive))
+                                            }
+                                        };
+                                        let cleanup = {
+                                            cloned![parent_archive];
+                                            cloned![nested_archive_manager];
+                                            move || {
+                                                match parent_archive.clone() {
+                                                    Some(parent) => {
+                                                        cloned![nested_archive_manager];
+                                                        async move { nested_archive_manager.lock().await.cleanup(parent).pipe(Ok) }
+                                                    }
+                                                    .boxed(),
+                                                    None => ready(Ok(())).boxed(),
+                                                }
+                                                .instrument(info_span!("cleaning_up", ?parent_archive))
+                                            }
+                                        };
+                                        tokio::task::spawn({
+                                            cloned![manager];
+                                            async move {
+                                                preheat()
+                                                    .into_stream()
+                                                    .try_flat_map({
+                                                        cloned![manager];
+                                                        move |_| {
+                                                            chunk
+                                                                .clone()
+                                                                .pipe(futures::stream::iter)
+                                                                .map(move |directive| match directive {
+                                                                    ArchivePathDirective::FromArchive(from_archive) => {
+                                                                        manager.from_archive.clone().handle(from_archive).boxed()
+                                                                    }
+                                                                    ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => manager
+                                                                        .patched_from_archive
+                                                                        .clone()
+                                                                        .handle(patched_from_archive_directive)
+                                                                        .boxed(),
+                                                                })
+                                                                .buffer_unordered(concurrency().div(4).max(1))
+                                                        }
+                                                    })
+                                                    .chain(cleanup().map_ok(|_| 0).into_stream())
+                                                    .try_fold(0, |acc, next| ready(Ok(acc + next)))
+                                                    .await
+                                            }
+                                        })
+                                        .map(|res| res.context("task crashed").and_then(identity))
+                                    }
+                                })
+                                .buffer_unordered(4.min(concurrency())),
+                        )
+                        .chain(remapped_inline_file.pipe(futures::stream::iter).then({
+                            cloned![manager];
+                            move |remapped_inline_file| {
+                                manager
+                                    .remapped_inline_file
+                                    .clone()
+                                    .handle(remapped_inline_file)
+                            }
+                        }))
+                        .chain(create_bsa.pipe(futures::stream::iter).then({
+                            cloned![manager];
+                            move |create_bsa| manager.create_bsa.clone().handle(create_bsa)
+                        }))
+                        .chain(transformed_texture.pipe(futures::stream::iter).then({
+                            cloned![manager];
+                            move |transformed_texture| {
+                                manager
+                                    .transformed_texture
+                                    .clone()
+                                    .handle(transformed_texture)
+                            }
+                        }))
+                        .map_ok({
+                            cloned![pb];
+                            move |size| {
+                                pb.inc(size);
+                            }
+                        })
+                },
+            )
     }
 }

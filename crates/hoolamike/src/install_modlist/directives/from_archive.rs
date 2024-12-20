@@ -13,6 +13,7 @@ use {
         path::Path,
     },
     tokio::sync::Mutex,
+    tracing::{info_span, Instrument},
 };
 
 #[derive(Clone, Debug)]
@@ -44,7 +45,7 @@ async fn validate_hash_with_overrides(path: PathBuf, hash: String, size: u64) ->
 }
 
 impl FromArchiveHandler {
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), level = "INFO")]
     pub async fn handle(
         self,
         FromArchiveDirective {
@@ -53,15 +54,17 @@ impl FromArchiveHandler {
             to,
             archive_hash_path,
         }: FromArchiveDirective,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         let output_path = self.output_directory.join(to.into_path());
 
         if let Err(message) = validate_hash_with_overrides(output_path.clone(), hash.clone(), size).await {
             let source_file = self
                 .nested_archive_service
                 .lock()
+                .instrument(info_span!("obtaining_archive_service_lock"))
                 .await
                 .get(archive_hash_path.clone())
+                .instrument(info_span!("obtaining_nested_archive", ?archive_hash_path))
                 .await
                 .context("could not get a handle to archive")?;
 
@@ -72,29 +75,32 @@ impl FromArchiveHandler {
                         pb.set_message(output_path.display().to_string());
                     });
                 let perform_copy = move |from: &mut dyn Read, to: &mut dyn Write, target_path: PathBuf| {
-                    let mut writer = to;
-                    let mut reader: Box<dyn Read> = match is_whitelisted_by_path(&target_path) {
-                        true => pb.wrap_read(from).and_validate_size(size).pipe(Box::new),
-                        false => pb
-                            .wrap_read(from)
-                            .and_validate_size(size)
-                            .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
-                            .pipe(Box::new),
-                    };
-                    std::io::copy(
-                        &mut reader,
-                        // WARN: hashes are not gonna match for bsa stuff because we write headers differentlys
-                        // .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on")),
-                        &mut writer,
-                    )
-                    .context("copying file from archive")
-                    .and_then(|_| writer.flush().context("flushing write"))
-                    .map(|_| ())
+                    info_span!("perform_copy").in_scope(|| {
+                        let mut writer = to;
+                        let mut reader: Box<dyn Read> = match is_whitelisted_by_path(&target_path) {
+                            true => pb.wrap_read(from).and_validate_size(size).pipe(Box::new),
+                            false => pb
+                                .wrap_read(from)
+                                .and_validate_size(size)
+                                .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
+                                .pipe(Box::new),
+                        };
+                        std::io::copy(
+                            &mut reader,
+                            // WARN: hashes are not gonna match for bsa stuff because we write headers differentlys
+                            // .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on")),
+                            &mut writer,
+                        )
+                        .context("copying file from archive")
+                        .and_then(|_| writer.flush().context("flushing write"))
+                        .map(|_| ())
+                    })
                 };
 
                 match source_file {
                     nested_archive_manager::HandleKind::Cached(file) => file
                         .inner
+                        .blocking_lock()
                         .1
                         .try_clone()
                         .context("cloning file")
@@ -112,10 +118,11 @@ impl FromArchiveHandler {
                 })?;
                 Ok(())
             })
+            .instrument(tracing::Span::current())
             .await
             .context("thread crashed")
             .and_then(identity)?;
         }
-        Ok(())
+        Ok(size)
     }
 }

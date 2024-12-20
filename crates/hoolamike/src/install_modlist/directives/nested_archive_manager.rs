@@ -10,6 +10,7 @@ use {
     futures::{FutureExt, TryFutureExt},
     indexmap::IndexMap,
     indicatif::ProgressBar,
+    itertools::Itertools,
     once_cell::sync::Lazy,
     std::{
         collections::BTreeMap,
@@ -21,7 +22,11 @@ use {
     },
     tap::prelude::*,
     tempfile::{NamedTempFile, SpooledTempFile},
-    tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore, SemaphorePermit},
+    tokio::{
+        sync::{Mutex, OwnedSemaphorePermit, Semaphore, SemaphorePermit},
+        time::Instant,
+    },
+    tracing::{info_span, instrument, Instrument},
 };
 
 impl ArchiveHashPath {
@@ -39,7 +44,7 @@ pub struct NestedArchivesService {
     pub download_summary: DownloadSummary,
     pub max_size: usize,
     #[derivative(Debug = "ignore")]
-    pub cache: IndexMap<ArchiveHashPath, CachedArchiveFile>,
+    pub cache: IndexMap<ArchiveHashPath, (CachedArchiveFile, tokio::time::Instant)>,
 }
 
 impl NestedArchivesService {
@@ -53,7 +58,7 @@ impl NestedArchivesService {
 }
 
 pub fn max_open_files() -> usize {
-    concurrency() * 4
+    concurrency() * 20
 }
 pub(crate) static OPEN_FILE_PERMITS: Lazy<Arc<Semaphore>> = Lazy::new(|| Arc::new(Semaphore::new(max_open_files())));
 
@@ -91,14 +96,18 @@ where
     }
 }
 
-pub type CachedArchiveFile = Arc<WithPermit<(NamedTempFile, std::fs::File)>>;
+pub type CachedArchiveFile = Arc<WithPermit<Mutex<(NamedTempFile, std::fs::File)>>>;
 pub enum HandleKind {
     Cached(CachedArchiveFile),
     JustHashPath(PathBuf),
 }
 
+fn ancestors(archive_hash_path: ArchiveHashPath) -> impl Iterator<Item = ArchiveHashPath> {
+    std::iter::successors(Some(archive_hash_path), |p| p.clone().parent().map(|(parent, _)| parent))
+}
+
 impl NestedArchivesService {
-    #[tracing::instrument(skip_all)]
+    #[instrument(skip_all)]
     async fn init(&mut self, archive_hash_path: ArchiveHashPath) -> Result<(ArchiveHashPath, HandleKind)> {
         let pb = vertical_progress_bar(0, ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)
             .attach_to(&super::PROGRESS_BAR)
@@ -109,6 +118,7 @@ impl NestedArchivesService {
                         .expect("must serialize"),
                 );
             });
+        #[instrument(skip(pb, file), level = "INFO")]
         async fn get_handle(pb: ProgressBar, file: std::fs::File, path: PathBuf, archive_path: PathBuf) -> Result<CachedArchiveFile> {
             tokio::task::spawn_blocking(move || {
                 ArchiveHandle::guess(file, &path)
@@ -123,16 +133,34 @@ impl NestedArchivesService {
         match archive_hash_path.clone().parent() {
             Some((parent, archive_path)) => match self.get(parent).boxed_local().await? {
                 HandleKind::Cached(cached) => {
-                    cached
+                    let file = cached
+                        .clone()
                         .inner
-                        .1
-                        .try_clone()
-                        .context("cloning file handle")
-                        .and_then(|mut cloned| cloned.rewind().context("rewinding file").map(|_| cloned))
-                        .pipe(ready)
-                        .and_then(|file| get_handle(pb, file, cached.inner.0.path().to_owned(), archive_path.into_path()))
-                        .map_ok(HandleKind::Cached)
+                        .lock()
+                        .instrument(info_span!("waiting_for_cached_file_entry_lock_to_roll_it_back"))
                         .await
+                        .1
+                        .pipe_ref_mut(|file| {
+                            file.rewind()
+                                .context("rewinding file")
+                                .and_then(|_| file.try_clone().context("cloning file handle"))
+                        })?;
+
+                    get_handle(
+                        pb,
+                        file,
+                        cached
+                            .inner
+                            .lock()
+                            .instrument(info_span!("waiting_for_cached_file_entry_lock_to_clone_it"))
+                            .await
+                            .0
+                            .path()
+                            .to_owned(),
+                        archive_path.into_path(),
+                    )
+                    .await
+                    .map(HandleKind::Cached)
                 }
                 HandleKind::JustHashPath(path_buf) => {
                     std::fs::OpenOptions::new()
@@ -154,27 +182,57 @@ impl NestedArchivesService {
         }
         .map(|handle| (archive_hash_path, handle))
     }
-    #[tracing::instrument(skip(self))]
+    #[instrument(skip(self), level = "INFO")]
     pub async fn get(&mut self, nested_archive: ArchiveHashPath) -> Result<HandleKind> {
-        match self.cache.get(&nested_archive) {
-            Some(exists) => {
+        match self.cache.get(&nested_archive).cloned() {
+            Some((exists, _last_accessed)) => {
                 // WARN: this is dirty but it prevents small files from piling up
-                exists.clone().pipe(HandleKind::Cached).pipe(Ok)
+                let exists = exists.pipe(HandleKind::Cached);
+                ancestors(nested_archive).for_each(|ancestor| {
+                    let now = Instant::now();
+                    if let Some((_, accessed)) = self.cache.get_mut(&ancestor) {
+                        *accessed = now;
+                    }
+                });
+                Ok(exists)
             }
             None => {
                 if self.cache.len() == self.max_size {
                     tracing::info!("dropping cached archive");
-                    self.cache.shift_remove_index(0);
+                    if let Some(last_accessed_chunk) = self
+                        .cache
+                        .iter()
+                        .sorted_unstable_by_key(|(_key, (_, accessed))| accessed)
+                        .chunk_by(|(_, (_, accessed))| accessed)
+                        .into_iter()
+                        .next()
+                        .map(|(_, k)| k.map(|(key, _)| key.clone()).collect_vec())
+                        .into_iter()
+                        .next()
+                    {
+                        last_accessed_chunk.into_iter().for_each(|key| {
+                            self.cache.shift_remove(&key);
+                        })
+                    }
                 }
                 let (hash_path, handle) = self
                     .init(nested_archive)
                     .await
                     .context("initializing a new archive handle")?;
                 if let HandleKind::Cached(cached) = &handle {
-                    self.cache.insert(hash_path, cached.clone());
+                    self.cache
+                        .insert(hash_path, (cached.clone(), Instant::now()));
                 }
                 Ok(handle)
             }
         }
+    }
+    pub async fn preheat(&mut self, archive_hash_path: ArchiveHashPath) -> Result<()> {
+        self.get(archive_hash_path).await.map(|_| ())
+    }
+    pub fn cleanup(&mut self, archive_hash_path: ArchiveHashPath) {
+        ancestors(archive_hash_path).for_each(|ancestor| {
+            self.cache.shift_remove(&ancestor);
+        })
     }
 }
