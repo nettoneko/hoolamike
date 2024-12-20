@@ -37,7 +37,7 @@ fn is_whitelisted_by_path(path: &Path) -> bool {
     )
 }
 
-async fn validate_hash_with_overrides(path: PathBuf, hash: String, size: u64) -> Result<PathBuf> {
+pub async fn validate_hash_with_overrides(path: PathBuf, hash: String, size: u64) -> Result<PathBuf> {
     match is_whitelisted_by_path(&path) {
         true => validate_file_size(path, size).await,
         false => validate_hash(path, hash).await,

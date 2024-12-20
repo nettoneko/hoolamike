@@ -49,18 +49,7 @@ pub(crate) fn create_file_all(path: &Path) -> Result<std::fs::File> {
         })
 }
 
-pub mod create_bsa {
-    use {super::*, crate::modlist_json::directive::CreateBSADirective};
-
-    #[derive(Clone, Debug)]
-    pub struct CreateBSAHandler {}
-
-    impl CreateBSAHandler {
-        pub async fn handle(self, directive: CreateBSADirective) -> Result<u64> {
-            anyhow::bail!("[CreateBSADirective] {directive:#?} is not implemented")
-        }
-    }
-}
+pub mod create_bsa;
 
 pub type DownloadSummary = Arc<BTreeMap<String, WithArchiveDescriptor<PathBuf>>>;
 
@@ -433,6 +422,10 @@ impl DirectivesHandler {
                                 })
                                 .buffer_unordered(4.min(concurrency())),
                         )
+                        .chain(create_bsa.pipe(futures::stream::iter).then({
+                            cloned![manager];
+                            move |create_bsa| manager.create_bsa.clone().handle(create_bsa)
+                        }))
                         .chain(remapped_inline_file.pipe(futures::stream::iter).then({
                             cloned![manager];
                             move |remapped_inline_file| {
@@ -441,10 +434,6 @@ impl DirectivesHandler {
                                     .clone()
                                     .handle(remapped_inline_file)
                             }
-                        }))
-                        .chain(create_bsa.pipe(futures::stream::iter).then({
-                            cloned![manager];
-                            move |create_bsa| manager.create_bsa.clone().handle(create_bsa)
                         }))
                         .chain(transformed_texture.pipe(futures::stream::iter).then({
                             cloned![manager];
