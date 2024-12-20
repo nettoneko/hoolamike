@@ -507,16 +507,16 @@ pub mod parsing_helpers {
         }
     }
 
-    // #[allow(unexpected_cfgs)]
-    // mod ad_hoc_test {
-    //     // #[cfg(ignore)]
-    //     #[test_log::test]
-    //     fn test_wasteland_reborn() -> anyhow::Result<()> {
-    //         use super::*;
+    #[allow(unexpected_cfgs)]
+    mod ad_hoc_test {
+        // #[cfg(ignore)]
+        #[test_log::test]
+        fn test_wasteland_reborn() -> anyhow::Result<()> {
+            use super::*;
 
-    //         include_str!("../../../../wasteland-reborn/test/modlist").pipe(validate_modlist_file)
-    //     }
-    // }
+            include_str!("../../../../wasteland-reborn/test/modlist").pipe(validate_modlist_file)
+        }
+    }
 
     pub fn validate_modlist_file(input: &str) -> Result<()> {
         input

@@ -24,7 +24,6 @@ use {
     nested_archive_manager::{max_open_files, NestedArchivesService},
     std::{
         collections::{BTreeMap, HashSet},
-        convert::identity,
         future::ready,
         ops::{Div, Mul},
         path::{Path, PathBuf},
@@ -384,8 +383,8 @@ impl DirectivesHandler {
                                                         cloned![nested_archive_manager];
                                                         async move { nested_archive_manager.lock().await.preheat(parent).await }
                                                     }
-                                                    .boxed(),
-                                                    None => ready(Ok(())).boxed(),
+                                                    .boxed_local(),
+                                                    None => ready(Ok(())).boxed_local(),
                                                 }
                                                 .instrument(info_span!("preheating_archive", ?parent_archive))
                                             }
@@ -399,42 +398,37 @@ impl DirectivesHandler {
                                                         cloned![nested_archive_manager];
                                                         async move { nested_archive_manager.lock().await.cleanup(parent).pipe(Ok) }
                                                     }
-                                                    .boxed(),
-                                                    None => ready(Ok(())).boxed(),
+                                                    .boxed_local(),
+                                                    None => ready(Ok(())).boxed_local(),
                                                 }
                                                 .instrument(info_span!("cleaning_up", ?parent_archive))
                                             }
                                         };
-                                        tokio::task::spawn({
-                                            cloned![manager];
-                                            async move {
-                                                preheat()
-                                                    .into_stream()
-                                                    .try_flat_map({
-                                                        cloned![manager];
-                                                        move |_| {
-                                                            chunk
+                                        preheat()
+                                            .into_stream()
+                                            .try_flat_map({
+                                                cloned![manager];
+                                                move |_| {
+                                                    chunk
+                                                        .clone()
+                                                        .pipe(futures::stream::iter)
+                                                        .map(move |directive| match directive {
+                                                            ArchivePathDirective::FromArchive(from_archive) => manager
+                                                                .from_archive
                                                                 .clone()
-                                                                .pipe(futures::stream::iter)
-                                                                .map(move |directive| match directive {
-                                                                    ArchivePathDirective::FromArchive(from_archive) => {
-                                                                        manager.from_archive.clone().handle(from_archive).boxed()
-                                                                    }
-                                                                    ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => manager
-                                                                        .patched_from_archive
-                                                                        .clone()
-                                                                        .handle(patched_from_archive_directive)
-                                                                        .boxed(),
-                                                                })
-                                                                .buffer_unordered(concurrency().div(4).max(1))
-                                                        }
-                                                    })
-                                                    .chain(cleanup().map_ok(|_| 0).into_stream())
-                                                    .try_fold(0, |acc, next| ready(Ok(acc + next)))
-                                                    .await
-                                            }
-                                        })
-                                        .map(|res| res.context("task crashed").and_then(identity))
+                                                                .handle(from_archive)
+                                                                .boxed_local(),
+                                                            ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => manager
+                                                                .patched_from_archive
+                                                                .clone()
+                                                                .handle(patched_from_archive_directive)
+                                                                .boxed_local(),
+                                                        })
+                                                        .buffer_unordered(concurrency().div(4).max(1))
+                                                }
+                                            })
+                                            .chain(cleanup().map_ok(|_| 0).into_stream())
+                                            .try_fold(0, |acc, next| ready(Ok(acc + next)))
                                     }
                                 })
                                 .buffer_unordered(4.min(concurrency())),
