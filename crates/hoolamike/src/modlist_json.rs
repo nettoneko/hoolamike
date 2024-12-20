@@ -339,10 +339,39 @@ pub struct ImageState {
     pub width: u64,
 }
 
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Serialize, Deserialize, enum_kinds::EnumKind)]
+#[serde(tag = "$type")]
+#[serde(deny_unknown_fields)]
+#[enum_kind(DirectiveStateKind, derive(Serialize, Deserialize, PartialOrd, Ord, derive_more::Display,))]
+pub enum DirectiveState {
+    #[serde(rename = "BA2State, Compression.BSA")]
+    #[serde(rename_all = "PascalCase")]
+    CompressionBsa {
+        /// has_name_table: bool
+        /// Description: Indicates if the file contains a name table.
+        /// Usage: Important for processing certain file formats.
+        has_name_table: bool,
+        /// header_magic: String
+        /// Description: Magic number or signature in the file header.
+        /// Usage: Verify file format before processing.
+        header_magic: String,
+        #[serde(rename = "Type")]
+        /// kind: u64 (renamed from Type)
+        /// Description: Numeric code representing the directive's kind.
+        /// Usage: May influence processing logic.
+        kind: u64,
+        /// version: u64
+        /// Description: Version number of the directive or file format.
+        /// Usage: Ensure compatibility with processing routines.
+        version: u64,
+    },
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
-pub struct DirectiveState {
+pub struct UnknownDirectiveState {
     #[serde(rename = "$type")]
     /// directive_state_type: String (renamed from $type)
     /// Description: Type of directive state.
@@ -367,90 +396,193 @@ pub struct DirectiveState {
     pub version: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Serialize, Deserialize, enum_kinds::EnumKind)]
+#[serde(tag = "$type")]
 #[serde(deny_unknown_fields)]
-#[serde(rename_all = "PascalCase")]
-pub struct FileState {
-    #[serde(rename = "$type")]
-    /// file_state_type: String (renamed from $type)
-    /// Description: Specifies the file's processing requirements.
-    /// Usage: Handle the file appropriately based on its type.
-    pub file_state_type: String,
-    /// align: Option<u64>
-    /// Description: Alignment requirement in bytes.
-    /// Usage: Ensure correct alignment during file operations.
-    pub align: Option<u64>,
-    /// compressed: Option<bool>
-    /// Description: Indicates if the file is compressed.
-    /// Usage: Decompress if necessary during installation.
-    pub compressed: Option<bool>,
-    /// dir_hash: u64
-    /// Description: Hash of the directory path.
-    /// Usage: Verify file locations or detect conflicts.
-    pub dir_hash: u64,
-    /// chunk_hdr_len: Option<u64>
-    /// Description: Length of the chunk header.
-    /// Usage: Needed when processing files split into chunks.
-    pub chunk_hdr_len: Option<u64>,
-    /// chunks: Option<Vec<FileStateChunk>>
-    /// Description: List of chunks if the file is divided.
-    /// Usage: Reassemble or process each chunk correctly.
-    pub chunks: Option<Vec<FileStateChunk>>,
-    /// num_mips: Option<u64>
-    /// Description: Number of mipmap levels in a texture.
-    /// Usage: Important for texture processing.
-    pub num_mips: Option<u64>,
-    /// pixel_format: Option<u64>
-    /// Description: Numeric code for the image's pixel format.
-    /// Usage: Handle image data accurately.
-    pub pixel_format: Option<u64>,
-    /// tile_mode: Option<u64>
-    /// Description: Tiling mode used in the texture.
-    /// Usage: For rendering or processing textures.
-    pub tile_mode: Option<u64>,
-    #[serde(rename = "Unk8")]
-    /// unk_8: Option<u8> (renamed from Unk8)
-    /// Description: An unknown or unused field.
-    /// Usage: May be ignored unless specified.
-    pub unk_8: Option<u8>,
-    /// extension: String
-    /// Description: File extension (e.g., "dds", "nif").
-    /// Usage: Determine how to process the file.
-    pub extension: String,
-    /// height: Option<u64>
-    /// Description: Height of an image file.
-    /// Usage: For image processing.
-    pub height: Option<u64>,
-    /// width: Option<u64>
-    /// Description: Width of an image file.
-    /// Usage: For image processing.
-    pub width: Option<u64>,
-    /// is_cube_map: Option<u8>
-    /// Description: Indicates if the texture is a cube map.
-    /// Usage: Special handling for cube maps in rendering.
-    pub is_cube_map: Option<u8>,
-    /// flags: Option<u64>
-    /// Description: Additional flags for file properties.
-    /// Usage: Influence processing based on flag values.
-    pub flags: Option<u64>,
-    /// index: usize
-    /// Description: Index of the file in a collection.
-    /// Usage: Reference files in order.
-    pub index: usize,
-    /// name_hash: u64
-    /// Description: Hash of the file name.
-    /// Usage: Quickly compare or locate files.
-    pub name_hash: u64,
-    /// path: PathBuf
-    /// Description: File system path to the file.
-    /// Usage: Access the file during installation.
-    pub path: PathBuf,
+#[enum_kind(FileStateKind, derive(Serialize, Deserialize, PartialOrd, Ord, derive_more::Display,))]
+pub enum FileState {
+    #[serde(rename_all = "PascalCase")]
+    BA2File {
+        /// align: u64
+        /// Description: Alignment requirement in bytes.
+        /// Usage: Ensure correct alignment during file operations.
+        align: u64,
+        /// compressed: Option<bool>
+        /// Description: Indicates if the file is compressed.
+        /// Usage: Decompress if necessary during installation.
+        compressed: bool,
+        /// dir_hash: u64
+        /// Description: Hash of the directory path.
+        /// Usage: Verify file locations or detect conflicts.
+        dir_hash: u64,
+        /// extension: String
+        /// Description: File extension (e.g., "dds", "nif").
+        /// Usage: Determine how to process the file.
+        extension: String,
+        /// flags: u64
+        /// Description: Additional flags for file properties.
+        /// Usage: Influence processing based on flag values.
+        flags: u64,
+        /// index: usize
+        /// Description: Index of the file in a collection.
+        /// Usage: Reference files in order.
+        index: usize,
+        /// name_hash: u64
+        /// Description: Hash of the file name.
+        /// Usage: Quickly compare or locate files.
+        name_hash: u64,
+        /// path: PathBuf
+        /// Description: File system path to the file.
+        /// Usage: Access the file during installation.
+        path: MaybeWindowsPath,
+    },
+    #[serde(rename_all = "PascalCase")]
+    BA2DX10Entry {
+        /// dir_hash: u64
+        /// Description: Hash of the directory path.
+        /// Usage: Verify file locations or detect conflicts.
+        dir_hash: u64,
+        /// chunk_hdr_len: Option<u64>
+        /// Description: Length of the chunk header.
+        /// Usage: Needed when processing files split into chunks.
+        chunk_hdr_len: u64,
+        /// chunks: Option<Vec<BA2DX10EntryChunk>>
+        /// Description: List of chunks if the file is divided.
+        /// Usage: Reassemble or process each chunk correctly.
+        chunks: Vec<BA2DX10EntryChunk>,
+        /// num_mips: Option<u64>
+        /// Description: Number of mipmap levels in a texture.
+        /// Usage: Important for texture processing.
+        num_mips: u64,
+        /// pixel_format: Option<u64>
+        /// Description: Numeric code for the image's pixel format.
+        /// Usage: Handle image data accurately.
+        pixel_format: u64,
+        /// tile_mode: Option<u64>
+        /// Description: Tiling mode used in the texture.
+        /// Usage: For rendering or processing textures.
+        tile_mode: u64,
+        #[serde(rename = "Unk8")]
+        /// unk_8: Option<u8> (renamed from Unk8)
+        /// Description: An unknown or unused field.
+        /// Usage: May be ignored unless specified.
+        unk_8: u8,
+        /// extension: String
+        /// Description: File extension (e.g., "dds", "nif").
+        /// Usage: Determine how to process the file.
+        extension: String,
+        /// height: Option<u64>
+        /// Description: Height of an image file.
+        /// Usage: For image processing.
+        height: u64,
+        /// width: Option<u64>
+        /// Description: Width of an image file.
+        /// Usage: For image processing.
+        width: u64,
+        /// is_cube_map: Option<u8>
+        /// Description: Indicates if the texture is a cube map.
+        /// Usage: Special handling for cube maps in rendering.
+        is_cube_map: u8,
+        /// index: usize
+        /// Description: Index of the file in a collection.
+        /// Usage: Reference files in order.
+        index: usize,
+        /// name_hash: u64
+        /// Description: Hash of the file name.
+        /// Usage: Quickly compare or locate files.
+        name_hash: u64,
+        /// path: PathBuf
+        /// Description: File system path to the file.
+        /// Usage: Access the file during installation.
+        path: MaybeWindowsPath,
+    },
 }
+
+// #[derive(Debug, Serialize, Deserialize)]
+// #[serde(deny_unknown_fields)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct UnknownFileState {
+//     #[serde(rename = "$type")]
+//     /// file_state_type: String (renamed from $type)
+//     /// Description: Specifies the file's processing requirements.
+//     /// Usage: Handle the file appropriately based on its type.
+//     pub file_state_type: String,
+//     /// align: Option<u64>
+//     /// Description: Alignment requirement in bytes.
+//     /// Usage: Ensure correct alignment during file operations.
+//     pub align: Option<u64>,
+//     /// compressed: Option<bool>
+//     /// Description: Indicates if the file is compressed.
+//     /// Usage: Decompress if necessary during installation.
+//     pub compressed: Option<bool>,
+//     /// dir_hash: u64
+//     /// Description: Hash of the directory path.
+//     /// Usage: Verify file locations or detect conflicts.
+//     pub dir_hash: u64,
+//     /// chunk_hdr_len: Option<u64>
+//     /// Description: Length of the chunk header.
+//     /// Usage: Needed when processing files split into chunks.
+//     pub chunk_hdr_len: Option<u64>,
+//     /// chunks: Option<Vec<FileStateChunk>>
+//     /// Description: List of chunks if the file is divided.
+//     /// Usage: Reassemble or process each chunk correctly.
+//     pub chunks: Option<Vec<BA2DX10EntryChunk>>,
+//     /// num_mips: Option<u64>
+//     /// Description: Number of mipmap levels in a texture.
+//     /// Usage: Important for texture processing.
+//     pub num_mips: Option<u64>,
+//     /// pixel_format: Option<u64>
+//     /// Description: Numeric code for the image's pixel format.
+//     /// Usage: Handle image data accurately.
+//     pub pixel_format: Option<u64>,
+//     /// tile_mode: Option<u64>
+//     /// Description: Tiling mode used in the texture.
+//     /// Usage: For rendering or processing textures.
+//     pub tile_mode: Option<u64>,
+//     #[serde(rename = "Unk8")]
+//     /// unk_8: Option<u8> (renamed from Unk8)
+//     /// Description: An unknown or unused field.
+//     /// Usage: May be ignored unless specified.
+//     pub unk_8: Option<u8>,
+//     /// extension: String
+//     /// Description: File extension (e.g., "dds", "nif").
+//     /// Usage: Determine how to process the file.
+//     pub extension: String,
+//     /// height: Option<u64>
+//     /// Description: Height of an image file.
+//     /// Usage: For image processing.
+//     pub height: Option<u64>,
+//     /// width: Option<u64>
+//     /// Description: Width of an image file.
+//     /// Usage: For image processing.
+//     pub width: Option<u64>,
+//     /// is_cube_map: Option<u8>
+//     /// Description: Indicates if the texture is a cube map.
+//     /// Usage: Special handling for cube maps in rendering.
+//     pub is_cube_map: Option<u8>,
+//     /// flags: Option<u64>
+//     /// Description: Additional flags for file properties.
+//     /// Usage: Influence processing based on flag values.
+//     pub flags: Option<u64>,
+//     /// index: usize
+//     /// Description: Index of the file in a collection.
+//     /// Usage: Reference files in order.
+//     pub index: usize,
+//     /// name_hash: u64
+//     /// Description: Hash of the file name.
+//     /// Usage: Quickly compare or locate files.
+//     pub name_hash: u64,
+//     /// path: PathBuf
+//     /// Description: File system path to the file.
+//     /// Usage: Access the file during installation.
+//     pub path: PathBuf,
+// }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
-pub struct FileStateChunk {
+pub struct BA2DX10EntryChunk {
     /// align: u64
     /// Description: Alignment requirement for the chunk.
     /// Usage: Ensure correct alignment when reassembling.

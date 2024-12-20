@@ -16,14 +16,7 @@ impl CreateBSAHandler {
             to,
             temp_id,
             file_states,
-            state:
-                DirectiveState {
-                    directive_state_type,
-                    has_name_table,
-                    header_magic,
-                    kind,
-                    version,
-                },
+            state,
         }: CreateBSADirective,
     ) -> Result<u64> {
         anyhow::bail!("ooo")
