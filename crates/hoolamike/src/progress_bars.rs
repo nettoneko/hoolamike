@@ -34,6 +34,7 @@ pub enum ProgressKind {
     Extract,
     InstallDirectives,
     ExtractTemporaryFile,
+    WriteBSA,
 }
 
 type ProgressBarPostAttach = Arc<dyn Fn(ProgressBar) -> ProgressBar + 'static>;
@@ -67,6 +68,7 @@ impl ProgressKind {
             ProgressKind::Extract => "magenta",
             ProgressKind::InstallDirectives => "green",
             ProgressKind::ExtractTemporaryFile => "white",
+            ProgressKind::WriteBSA => "purple",
         }
     }
     #[rustfmt::skip]
@@ -78,6 +80,7 @@ impl ProgressKind {
             ProgressKind::Extract =>              "[ extract    ]",
             ProgressKind::InstallDirectives =>    "[ directive  ]",
             ProgressKind::ExtractTemporaryFile => "[ temp extr. ]",
+            ProgressKind::WriteBSA =>             "[ write BSA  ]",
         }
     }
 }

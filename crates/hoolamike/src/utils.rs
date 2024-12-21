@@ -27,6 +27,13 @@ impl Box<dyn std::any::Any + Send> {
     }
 }
 
+#[extension_traits::extension(pub trait ResultZipExt)]
+impl<T, E> std::result::Result<T, E> {
+    fn zip<O>(self, other: std::result::Result<O, E>) -> std::result::Result<(T, O), E> {
+        self.and_then(|one| other.map(|other| (one, other)))
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Hash, derive_more::Display, Clone, Ord)]
 pub struct MaybeWindowsPath(pub String);
 

@@ -5,6 +5,7 @@ use {
     anyhow::{Context, Result},
     clap::{Parser, Subcommand},
     modlist_data::ModlistSummary,
+    modlist_json::DirectiveKind,
     std::path::PathBuf,
     tracing::info,
 };
@@ -34,6 +35,8 @@ pub struct DebugHelpers {
     skip_verify_and_downloads: bool,
     #[arg(long)]
     start_from_directive: Option<String>,
+    #[arg(long)]
+    skip_kind: Vec<DirectiveKind>,
 }
 
 #[derive(Subcommand)]

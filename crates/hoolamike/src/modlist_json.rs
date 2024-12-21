@@ -287,7 +287,7 @@ pub mod directive;
 #[derive(Debug, Serialize, Deserialize, enum_kinds::EnumKind)]
 #[serde(tag = "$type")]
 #[serde(deny_unknown_fields)]
-#[enum_kind(DirectiveKind, derive(Serialize, Deserialize, PartialOrd, Ord, derive_more::Display, Hash))]
+#[enum_kind(DirectiveKind, derive(Serialize, Deserialize, PartialOrd, Ord, derive_more::Display, Hash, clap::ValueEnum))]
 pub enum Directive {
     CreateBSA(directive::CreateBSADirective),
     FromArchive(directive::FromArchiveDirective),
@@ -415,7 +415,7 @@ pub enum FileState {
         /// dir_hash: u64
         /// Description: Hash of the directory path.
         /// Usage: Verify file locations or detect conflicts.
-        dir_hash: u64,
+        dir_hash: u32,
         /// extension: String
         /// Description: File extension (e.g., "dds", "nif").
         /// Usage: Determine how to process the file.
@@ -431,7 +431,7 @@ pub enum FileState {
         /// name_hash: u64
         /// Description: Hash of the file name.
         /// Usage: Quickly compare or locate files.
-        name_hash: u64,
+        name_hash: u32,
         /// path: PathBuf
         /// Description: File system path to the file.
         /// Usage: Access the file during installation.

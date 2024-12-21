@@ -59,18 +59,7 @@ pub mod inline_file;
 
 pub mod patched_from_archive;
 
-pub mod remapped_inline_file {
-    use {super::*, crate::modlist_json::directive::RemappedInlineFileDirective};
-
-    #[derive(Clone, Debug)]
-    pub struct RemappedInlineFileHandler {}
-
-    impl RemappedInlineFileHandler {
-        pub async fn handle(self, directive: RemappedInlineFileDirective) -> Result<u64> {
-            anyhow::bail!("[RemappedInlineFileDirective ] {directive:#?} is not implemented")
-        }
-    }
-}
+pub mod remapped_inline_file;
 
 pub mod transformed_texture {
     use {super::*, crate::modlist_json::directive::TransformedTextureDirective};
@@ -216,7 +205,9 @@ impl DirectivesHandler {
             .pipe(Arc::new);
         Self {
             config,
-            create_bsa: create_bsa::CreateBSAHandler {},
+            create_bsa: create_bsa::CreateBSAHandler {
+                output_directory: output_directory.clone(),
+            },
             from_archive: from_archive::FromArchiveHandler {
                 output_directory: output_directory.clone(),
                 nested_archive_service: nested_archive_service.clone(),
@@ -422,10 +413,6 @@ impl DirectivesHandler {
                                 })
                                 .buffer_unordered(4.min(concurrency())),
                         )
-                        .chain(create_bsa.pipe(futures::stream::iter).then({
-                            cloned![manager];
-                            move |create_bsa| manager.create_bsa.clone().handle(create_bsa)
-                        }))
                         .chain(remapped_inline_file.pipe(futures::stream::iter).then({
                             cloned![manager];
                             move |remapped_inline_file| {
@@ -443,6 +430,10 @@ impl DirectivesHandler {
                                     .clone()
                                     .handle(transformed_texture)
                             }
+                        }))
+                        .chain(create_bsa.pipe(futures::stream::iter).then({
+                            cloned![manager];
+                            move |create_bsa| manager.create_bsa.clone().handle(create_bsa)
                         }))
                         .map_ok({
                             cloned![pb];

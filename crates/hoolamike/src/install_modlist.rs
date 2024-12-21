@@ -39,6 +39,7 @@ pub async fn install_modlist(
     DebugHelpers {
         skip_verify_and_downloads,
         start_from_directive,
+        skip_kind,
     }: DebugHelpers,
 ) -> TotalResult<()> {
     let synchronizers = Synchronizers::new(downloaders, games)
@@ -118,14 +119,17 @@ pub async fn install_modlist(
                 .and_then(move |directives_handler| {
                     directives_handler
                         .handle_directives(directives.tap_mut(|directives| {
-                            if let Some(start_from_directive) = start_from_directive {
-                                tracing::warn!("runing only a single directive");
-                                *directives = directives
-                                    .pipe(std::mem::take)
-                                    .drain(..)
-                                    .skip_while(|d| d.directive_hash() != start_from_directive)
-                                    .collect_vec();
-                            }
+                            *directives = directives
+                                .pipe(std::mem::take)
+                                .drain(..)
+                                .skip_while(|d| {
+                                    start_from_directive
+                                        .as_ref()
+                                        .map(|start_from_directive| &d.directive_hash() != start_from_directive)
+                                        .unwrap_or(false)
+                                })
+                                .filter(|directive| !skip_kind.contains(&directive.directive_kind()))
+                                .collect_vec();
                         }))
                         .multi_error_collect()
                 })
