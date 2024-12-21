@@ -55,3 +55,11 @@ impl MaybeWindowsPath {
 pub fn boxed_iter<'a, T: 'a>(iter: impl Iterator<Item = T> + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(iter)
 }
+
+#[macro_export]
+macro_rules! cloned {
+    ($($es:ident),+) => {$(
+        #[allow(unused_mut)]
+        let mut $es = $es.clone();
+    )*}
+}

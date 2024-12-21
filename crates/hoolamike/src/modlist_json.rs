@@ -31,7 +31,7 @@ pub struct Modlist {
     /// game_type: String
     /// Description: The type of game the modlist is for (e.g., "Skyrim", "Fallout4").
     /// Usage: Ensure compatibility with the user's game.
-    pub game_type: String,
+    pub game_type: GameName,
     /// image: String
     /// Description: Path or URL to an image representing the modlist.
     /// Usage: Display this image in your tool's UI.

@@ -22,6 +22,7 @@ use {
     futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt},
     itertools::Itertools,
     nested_archive_manager::{max_open_files, NestedArchivesService},
+    remapped_inline_file::RemappingContext,
     std::{
         collections::{BTreeMap, HashSet},
         future::ready,
@@ -116,6 +117,8 @@ pub struct DirectivesHandlerConfig {
     pub failed_directives_whitelist: HashSet<String>,
     pub wabbajack_file: WabbajackFileHandle,
     pub output_directory: PathBuf,
+    pub game_directory: PathBuf,
+    pub downloads_directory: PathBuf,
 }
 
 pub mod nested_archive_manager;
@@ -179,12 +182,6 @@ pub async fn validate_hash_with_overrides(path: PathBuf, hash: String, size: u64
         false => validate_hash(path, hash).await,
     }
 }
-macro_rules! cloned {
-    ($($es:ident),+) => {$(
-        #[allow(unused_mut)]
-        let mut $es = $es.clone();
-    )*}
-}
 
 impl DirectivesHandler {
     #[allow(clippy::new_without_default)]
@@ -193,6 +190,8 @@ impl DirectivesHandler {
             failed_directives_whitelist,
             wabbajack_file,
             output_directory,
+            game_directory,
+            downloads_directory,
         } = config.clone();
         let download_summary: DownloadSummary = sync_summary
             .into_iter()
@@ -218,10 +217,17 @@ impl DirectivesHandler {
             },
             patched_from_archive: patched_from_archive::PatchedFromArchiveHandler {
                 output_directory: output_directory.clone(),
-                wabbajack_file,
+                wabbajack_file: wabbajack_file.clone(),
                 nested_archive_service: nested_archive_service.clone(),
             },
-            remapped_inline_file: remapped_inline_file::RemappedInlineFileHandler {},
+            remapped_inline_file: remapped_inline_file::RemappedInlineFileHandler {
+                remapping_context: Arc::new(RemappingContext {
+                    game_folder: game_directory.clone(),
+                    output_directory: output_directory.clone(),
+                    downloads_directory,
+                }),
+                wabbajack_file: wabbajack_file.clone(),
+            },
             transformed_texture: transformed_texture::TransformedTextureHandler {},
             nested_archive_manager: nested_archive_service,
         }

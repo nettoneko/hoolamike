@@ -42,7 +42,7 @@ pub async fn install_modlist(
         skip_kind,
     }: DebugHelpers,
 ) -> TotalResult<()> {
-    let synchronizers = Synchronizers::new(downloaders, games)
+    let synchronizers = Synchronizers::new(downloaders.clone(), games.clone())
         .context("setting up downloaders")
         .map_err(|e| vec![e])?;
 
@@ -81,7 +81,7 @@ pub async fn install_modlist(
                       author: _,
                       description: _,
                       directives,
-                      game_type: _,
+                      game_type,
                       image: _,
                       is_nsfw: _,
                       name: _,
@@ -105,15 +105,26 @@ pub async fn install_modlist(
                         .boxed_local(),
                     false => synchronizers.clone().sync_downloads(archives).boxed_local(),
                 }
-                .map_ok(|summary| {
-                    DirectivesHandler::new(
-                        DirectivesHandlerConfig {
-                            wabbajack_file: wabbajack_file_handle,
-                            output_directory: installation_path,
-                            failed_directives_whitelist: whitelist_failed_directives,
-                        },
-                        summary,
-                    )
+                .and_then({
+                    move |summary| {
+                        games
+                            .get(&game_type)
+                            .with_context(|| format!("[{game_type}] not found in {:?}", games.keys().collect::<Vec<_>>()))
+                            .map(|game_config| {
+                                DirectivesHandler::new(
+                                    DirectivesHandlerConfig {
+                                        wabbajack_file: wabbajack_file_handle,
+                                        output_directory: installation_path,
+                                        failed_directives_whitelist: whitelist_failed_directives,
+                                        game_directory: game_config.root_directory.clone(),
+                                        downloads_directory: downloaders.downloads_directory.clone(),
+                                    },
+                                    summary,
+                                )
+                            })
+                            .map_err(|e| vec![e])
+                            .pipe(ready)
+                    }
                 })
                 .map_ok(Arc::new)
                 .and_then(move |directives_handler| {

@@ -48,6 +48,7 @@
                 webkitgtk_4_1
                 xdotool
                 xdo
+                just
                 # needed for openapi generator only
                 jdk
                 nodejs

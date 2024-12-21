@@ -60,6 +60,7 @@ enum Commands {
 }
 
 pub mod read_wrappers;
+#[macro_use]
 pub mod utils;
 
 pub mod error;
