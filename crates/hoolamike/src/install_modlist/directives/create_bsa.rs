@@ -1,6 +1,6 @@
 use {
     super::*,
-    crate::modlist_json::{directive::CreateBSADirective, DirectiveState, FileState},
+    crate::modlist_json::{directive::CreateBSADirective, BA2DX10EntryChunk, DirectiveState, FileState},
     ba2::{CompressableFrom, ReaderWithOptions},
     std::{
         any::Any,
@@ -93,14 +93,20 @@ impl CreateBSAHandler {
                         .pipe(|file_states| files_pb.wrap_iter(file_states))
                         .map(|file_state| match file_state {
                             FileState::BA2File {
-                                align,
-                                compressed,
                                 dir_hash,
                                 extension,
-                                flags,
                                 index,
                                 name_hash,
                                 path,
+                                ..
+                            }
+                            | FileState::BA2DX10Entry {
+                                dir_hash,
+                                extension,
+                                index,
+                                name_hash,
+                                path,
+                                ..
                             } => output_directory
                                 .clone()
                                 .join("TEMP_BSA_FILES")
@@ -113,7 +119,7 @@ impl CreateBSAHandler {
                                         .with_context(|| format!("opening [{path:?}]"))
                                 })
                                 .and_then(|file| {
-                                    LazyArchiveFile::new(&file, compressed)
+                                    LazyArchiveFile::new(&file, false)
                                         //
                                         .and_then(|file| {
                                             extension
@@ -145,22 +151,22 @@ impl CreateBSAHandler {
                                                 .map(|key| (key, file))
                                         })
                                 }),
-                            FileState::BA2DX10Entry {
-                                dir_hash,
-                                chunk_hdr_len,
-                                chunks,
-                                num_mips,
-                                pixel_format,
-                                tile_mode,
-                                unk_8,
-                                extension,
-                                height,
-                                width,
-                                is_cube_map,
-                                index,
-                                name_hash,
-                                path,
-                            } => anyhow::bail!("unimplemented"),
+                            // FileState::BA2DX10Entry {
+                            //     dir_hash,
+                            //     chunk_hdr_len,
+                            //     chunks,
+                            //     num_mips,
+                            //     pixel_format,
+                            //     tile_mode,
+                            //     unk_8,
+                            //     extension,
+                            //     height,
+                            //     width,
+                            //     is_cube_map,
+                            //     index,
+                            //     name_hash,
+                            //     path,
+                            // } => ,
                         })
                         .collect::<Result<Vec<_>>>()
                         .and_then(|entries| {

@@ -442,7 +442,7 @@ pub enum FileState {
         /// dir_hash: u64
         /// Description: Hash of the directory path.
         /// Usage: Verify file locations or detect conflicts.
-        dir_hash: u64,
+        dir_hash: u32,
         /// chunk_hdr_len: Option<u64>
         /// Description: Length of the chunk header.
         /// Usage: Needed when processing files split into chunks.
@@ -491,7 +491,7 @@ pub enum FileState {
         /// name_hash: u64
         /// Description: Hash of the file name.
         /// Usage: Quickly compare or locate files.
-        name_hash: u64,
+        name_hash: u32,
         /// path: PathBuf
         /// Description: File system path to the file.
         /// Usage: Access the file during installation.
