@@ -68,8 +68,9 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
         let pb = vertical_progress_bar(0, crate::progress_bars::ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)
             .attach_to(&PROGRESS_BAR)
             .tap_mut(|pb| pb.set_message(path.display().to_string()));
-        self.list_paths_with_originals()?
-            .pipe(|paths| {
+        self.list_paths_with_originals()
+            .context("listing entries")
+            .and_then(|paths| {
                 paths
                     .iter()
                     .find_map(|(entry, repr)| entry.eq(path).then_some(repr))
@@ -87,7 +88,7 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
                             let mut writer = pb.wrap_write(&mut output);
                             file.write(&mut writer, &options)
                                 // file.write(&mut output, &options)
-                                .context("extracting fallout 4 bsa")
+                                .context("writing fallout 4 bsa to output buffer")
                                 .and_then(|_| {
                                     output.rewind().context("rewinding file").and_then(|_| {
                                         let wrote = writer.progress.length().unwrap_or(0);
@@ -140,8 +141,8 @@ impl BethesdaArchive<'_> {
                         ba2::FileFormat::FO4 => ba2::fo4::Archive::read(file)
                             .context("opening fo4")
                             .map(BethesdaArchive::Fallout4),
-                        ba2::FileFormat::TES3 => todo!(),
-                        ba2::FileFormat::TES4 => todo!(),
+                        ba2::FileFormat::TES3 => anyhow::bail!("{format:?} is not supported"),
+                        ba2::FileFormat::TES4 => anyhow::bail!("{format:?} is not supported"),
                     })
             })
     }
