@@ -40,7 +40,7 @@ where
                                         .with_context(|| format!("reading data for layer={layer}, depth={depth}, mipmap={mipmap}"))
                                         .and_then(|data| image_dds::image::ImageBuffer::from_vec(width, height, data.to_vec()).context("creating a buffer"))
                                         .map(|image| DynamicImage::ImageRgba32F(image))
-                                        .map(|image| image.resize(width, height, image_dds::image::imageops::FilterType::Lanczos3))
+                                        .map(|image| image.resize_exact(width, height, image_dds::image::imageops::FilterType::Lanczos3))
                                         .map(|resized| resized.into_rgba32f())
                                 })
                                 .try_fold(Vec::new(), |mut acc, part| {
