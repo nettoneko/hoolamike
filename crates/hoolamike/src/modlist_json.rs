@@ -324,7 +324,7 @@ pub struct ImageState {
     /// height: u64
     /// Description: Height of the image in pixels.
     /// Usage: May be needed for processing or validation.
-    pub height: u64,
+    pub height: u32,
     /// mip_levels: u64
     /// Description: Number of mipmap levels in the image.
     /// Usage: Important for rendering and performance.
@@ -336,7 +336,7 @@ pub struct ImageState {
     /// width: u64
     /// Description: Width of the image in pixels.
     /// Usage: May be needed for processing or validation.
-    pub width: u64,
+    pub width: u32,
 }
 
 #[allow(clippy::large_enum_variant)]

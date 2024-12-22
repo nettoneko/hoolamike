@@ -5,7 +5,7 @@ use {
 };
 
 #[tracing::instrument(skip(input, output))]
-pub fn recompress<R, W>(input: &mut R, width: u32, height: u32, mip_maps: u32, output: &mut W) -> Result<()>
+pub fn recompress<R, W>(input: &mut R, width: u32, height: u32, output: &mut W) -> Result<()>
 where
     R: Read,
     W: Write,
@@ -29,7 +29,9 @@ where
                                     decoded
                                         .get(layer, depth, mipmap)
                                         .with_context(|| format!("reading data for layer={layer}, depth={depth}, mipmap={mipmap}"))
-                                        .and_then(|data| image_dds::image::ImageBuffer::from_vec(width, height, data.to_vec()).context("creating a buffer"))
+                                        .and_then(|data| {
+                                            image_dds::image::ImageBuffer::from_vec(surface.width, surface.height, data.to_vec()).context("creating a buffer")
+                                        })
                                         .map(DynamicImage::ImageRgba32F)
                                         .map(|image| image.resize_exact(width, height, image_dds::image::imageops::FilterType::Lanczos3))
                                         .map(|resized| resized.into_rgba32f())
@@ -59,4 +61,5 @@ where
         })
         .and_then(|reencoded| reencoded.to_dds().context("creating a dds file"))
         .and_then(|dds| dds.write(output).context("writing dds file to output"))
+        .context("recompressing/resizing a dds file")
 }

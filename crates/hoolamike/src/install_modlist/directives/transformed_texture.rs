@@ -1,6 +1,10 @@
 use {
     super::*,
-    crate::{install_modlist::download_cache::to_u64_from_base_64, modlist_json::directive::TransformedTextureDirective, read_wrappers::ReadExt},
+    crate::{
+        install_modlist::download_cache::to_u64_from_base_64,
+        modlist_json::{directive::TransformedTextureDirective, ImageState},
+        read_wrappers::ReadExt,
+    },
     std::{
         convert::identity,
         io::{Read, Seek, Write},
@@ -33,7 +37,14 @@ impl TransformedTextureHandler {
         TransformedTextureDirective {
             hash,
             size,
-            image_state,
+            image_state:
+                ImageState {
+                    format,
+                    height,
+                    mip_levels,
+                    perceptual_hash,
+                    width,
+                },
             to,
             archive_hash_path,
         }: TransformedTextureDirective,
@@ -67,16 +78,10 @@ impl TransformedTextureHandler {
                                 .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
                                 .pipe(Box::new),
                         };
-                        std::io::copy(
-                            &mut reader,
-                            // WARN: hashes are not gonna match for bsa stuff because we write headers differentlys
-                            // .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on")),
-                            &mut writer,
-                        )
-                        // .and_validate_size(size)
-                        .context("copying file from archive")
-                        .and_then(|_| writer.flush().context("flushing write"))
-                        .map(|_| ())
+                        dds_recompression::recompress(&mut reader, width, height, &mut writer)
+                            .context("copying file from archive")
+                            .and_then(|_| writer.flush().context("flushing write"))
+                            .map(|_| ())
                     })
                 };
 
