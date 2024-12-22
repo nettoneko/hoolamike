@@ -3,18 +3,16 @@ use {
         install_modlist::directives::nested_archive_manager::{WithPermit, OPEN_FILE_PERMITS},
         utils::{boxed_iter, ReadableCatchUnwindExt},
     },
-    ::wrapped_7zip::{which, WRAPPED_7ZIP},
+    ::wrapped_7zip::WRAPPED_7ZIP,
     anyhow::{Context, Result},
     bethesda_archive::BethesdaArchiveFile,
     futures::TryFutureExt,
     indicatif::ProgressBar,
     std::{
-        borrow::BorrowMut,
         convert::identity,
         fs::File,
-        io::{self, Seek, Write},
+        io::{Seek, Write},
         path::{Path, PathBuf},
-        pin::Pin,
         sync::Arc,
     },
     tap::prelude::*,
@@ -185,8 +183,7 @@ mod tests {
     use {
         super::*,
         futures::{StreamExt, TryStreamExt},
-        io::{BufReader, Read},
-        std::future::ready,
+        std::io::{BufReader, Read},
     };
     #[test_log::test(tokio::test)]
     async fn test_seek_with_tempfile() -> Result<()> {

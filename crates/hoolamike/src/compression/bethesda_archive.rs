@@ -2,12 +2,11 @@ use {
     super::ProcessArchive,
     crate::{
         progress_bars::{vertical_progress_bar, PROGRESS_BAR},
-        utils::ReadableCatchUnwindExt,
+        utils::{MaybeWindowsPath, ReadableCatchUnwindExt},
     },
     anyhow::{Context, Result},
     ba2::{
         fo4::{self, FileWriteOptionsBuilder},
-        BString,
         ByteSlice,
         Reader,
     },
@@ -17,7 +16,6 @@ use {
         panic::catch_unwind,
         path::{Path, PathBuf},
     },
-    wrapped_7zip::MaybeWindowsPath,
 };
 
 type Fallout4Archive<'a> = (ba2::fo4::Archive<'a>, ba2::fo4::ArchiveOptions);

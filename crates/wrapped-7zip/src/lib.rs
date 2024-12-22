@@ -191,7 +191,7 @@ impl Read for ArchiveFileHandle {
 mod list_output;
 
 #[derive(Debug, PartialEq, PartialOrd, Hash)]
-pub struct MaybeWindowsPath(pub String);
+pub(crate) struct MaybeWindowsPath(pub String);
 
 impl MaybeWindowsPath {
     pub fn into_path(self) -> PathBuf {
