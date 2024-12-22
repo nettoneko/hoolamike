@@ -31,6 +31,36 @@ impl std::io::Result<u64> {
 // #[cfg(feature = "dds_recompression")]
 mod dds_recompression;
 
+fn supported_image_format(format: crate::modlist_json::image_format::DXGIFormat) -> Result<image_dds::ImageFormat> {
+    // TODO: validate this
+    match format {
+        crate::modlist_json::image_format::DXGIFormat::R8_UNORM => image_dds::ImageFormat::R8Unorm,
+        crate::modlist_json::image_format::DXGIFormat::R8G8B8A8_UNORM => image_dds::ImageFormat::Rgba8Unorm,
+        crate::modlist_json::image_format::DXGIFormat::R8G8B8A8_UNORM_SRGB => image_dds::ImageFormat::Rgba8UnormSrgb,
+        crate::modlist_json::image_format::DXGIFormat::R16G16B16A16_FLOAT => image_dds::ImageFormat::Rgba16Float,
+        crate::modlist_json::image_format::DXGIFormat::R32G32B32A32_FLOAT => image_dds::ImageFormat::Rgba32Float,
+        crate::modlist_json::image_format::DXGIFormat::B8G8R8A8_UNORM => image_dds::ImageFormat::Bgra8Unorm,
+        crate::modlist_json::image_format::DXGIFormat::B8G8R8A8_UNORM_SRGB => image_dds::ImageFormat::Bgra8UnormSrgb,
+        crate::modlist_json::image_format::DXGIFormat::B4G4R4A4_UNORM => image_dds::ImageFormat::Bgra4Unorm,
+        crate::modlist_json::image_format::DXGIFormat::BC1_UNORM => image_dds::ImageFormat::BC1RgbaUnorm,
+        crate::modlist_json::image_format::DXGIFormat::BC1_UNORM_SRGB => image_dds::ImageFormat::BC1RgbaUnormSrgb,
+        crate::modlist_json::image_format::DXGIFormat::BC2_UNORM => image_dds::ImageFormat::BC2RgbaUnorm,
+        crate::modlist_json::image_format::DXGIFormat::BC2_UNORM_SRGB => image_dds::ImageFormat::BC2RgbaUnormSrgb,
+        crate::modlist_json::image_format::DXGIFormat::BC3_UNORM => image_dds::ImageFormat::BC3RgbaUnorm,
+        crate::modlist_json::image_format::DXGIFormat::BC3_UNORM_SRGB => image_dds::ImageFormat::BC3RgbaUnormSrgb,
+        crate::modlist_json::image_format::DXGIFormat::BC4_UNORM => image_dds::ImageFormat::BC4RUnorm,
+        crate::modlist_json::image_format::DXGIFormat::BC4_SNORM => image_dds::ImageFormat::BC4RSnorm,
+        crate::modlist_json::image_format::DXGIFormat::BC5_UNORM => image_dds::ImageFormat::BC5RgUnorm,
+        crate::modlist_json::image_format::DXGIFormat::BC5_SNORM => image_dds::ImageFormat::BC5RgSnorm,
+        crate::modlist_json::image_format::DXGIFormat::BC6H_UF16 => image_dds::ImageFormat::BC6hRgbUfloat,
+        crate::modlist_json::image_format::DXGIFormat::BC6H_SF16 => image_dds::ImageFormat::BC6hRgbSfloat,
+        crate::modlist_json::image_format::DXGIFormat::BC7_UNORM => image_dds::ImageFormat::BC7RgbaUnorm,
+        crate::modlist_json::image_format::DXGIFormat::BC7_UNORM_SRGB => image_dds::ImageFormat::BC7RgbaUnormSrgb,
+        unsupported => anyhow::bail!("{unsupported:?} is not supported"),
+    }
+    .pipe(Ok)
+}
+
 impl TransformedTextureHandler {
     pub async fn handle(
         self,
@@ -49,6 +79,7 @@ impl TransformedTextureHandler {
             archive_hash_path,
         }: TransformedTextureDirective,
     ) -> Result<u64> {
+        let format = supported_image_format(format).context("checking for format support")?;
         let output_path = self.output_directory.join(to.into_path());
 
         if let Err(message) = validate_hash_with_overrides(output_path.clone(), hash.clone(), size).await {
@@ -78,7 +109,7 @@ impl TransformedTextureHandler {
                                 .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
                                 .pipe(Box::new),
                         };
-                        dds_recompression::recompress(&mut reader, width, height, &mut writer)
+                        dds_recompression::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
                             .context("copying file from archive")
                             .and_then(|_| writer.flush().context("flushing write"))
                             .map(|_| ())
@@ -86,22 +117,23 @@ impl TransformedTextureHandler {
                 };
 
                 match source_file {
-                    nested_archive_manager::HandleKind::Cached(file) => file
-                        .inner
-                        .blocking_lock()
-                        .1
-                        .try_clone()
-                        .context("cloning file")
-                        .and_then(|mut f| f.rewind().context("rewinding").map(|_| f)),
+                    nested_archive_manager::HandleKind::Cached(file) => file.inner.blocking_lock().pipe_deref_mut(|(guard, file)| {
+                        file.try_clone().context("cloning file").and_then(|mut f| {
+                            f.rewind()
+                                .context("rewinding")
+                                .map(|_| (guard.path().to_owned(), f))
+                        })
+                    }),
                     nested_archive_manager::HandleKind::JustHashPath(source_file_path) => std::fs::OpenOptions::new()
                         .read(true)
                         .open(&source_file_path)
-                        .with_context(|| format!("opening [{}]", source_file_path.display())),
+                        .with_context(|| format!("opening [{}]", source_file_path.display()))
+                        .map(|file| (source_file_path, file)),
                 }
-                .and_then(|mut final_source| {
+                .and_then(|(source_path, mut final_source)| {
                     create_file_all(&output_path).and_then(|mut output_file| {
                         perform_copy(&mut final_source, &mut output_file, output_path.clone())
-                            .with_context(|| format!("when extracting from [{:?}] to [{}]", archive_hash_path, output_path.display()))
+                            .with_context(|| format!("when extracting from [{source_path:?}]({:?}) to [{}]", archive_hash_path, output_path.display()))
                     })
                 })?;
                 Ok(())

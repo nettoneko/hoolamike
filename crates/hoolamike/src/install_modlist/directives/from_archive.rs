@@ -78,22 +78,21 @@ impl FromArchiveHandler {
                     info_span!("perform_copy").in_scope(|| {
                         let mut writer = to;
                         let mut reader: Box<dyn Read> = match is_whitelisted_by_path(&target_path) {
-                            true => pb.wrap_read(from).and_validate_size(size).pipe(Box::new),
+                            true => pb
+                                // WARN: hashes are not gonna match for bsa stuff because we write headers differentlys
+                                .wrap_read(from)
+                                .and_validate_size(size)
+                                .pipe(Box::new),
                             false => pb
                                 .wrap_read(from)
                                 .and_validate_size(size)
                                 .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
                                 .pipe(Box::new),
                         };
-                        std::io::copy(
-                            &mut reader,
-                            // WARN: hashes are not gonna match for bsa stuff because we write headers differentlys
-                            // .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on")),
-                            &mut writer,
-                        )
-                        .context("copying file from archive")
-                        .and_then(|_| writer.flush().context("flushing write"))
-                        .map(|_| ())
+                        std::io::copy(&mut reader, &mut writer)
+                            .context("copying file from archive")
+                            .and_then(|_| writer.flush().context("flushing write"))
+                            .map(|_| ())
                     })
                 };
 

@@ -313,6 +313,8 @@ impl Directive {
     }
 }
 
+pub mod image_format;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
@@ -320,7 +322,7 @@ pub struct ImageState {
     /// format: String
     /// Description: Image file format (e.g., "DDS", "PNG").
     /// Usage: Handle the image appropriately during installation.
-    pub format: String,
+    pub format: self::image_format::DXGIFormat,
     /// height: u64
     /// Description: Height of the image in pixels.
     /// Usage: May be needed for processing or validation.
@@ -328,7 +330,7 @@ pub struct ImageState {
     /// mip_levels: u64
     /// Description: Number of mipmap levels in the image.
     /// Usage: Important for rendering and performance.
-    pub mip_levels: u64,
+    pub mip_levels: u32,
     /// perceptual_hash: String
     /// Description: Hash representing the image's visual content.
     /// Usage: Detect duplicate or similar images.

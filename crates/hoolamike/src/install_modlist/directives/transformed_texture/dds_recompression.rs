@@ -1,11 +1,18 @@
 use {
     anyhow::{Context, Result},
-    image_dds::{self, image::DynamicImage, SurfaceRgba32Float},
+    image_dds::{self, image::DynamicImage, mip_dimension, SurfaceRgba32Float},
     std::io::{Read, Write},
 };
 
 #[tracing::instrument(skip(input, output))]
-pub fn recompress<R, W>(input: &mut R, width: u32, height: u32, output: &mut W) -> Result<()>
+pub fn resize_dds<R, W>(
+    input: &mut R,
+    target_width: u32,
+    target_height: u32,
+    target_format: image_dds::ImageFormat,
+    target_mipmaps: u32,
+    output: &mut W,
+) -> Result<()>
 where
     R: Read,
     W: Write,
@@ -24,17 +31,24 @@ where
                             std::iter::once(())
                                 .flat_map(|_| (0..decoded.layers))
                                 .flat_map(|layer| (0..decoded.depth).map(move |depth| (layer, depth)))
-                                .flat_map(|(layer, depth)| (0..decoded.mipmaps).map(move |mipmap| (layer, depth, mipmap)))
-                                .map(|(layer, depth, mipmap)| {
+                                .map(|(layer, depth)| {
+                                    // we will regenerate mipmaps
+                                    let mipmap = 0;
                                     decoded
                                         .get(layer, depth, mipmap)
-                                        .with_context(|| format!("reading data for layer={layer}, depth={depth}, mipmap={mipmap}"))
+                                        .context("getting the chunk from decoded surface")
                                         .and_then(|data| {
-                                            image_dds::image::ImageBuffer::from_vec(surface.width, surface.height, data.to_vec()).context("creating a buffer")
+                                            image_dds::image::ImageBuffer::from_raw(
+                                                mip_dimension(surface.width, mipmap),
+                                                mip_dimension(surface.height, mipmap),
+                                                data.to_vec(),
+                                            )
+                                            .context("loading part into an ImageBuffer failed")
                                         })
                                         .map(DynamicImage::ImageRgba32F)
-                                        .map(|image| image.resize_exact(width, height, image_dds::image::imageops::FilterType::Lanczos3))
+                                        .map(|image| image.resize_exact(target_width, target_height, image_dds::image::imageops::FilterType::Lanczos3))
                                         .map(|resized| resized.into_rgba32f())
+                                        .with_context(|| format!("processing part layer={layer}, depth={depth}, mipmap={mipmap}"))
                                 })
                                 .try_fold(Vec::new(), |mut acc, part| {
                                     part.map(|part| {
@@ -42,19 +56,29 @@ where
                                         acc
                                     })
                                 })
-                                .context("resizing all parts of dds")
+                                .with_context(|| {
+                                    format!(
+                                        "resizing all parts of dds (layers={}, depths={}, mipmaps={}, image_format={:?}, data_len=[{}])",
+                                        surface.layers,
+                                        surface.depth,
+                                        surface.mipmaps,
+                                        surface.image_format,
+                                        surface.data.len()
+                                    )
+                                })
                         })
                         .map(|data| SurfaceRgba32Float {
                             data,
-                            width,
-                            height,
+                            width: target_width,
+                            height: target_height,
                             depth: surface.depth,
                             layers: surface.layers,
-                            mipmaps: surface.mipmaps,
+                            // this newly created surface only has 1 mipmap, the encoder will generate the desired amount
+                            mipmaps: 1,
                         })
                         .and_then(|resized_surface| {
                             resized_surface
-                                .encode(surface.image_format, image_dds::Quality::Normal, image_dds::Mipmaps::FromSurface)
+                                .encode(target_format, image_dds::Quality::Normal, image_dds::Mipmaps::GeneratedExact(target_mipmaps))
                                 .context("reencoding surface")
                         })
                 })

@@ -26,7 +26,7 @@ test-empty:
             {{args}}
 
 
-@test-from-archive:
+@test-from-archive +args:
     cargo \
             run --release \
             -- \
@@ -37,7 +37,7 @@ test-empty:
             --skip-kind remapped-inline-file \
             --skip-kind inline-file \
             --skip-kind create-bsa \
-            "$@"
+            {{args}}
 
 @test-create-bsa +args:
     cargo \

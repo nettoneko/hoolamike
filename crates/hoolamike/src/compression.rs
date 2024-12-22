@@ -146,7 +146,8 @@ where
                 .context("creating a tempfile")
                 .and_then(|mut temp_file| {
                     let _ = tracing::debug_span!("seek_with_temp_file", temp_file=?temp_file).entered();
-                    std::io::copy(&mut *reader.lock().unwrap(), &mut pb.wrap_write(&mut temp_file))
+                    let mut reader = reader.lock().unwrap();
+                    std::io::copy(&mut *reader, &mut pb.wrap_write(&mut temp_file))
                         .context("creating a seekable temp file")
                         .map(|wrote_size| {
                             match wrote_size {
