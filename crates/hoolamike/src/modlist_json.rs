@@ -396,6 +396,69 @@ pub struct UnknownDirectiveState {
     pub version: u64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "PascalCase")]
+pub struct BA2DX10Entry {
+    /// dir_hash: u64
+    /// Description: Hash of the directory path.
+    /// Usage: Verify file locations or detect conflicts.
+    pub dir_hash: u32,
+    /// chunk_hdr_len: Option<u64>
+    /// Description: Length of the chunk header.
+    /// Usage: Needed when processing files split into chunks.
+    pub chunk_hdr_len: u64,
+    /// chunks: Option<Vec<BA2DX10EntryChunk>>
+    /// Description: List of chunks if the file is divided.
+    /// Usage: Reassemble or process each chunk correctly.
+    pub chunks: Vec<BA2DX10EntryChunk>,
+    /// num_mips: Option<u64>
+    /// Description: Number of mipmap levels in a texture.
+    /// Usage: Important for texture processing.
+    pub num_mips: u8,
+    /// pixel_format: Option<u64>
+    /// Description: Numeric code for the image's pixel format.
+    /// Usage: Handle image data accurately.
+    pub pixel_format: u8,
+    /// tile_mode: Option<u64>
+    /// Description: Tiling mode used in the texture.
+    /// Usage: For rendering or processing textures.
+    pub tile_mode: u8,
+    #[serde(rename = "Unk8")]
+    /// unk_8: Option<u8> (renamed from Unk8)
+    /// Description: An unknown or unused field.
+    /// Usage: May be ignored unless specified.
+    pub unk_8: u8,
+    /// extension: String
+    /// Description: File extension (e.g., "dds", "nif").
+    /// Usage: Determine how to process the file.
+    pub extension: String,
+    /// height: Option<u64>
+    /// Description: Height of an image file.
+    /// Usage: For image processing.
+    pub height: u16,
+    /// width: Option<u64>
+    /// Description: Width of an image file.
+    /// Usage: For image processing.
+    pub width: u16,
+    /// is_cube_map: Option<u8>
+    /// Description: Indicates if the texture is a cube map.
+    /// Usage: Special handling for cube maps in rendering.
+    pub is_cube_map: u8,
+    /// index: usize
+    /// Description: Index of the file in a collection.
+    /// Usage: Reference files in order.
+    pub index: usize,
+    /// name_hash: u64
+    /// Description: Hash of the file name.
+    /// Usage: Quickly compare or locate files.
+    pub name_hash: u32,
+    /// path: PathBuf
+    /// Description: File system path to the file.
+    /// Usage: Access the file during installation.
+    pub path: MaybeWindowsPath,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Serialize, Deserialize, enum_kinds::EnumKind)]
 #[serde(tag = "$type")]
@@ -437,66 +500,7 @@ pub enum FileState {
         /// Usage: Access the file during installation.
         path: MaybeWindowsPath,
     },
-    #[serde(rename_all = "PascalCase")]
-    BA2DX10Entry {
-        /// dir_hash: u64
-        /// Description: Hash of the directory path.
-        /// Usage: Verify file locations or detect conflicts.
-        dir_hash: u32,
-        /// chunk_hdr_len: Option<u64>
-        /// Description: Length of the chunk header.
-        /// Usage: Needed when processing files split into chunks.
-        chunk_hdr_len: u64,
-        /// chunks: Option<Vec<BA2DX10EntryChunk>>
-        /// Description: List of chunks if the file is divided.
-        /// Usage: Reassemble or process each chunk correctly.
-        chunks: Vec<BA2DX10EntryChunk>,
-        /// num_mips: Option<u64>
-        /// Description: Number of mipmap levels in a texture.
-        /// Usage: Important for texture processing.
-        num_mips: u64,
-        /// pixel_format: Option<u64>
-        /// Description: Numeric code for the image's pixel format.
-        /// Usage: Handle image data accurately.
-        pixel_format: u64,
-        /// tile_mode: Option<u64>
-        /// Description: Tiling mode used in the texture.
-        /// Usage: For rendering or processing textures.
-        tile_mode: u64,
-        #[serde(rename = "Unk8")]
-        /// unk_8: Option<u8> (renamed from Unk8)
-        /// Description: An unknown or unused field.
-        /// Usage: May be ignored unless specified.
-        unk_8: u8,
-        /// extension: String
-        /// Description: File extension (e.g., "dds", "nif").
-        /// Usage: Determine how to process the file.
-        extension: String,
-        /// height: Option<u64>
-        /// Description: Height of an image file.
-        /// Usage: For image processing.
-        height: u64,
-        /// width: Option<u64>
-        /// Description: Width of an image file.
-        /// Usage: For image processing.
-        width: u64,
-        /// is_cube_map: Option<u8>
-        /// Description: Indicates if the texture is a cube map.
-        /// Usage: Special handling for cube maps in rendering.
-        is_cube_map: u8,
-        /// index: usize
-        /// Description: Index of the file in a collection.
-        /// Usage: Reference files in order.
-        index: usize,
-        /// name_hash: u64
-        /// Description: Hash of the file name.
-        /// Usage: Quickly compare or locate files.
-        name_hash: u32,
-        /// path: PathBuf
-        /// Description: File system path to the file.
-        /// Usage: Access the file during installation.
-        path: MaybeWindowsPath,
-    },
+    BA2DX10Entry(BA2DX10Entry),
 }
 
 // #[derive(Debug, Serialize, Deserialize)]
