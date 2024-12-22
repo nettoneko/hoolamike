@@ -1,6 +1,6 @@
 use {
     anyhow::{Context, Result},
-    image_dds::{self, image::DynamicImage, ImageFormat, SurfaceRgba32Float},
+    image_dds::{self, image::DynamicImage, SurfaceRgba32Float},
     std::io::{Read, Write},
 };
 
