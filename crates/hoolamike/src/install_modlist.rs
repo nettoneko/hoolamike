@@ -40,6 +40,7 @@ pub async fn install_modlist(
         skip_verify_and_downloads,
         start_from_directive,
         skip_kind,
+        contains,
     }: DebugHelpers,
 ) -> TotalResult<()> {
     let synchronizers = Synchronizers::new(downloaders.clone(), games.clone())
@@ -140,6 +141,12 @@ pub async fn install_modlist(
                                         .unwrap_or(false)
                                 })
                                 .filter(|directive| !skip_kind.contains(&directive.directive_kind()))
+                                .filter(|directive| {
+                                    serde_json::to_string(&directive)
+                                        .tap_err(|e| tracing::error!("{e:#?}"))
+                                        .map(|directive| contains.iter().all(|contains| directive.contains(contains)))
+                                        .unwrap_or(false)
+                                })
                                 .collect_vec();
                         }))
                         .multi_error_collect()

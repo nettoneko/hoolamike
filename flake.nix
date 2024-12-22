@@ -49,9 +49,8 @@
                 xdotool
                 xdo
                 just
-                # needed for openapi generator only
-                jdk
-                nodejs
+                jless
+
                 (rust-bin
                   .selectLatestNightlyWith (toolchain:
                     toolchain

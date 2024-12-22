@@ -63,13 +63,13 @@ impl<T: ProcessArchive> FileHandleIterator<T> {
 #[allow(clippy::large_enum_variant)]
 #[enum_dispatch::enum_dispatch]
 pub enum ArchiveFileHandle {
-    CompressTools(compress_tools::CompressToolsFile),
+    // CompressTools(compress_tools::CompressToolsFile),
     Wrapped7Zip(::wrapped_7zip::ArchiveFileHandle),
     Bethesda(self::bethesda_archive::BethesdaArchiveFile),
 }
 
 // static_assertions::assert_impl_all!(zip::ZipFile<'static>: Send, Sync);
-static_assertions::assert_impl_all!(compress_tools::CompressToolsFile: Send, Sync);
+// static_assertions::assert_impl_all!(compress_tools::CompressToolsFile: Send, Sync);
 static_assertions::assert_impl_all!(::wrapped_7zip::ArchiveFileHandle: Send, Sync);
 static_assertions::assert_impl_all!(self::bethesda_archive::BethesdaArchiveFile: Send, Sync);
 static_assertions::assert_impl_all!(ArchiveFileHandle: Send , Sync);
@@ -92,14 +92,14 @@ impl ArchiveHandle<'_> {
                         .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
                         .map_err(|_| file)
                 })
-                .or_else(|file| {
-                    file.try_clone()
-                        .context("cloning file")
-                        .and_then(|file| compress_tools::CompressToolsArchive::new(file).context("reading zip"))
-                        .map(Self::CompressTools)
-                        .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
-                        .map_err(|_| file)
-                })
+                // .or_else(|file| {
+                //     file.try_clone()
+                //         .context("cloning file")
+                //         .and_then(|file| compress_tools::CompressToolsArchive::new(file).context("reading zip"))
+                //         .map(Self::CompressTools)
+                //         .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
+                //         .map_err(|_| file)
+                // })
                 .tap_ok(|a| tracing::trace!("succesfully opened an archive: {a:?}"))
                 .map_err(|_| anyhow::anyhow!("no defined archive handler could handle this file"))
         })
@@ -112,7 +112,7 @@ impl ArchiveHandle<'_> {
 impl std::io::Read for ArchiveFileHandle {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self {
-            ArchiveFileHandle::CompressTools(compress_tools_seek) => compress_tools_seek.read(buf),
+            // ArchiveFileHandle::CompressTools(compress_tools_seek) => compress_tools_seek.read(buf),
             ArchiveFileHandle::Wrapped7Zip(wrapped_7zip) => wrapped_7zip.read(buf),
             ArchiveFileHandle::Bethesda(bethesda_archive_file) => match bethesda_archive_file {
                 BethesdaArchiveFile::Fallout4(fo4) => fo4.read(buf),
@@ -127,7 +127,7 @@ pub trait ProcessArchiveFile {}
 #[enum_dispatch::enum_dispatch]
 #[derive(Debug)]
 pub enum ArchiveHandle<'a> {
-    CompressTools(compress_tools::CompressToolsArchive),
+    // CompressTools(compress_tools::CompressToolsArchive),
     Wrapped7Zip(::wrapped_7zip::ArchiveHandle),
     Bethesda(bethesda_archive::BethesdaArchive<'a>),
 }

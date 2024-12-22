@@ -176,6 +176,7 @@ impl NestedArchivesService {
             None => self
                 .download_summary
                 .get(&archive_hash_path.source_hash)
+                .tap_some(|path| tracing::debug!("translated [{}] => [{}]\n\n\n", archive_hash_path.source_hash, path.inner.display()))
                 .with_context(|| format!("could not find file by hash path: {:#?}", archive_hash_path))
                 .map(|downloaded| downloaded.inner.clone())
                 .map(HandleKind::JustHashPath),
@@ -187,6 +188,13 @@ impl NestedArchivesService {
         match self.cache.get(&nested_archive).cloned() {
             Some((exists, _last_accessed)) => {
                 // WARN: this is dirty but it prevents small files from piling up
+                exists
+                    .inner
+                    .lock()
+                    .await
+                    .1
+                    .rewind()
+                    .context("rewinding file")?;
                 let exists = exists.pipe(HandleKind::Cached);
                 ancestors(nested_archive).for_each(|ancestor| {
                     let now = Instant::now();

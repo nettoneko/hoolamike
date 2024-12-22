@@ -62,18 +62,7 @@ pub mod patched_from_archive;
 
 pub mod remapped_inline_file;
 
-pub mod transformed_texture {
-    use {super::*, crate::modlist_json::directive::TransformedTextureDirective};
-
-    #[derive(Clone, Debug)]
-    pub struct TransformedTextureHandler {}
-
-    impl TransformedTextureHandler {
-        pub async fn handle(self, directive: TransformedTextureDirective) -> Result<u64> {
-            anyhow::bail!("[TransformedTextureDirective ] {directive:#?} is not implemented")
-        }
-    }
-}
+pub mod transformed_texture;
 
 use crate::modlist_json::Directive;
 
@@ -228,7 +217,10 @@ impl DirectivesHandler {
                 }),
                 wabbajack_file: wabbajack_file.clone(),
             },
-            transformed_texture: transformed_texture::TransformedTextureHandler {},
+            transformed_texture: transformed_texture::TransformedTextureHandler {
+                output_directory: output_directory.clone(),
+                nested_archive_service: nested_archive_service.clone(),
+            },
             nested_archive_manager: nested_archive_service,
         }
     }
@@ -271,10 +263,11 @@ impl DirectivesHandler {
                     Directive::RemappedInlineFile(RemappedInlineFileDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
                     Directive::TransformedTexture(TransformedTextureDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
                 }
-                .pipe(|(hash, size, to)| (hash, size, output_directory.join(to.into_path())))
+                .pipe(|(hash, size, to)| (hash, *size, output_directory.join(to.into_path())))
                 .pipe(move |(hash, size, to)| {
-                    validate_hash_with_overrides(to.clone(), hash, *size).map(move |res| {
-                        res.tap_err(|reason| tracing::warn!(%kind, ?reason, ?to, "directive will be recomputed"))
+                    validate_hash_with_overrides(to.clone(), hash, size).map(move |res| {
+                        res.tap_err(|reason| tracing::warn!(%kind, ?size, ?reason, ?to, "directive will be recomputed"))
+                            .tap_ok(|path| tracing::info!(%kind, ?size, ?path, ?to,  "directive is ok"))
                             .is_err()
                     })
                 })
@@ -321,6 +314,7 @@ impl DirectivesHandler {
                     enum ArchivePathDirective {
                         FromArchive(FromArchiveDirective),
                         PatchedFromArchive(PatchedFromArchiveDirective),
+                        TransformedTexture(TransformedTextureDirective),
                     }
 
                     impl ArchivePathDirective {
@@ -328,6 +322,7 @@ impl DirectivesHandler {
                             match self {
                                 ArchivePathDirective::FromArchive(f) => &f.archive_hash_path,
                                 ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => &patched_from_archive_directive.archive_hash_path,
+                                ArchivePathDirective::TransformedTexture(transformed_texture_directive) => &transformed_texture_directive.archive_hash_path,
                             }
                         }
                     }
@@ -338,7 +333,14 @@ impl DirectivesHandler {
                                 .pipe(futures::stream::iter)
                                 .map({
                                     cloned![manager];
-                                    move |directive| manager.clone().inline_file.clone().handle(directive)
+                                    move |directive| {
+                                        manager
+                                            .clone()
+                                            .inline_file
+                                            .clone()
+                                            .handle(directive.clone())
+                                            .map(move |res| res.with_context(|| format!("handling directive [{directive:#?}]")))
+                                    }
                                 })
                                 .buffered(concurrency()),
                         )
@@ -350,6 +352,11 @@ impl DirectivesHandler {
                                         .map(ArchivePathDirective::from),
                                 )
                                 .chain(from_archive.into_iter().map(ArchivePathDirective::from))
+                                .chain(
+                                    transformed_texture
+                                        .into_iter()
+                                        .map(ArchivePathDirective::from),
+                                )
                                 .sorted_unstable_by_key(|a| a.archive_path().clone())
                                 .chunk_by(|a| a.archive_path().clone().parent().map(|(path, _)| path))
                                 .into_iter()
@@ -399,15 +406,25 @@ impl DirectivesHandler {
                                                         .clone()
                                                         .pipe(futures::stream::iter)
                                                         .map(move |directive| match directive {
+                                                            ArchivePathDirective::TransformedTexture(transformed_texture) => manager
+                                                                .transformed_texture
+                                                                .clone()
+                                                                .handle(transformed_texture.clone())
+                                                                .map(move |res| res.with_context(|| format!("handling directive: {transformed_texture:#?}")))
+                                                                .boxed_local(),
                                                             ArchivePathDirective::FromArchive(from_archive) => manager
                                                                 .from_archive
                                                                 .clone()
-                                                                .handle(from_archive)
+                                                                .handle(from_archive.clone())
+                                                                .map(move |res| res.with_context(|| format!("handling directive: {from_archive:#?}")))
                                                                 .boxed_local(),
                                                             ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => manager
                                                                 .patched_from_archive
                                                                 .clone()
-                                                                .handle(patched_from_archive_directive)
+                                                                .handle(patched_from_archive_directive.clone())
+                                                                .map(move |res| {
+                                                                    res.with_context(|| format!("handling directive: {patched_from_archive_directive:#?}"))
+                                                                })
                                                                 .boxed_local(),
                                                         })
                                                         .buffer_unordered(concurrency().div(4).max(1))
@@ -425,21 +442,23 @@ impl DirectivesHandler {
                                 manager
                                     .remapped_inline_file
                                     .clone()
-                                    .handle(remapped_inline_file)
-                            }
-                        }))
-                        .chain(transformed_texture.pipe(futures::stream::iter).then({
-                            cloned![manager];
-                            move |transformed_texture| {
-                                manager
-                                    .transformed_texture
-                                    .clone()
-                                    .handle(transformed_texture)
+                                    .handle(remapped_inline_file.clone())
+                                    .map(move |res| res.with_context(|| format!("handling {remapped_inline_file:#?}")))
                             }
                         }))
                         .chain(create_bsa.pipe(futures::stream::iter).then({
                             cloned![manager];
-                            move |create_bsa| manager.create_bsa.clone().handle(create_bsa)
+                            move |create_bsa| {
+                                let debug = format!("{create_bsa:#?}")
+                                    .chars()
+                                    .take(256)
+                                    .collect::<String>();
+                                manager
+                                    .create_bsa
+                                    .clone()
+                                    .handle(create_bsa)
+                                    .map(move |res| res.with_context(|| format!("handling directive: [{debug}]")))
+                            }
                         }))
                         .map_ok({
                             cloned![pb];

@@ -56,7 +56,7 @@ pub struct FromArchiveDirective {
     pub archive_hash_path: ArchiveHashPath,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
 pub struct InlineFileDirective {
@@ -110,7 +110,7 @@ pub struct PatchedFromArchiveDirective {
     pub patch_id: uuid::Uuid,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
 pub struct RemappedInlineFileDirective {
@@ -133,7 +133,7 @@ pub struct RemappedInlineFileDirective {
     pub to: MaybeWindowsPath,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
 pub struct TransformedTextureDirective {

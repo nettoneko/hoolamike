@@ -27,6 +27,12 @@ impl ListOutput {
                 .and_then(|(_header, files)| {
                     files
                         .split("\n\n")
+                        .filter_map(|entry| {
+                            entry
+                                .trim()
+                                .pipe(|trimmed| trimmed.is_empty().not().then_some(trimmed))
+                        })
+                        .filter(|entry| entry.lines().count() > 2)
                         .map(|entry| {
                             entry
                                 .trim()

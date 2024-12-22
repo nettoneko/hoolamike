@@ -1,10 +1,9 @@
 set working-directory := './playground'
+set positional-arguments
+
 default:
-    cargo \
-            run --release \
-            -- \
-            install \
-            --skip-verify-and-downloads
+    just --list
+
 test-empty:
     cargo \
             run --release \
@@ -18,7 +17,29 @@ test-empty:
             --skip-kind inline-file \
             --skip-kind create-bsa
 
-test-create-bsa:
+@test-all +args:
+    cargo \
+            run --release \
+            -- \
+            install \
+            --skip-verify-and-downloads \
+            {{args}}
+
+
+@test-from-archive:
+    cargo \
+            run --release \
+            -- \
+            install \
+            --skip-verify-and-downloads \
+            --skip-kind patched-from-archive \
+            --skip-kind transformed-texture \
+            --skip-kind remapped-inline-file \
+            --skip-kind inline-file \
+            --skip-kind create-bsa \
+            "$@"
+
+@test-create-bsa +args:
     cargo \
             run --release \
             -- \
@@ -28,8 +49,9 @@ test-create-bsa:
             --skip-kind patched-from-archive \
             --skip-kind transformed-texture \
             --skip-kind remapped-inline-file \
-            --skip-kind inline-file
-test-transformed-texture:
+            --skip-kind inline-file \
+            {{args}}
+test-transformed-texture +args:
     cargo \
             run --release \
             -- \
@@ -39,7 +61,8 @@ test-transformed-texture:
             --skip-kind patched-from-archive \
             --skip-kind remapped-inline-file \
             --skip-kind inline-file \
-            --skip-kind create-bsa
+            --skip-kind create-bsa \
+            {{args}}
 
 test-remapped-inline-file:
     cargo \

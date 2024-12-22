@@ -3,10 +3,11 @@
 #![feature(slice_take)]
 use {
     anyhow::{Context, Result},
-    clap::{Parser, Subcommand},
+    clap::{Args, Parser, Subcommand},
     modlist_data::ModlistSummary,
     modlist_json::DirectiveKind,
     std::path::PathBuf,
+    tap::Pipe,
     tracing::info,
 };
 pub const BUFFER_SIZE: usize = 1024 * 64;
@@ -37,10 +38,24 @@ pub struct DebugHelpers {
     start_from_directive: Option<String>,
     #[arg(long)]
     skip_kind: Vec<DirectiveKind>,
+    #[arg(long)]
+    contains: Vec<String>,
+}
+
+#[derive(Subcommand)]
+enum HoolamikeDebugCommand {
+    ReserializeDirectives { modlist_file: PathBuf },
+}
+
+#[derive(Args)]
+struct HoolamikeDebug {
+    #[command(subcommand)]
+    command: HoolamikeDebugCommand,
 }
 
 #[derive(Subcommand)]
 enum Commands {
+    HoolamikeDebug(HoolamikeDebug),
     /// tests the modlist parser
     ValidateModlist {
         /// path to modlist (.wabbajack) file
@@ -180,6 +195,18 @@ async fn main() -> Result<()> {
                 anyhow::anyhow!("could not finish installation due to [{}] errors", errors.len())
             })
             .map(|count| println!("successfully installed [{}] mods", count.len())),
+        Commands::HoolamikeDebug(HoolamikeDebug { command }) => match command {
+            HoolamikeDebugCommand::ReserializeDirectives { modlist_file } => wabbajack_file::WabbajackFile::load(modlist_file)
+                .context("loading modlist file")
+                .and_then(|modlist| {
+                    modlist
+                        .1
+                        .modlist
+                        .directives
+                        .pipe_ref(|directives| serde_json::to_string_pretty(directives).context("serializing directives"))
+                })
+                .map(|directives| println!("{directives}")),
+        },
     }
     .with_context(|| {
         format!(

@@ -30,12 +30,14 @@ fs2.workspace = true
 futures.workspace = true
 futures-util.workspace = true
 hex.workspace = true
+image_dds = { version = "0.6.2", features = ["serde"] }
 indexmap.workspace = true
 indicatif.workspace = true
 iter-read.workspace = true
 itertools.workspace = true
 memmap2 = "0.9.5"
 nonempty.workspace = true
+normalize-path = "0.2.1"
 num.workspace = true
 num_cpus.workspace = true
 omnom.workspace = true
