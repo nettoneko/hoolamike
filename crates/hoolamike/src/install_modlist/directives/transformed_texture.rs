@@ -24,7 +24,7 @@ impl std::io::Result<u64> {
     }
 }
 
-#[cfg(feature = "dds_recompression")]
+// #[cfg(feature = "dds_recompression")]
 mod dds_recompression;
 
 impl TransformedTextureHandler {
