@@ -179,3 +179,39 @@ where
         .await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        futures::{StreamExt, TryStreamExt},
+        io::{BufReader, Read},
+        std::future::ready,
+    };
+    #[test_log::test(tokio::test)]
+    async fn test_seek_with_tempfile() -> Result<()> {
+        [
+            //
+            [1u8; 8].as_slice(),
+        ]
+        .pipe(futures::stream::iter)
+        .map(|slice| (slice, slice.pipe(std::io::Cursor::new).pipe(BufReader::new)))
+        .map(Ok)
+        .try_for_each(|(slice, reader)| {
+            reader
+                .seek_with_temp_file(ProgressBar::new(slice.len() as _))
+                .and_then(move |temp| async move {
+                    let mut buffer = vec![];
+                    temp.inner
+                        .lock()
+                        .await
+                        .1
+                        .read_to_end(&mut buffer)
+                        .context("reading failed")?;
+                    assert_eq!(slice, &buffer, "buffer mismatch");
+                    Ok(())
+                })
+        })
+        .await
+    }
+}

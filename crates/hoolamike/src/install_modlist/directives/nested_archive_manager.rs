@@ -107,8 +107,9 @@ fn ancestors(archive_hash_path: ArchiveHashPath) -> impl Iterator<Item = Archive
 }
 
 impl NestedArchivesService {
-    #[instrument(skip_all)]
+    #[instrument(skip(self))]
     async fn init(&mut self, archive_hash_path: ArchiveHashPath) -> Result<(ArchiveHashPath, HandleKind)> {
+        tracing::trace!("initializing entry");
         let pb = vertical_progress_bar(0, ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)
             .attach_to(&super::PROGRESS_BAR)
             .tap_mut(|pb| {
@@ -235,10 +236,14 @@ impl NestedArchivesService {
             }
         }
     }
+    #[tracing::instrument(skip(self))]
     pub async fn preheat(&mut self, archive_hash_path: ArchiveHashPath) -> Result<()> {
+        tracing::trace!("preheating");
         self.get(archive_hash_path).await.map(|_| ())
     }
+    #[tracing::instrument(skip(self))]
     pub fn cleanup(&mut self, archive_hash_path: ArchiveHashPath) {
+        tracing::trace!("preheating");
         ancestors(archive_hash_path).for_each(|ancestor| {
             self.cache.shift_remove(&ancestor);
         })
