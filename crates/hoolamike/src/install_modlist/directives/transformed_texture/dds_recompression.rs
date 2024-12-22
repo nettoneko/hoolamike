@@ -29,9 +29,11 @@ where
                         .decode_rgbaf32()
                         .context("decoding rgbaf32")
                         .and_then(|decoded| {
-                            // layer == face
-                            (0..decoded.layers)
-                                .flat_map(|layer| (0..decoded.mipmaps).flat_map(move |mipmap| (0..decoded.depth).map(move |depth| (layer, depth, mipmap))))
+                            // note to self: layer == face
+                            std::iter::once(())
+                                .flat_map(|_| (0..decoded.layers))
+                                .flat_map(|layer| (0..decoded.depth).map(move |depth| (layer, depth)))
+                                .flat_map(|(layer, depth)| (0..decoded.mipmaps).map(move |mipmap| (layer, depth, mipmap)))
                                 .map(|(layer, depth, mipmap)| {
                                     decoded
                                         .get(layer, depth, mipmap)
@@ -63,6 +65,6 @@ where
                         })
                 })
         })
-        .and_then(|reencoded| reencoded.to_dds().context("writing dds file"))
-        .and_then(|dds| dds.write(output).context("writing dds file"))
+        .and_then(|reencoded| reencoded.to_dds().context("creating a dds file"))
+        .and_then(|dds| dds.write(output).context("writing dds file to output"))
 }
