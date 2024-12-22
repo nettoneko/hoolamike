@@ -1,20 +1,11 @@
 use {
     anyhow::{Context, Result},
-    crossbeam::epoch::Pointable,
-    image_dds::{
-        self,
-        ddsfile::{DataFormat, Dds, DxgiFormat},
-        image::{DynamicImage, GenericImage, ImageBuffer},
-        ImageFormat,
-        SurfaceRgba32Float,
-    },
-    std::{
-        borrow::BorrowMut,
-        io::{BufReader, Cursor, Read, Write},
-    },
+    image_dds::{self, image::DynamicImage, ImageFormat, SurfaceRgba32Float},
+    std::io::{Read, Write},
 };
 
-pub fn recompress<R, W>(input: &mut R, width: u32, height: u32, mip_maps: u32, format: ImageFormat, output: &mut W, leave_open: bool) -> Result<()>
+#[tracing::instrument(skip(input, output))]
+pub fn recompress<R, W>(input: &mut R, width: u32, height: u32, mip_maps: u32, output: &mut W) -> Result<()>
 where
     R: Read,
     W: Write,
@@ -39,7 +30,7 @@ where
                                         .get(layer, depth, mipmap)
                                         .with_context(|| format!("reading data for layer={layer}, depth={depth}, mipmap={mipmap}"))
                                         .and_then(|data| image_dds::image::ImageBuffer::from_vec(width, height, data.to_vec()).context("creating a buffer"))
-                                        .map(|image| DynamicImage::ImageRgba32F(image))
+                                        .map(DynamicImage::ImageRgba32F)
                                         .map(|image| image.resize_exact(width, height, image_dds::image::imageops::FilterType::Lanczos3))
                                         .map(|resized| resized.into_rgba32f())
                                 })
@@ -49,6 +40,7 @@ where
                                         acc
                                     })
                                 })
+                                .context("resizing all parts of dds")
                         })
                         .map(|data| SurfaceRgba32Float {
                             data,
@@ -58,9 +50,9 @@ where
                             layers: surface.layers,
                             mipmaps: surface.mipmaps,
                         })
-                        .and_then(|surface| {
-                            surface
-                                .encode(format, image_dds::Quality::Normal, image_dds::Mipmaps::FromSurface)
+                        .and_then(|resized_surface| {
+                            resized_surface
+                                .encode(surface.image_format, image_dds::Quality::Normal, image_dds::Mipmaps::FromSurface)
                                 .context("reencoding surface")
                         })
                 })
