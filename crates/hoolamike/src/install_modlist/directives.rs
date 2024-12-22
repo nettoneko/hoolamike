@@ -1,7 +1,6 @@
 use {
     crate::{
         downloaders::WithArchiveDescriptor,
-        error::TotalResult,
         install_modlist::download_cache::validate_hash,
         modlist_json::{
             directive::{
@@ -16,7 +15,6 @@ use {
             DirectiveKind,
         },
         progress_bars::{vertical_progress_bar, ProgressKind, PROGRESS_BAR},
-        utils::MaybeWindowsPath,
     },
     anyhow::{Context, Result},
     futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt},
@@ -24,16 +22,16 @@ use {
     nested_archive_manager::{max_open_files, NestedArchivesService},
     remapped_inline_file::RemappingContext,
     std::{
-        collections::{BTreeMap, HashSet},
+        collections::BTreeMap,
         future::ready,
-        ops::{Div, Mul},
+        ops::Div,
         path::{Path, PathBuf},
         sync::Arc,
         time::Duration,
     },
     tap::prelude::*,
     tokio::sync::Mutex,
-    tracing::{debug, info, info_span, trace, Instrument},
+    tracing::{info_span, Instrument},
 };
 
 pub(crate) fn create_file_all(path: &Path) -> Result<std::fs::File> {
@@ -103,7 +101,6 @@ impl DirectiveKind {
 
 #[derive(Debug, Clone)]
 pub struct DirectivesHandlerConfig {
-    pub failed_directives_whitelist: HashSet<String>,
     pub wabbajack_file: WabbajackFileHandle,
     pub output_directory: PathBuf,
     pub game_directory: PathBuf,
@@ -111,7 +108,6 @@ pub struct DirectivesHandlerConfig {
 }
 
 pub mod nested_archive_manager;
-pub mod nested_archive_manager_v2;
 
 fn concurrency() -> usize {
     #[cfg(not(debug_assertions))]
@@ -176,7 +172,6 @@ impl DirectivesHandler {
     #[allow(clippy::new_without_default)]
     pub fn new(config: DirectivesHandlerConfig, sync_summary: Vec<WithArchiveDescriptor<PathBuf>>) -> Self {
         let DirectivesHandlerConfig {
-            failed_directives_whitelist,
             wabbajack_file,
             output_directory,
             game_directory,

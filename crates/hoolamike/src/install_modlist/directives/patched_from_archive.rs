@@ -38,6 +38,7 @@ impl PatchedFromArchiveHandler {
         let output_path = self.output_directory.join(to.into_path());
 
         if let Err(message) = validate_hash(output_path.clone(), hash.clone()).await {
+            tracing::error!(?message);
             let source_file = self
                 .nested_archive_service
                 .lock()

@@ -274,7 +274,7 @@ impl Synchronizers {
                     .and_then(ready)
                     .await
                 {
-                    Ok(verified) => Ok(Either::Left(verified.tap(|verified| info!(?verified, "succesfully verified a file")))),
+                    Ok(verified) => Ok(Either::Left(verified.tap(|verified| tracing::info!(?verified, "succesfully verified a file")))),
                     Err(message) => self
                         .clone()
                         .prepare_sync_task(Archive {

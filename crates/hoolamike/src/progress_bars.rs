@@ -1,5 +1,4 @@
 use {
-    console::style,
     indicatif::{MultiProgress, ProgressBar, ProgressStyle},
     once_cell::sync::Lazy,
     std::sync::Arc,

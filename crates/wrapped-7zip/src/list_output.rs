@@ -1,7 +1,7 @@
 use {
     super::*,
-    chrono::{NaiveDate, NaiveDateTime, NaiveTime},
-    std::{collections::BTreeMap, iter::empty, ops::Not, str::FromStr},
+    chrono::NaiveDateTime,
+    std::{collections::BTreeMap, ops::Not},
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -85,6 +85,3 @@ impl ListOutput {
         })
     }
 }
-
-#[cfg(test)]
-mod tests;

@@ -6,7 +6,6 @@ use {
     list_output::{ListOutput, ListOutputEntry},
     parking_lot::Mutex,
     std::{
-        convert::identity,
         io::{BufReader, Read},
         iter::once,
         path::{Path, PathBuf},
@@ -228,10 +227,10 @@ impl ArchiveHandle {
                     .iter()
                     .find_map(
                         |ListOutputEntry {
-                             modified,
+                             modified: _,
                              original_path,
-                             created,
-                             size,
+                             created: _,
+                             size: _,
                              path,
                          }| { path.as_path().eq(file).then(|| original_path.clone()) },
                     )

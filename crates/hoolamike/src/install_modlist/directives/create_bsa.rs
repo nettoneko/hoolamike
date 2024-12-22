@@ -32,10 +32,11 @@ impl LazyArchiveFile {
     }
     pub fn as_archive_file(&self) -> Result<ba2::fo4::File<'_>> {
         match self.compressed {
-            true => Ok(ba2::fo4::Chunk::from_compressed(self.as_bytes(), anyhow::bail!("compressed"))),
+            true => Err(anyhow::anyhow!("compressed is not supported")),
             false => Ok(ba2::fo4::Chunk::from_decompressed(self.as_bytes())),
         }
         .map(|chunk| [chunk].into_iter().collect::<ba2::fo4::File>())
+        .context("building bsa archive file")
     }
 }
 
@@ -125,7 +126,7 @@ impl CreateBSAHandler {
     pub async fn handle(
         self,
         CreateBSADirective {
-            hash,
+            hash: _,
             size,
             to,
             temp_id,
@@ -141,10 +142,10 @@ impl CreateBSAHandler {
             });
         tokio::task::spawn_blocking(move || match state {
             DirectiveState::CompressionBsa {
-                has_name_table,
-                header_magic,
-                kind,
-                version,
+                has_name_table: _,
+                header_magic: _,
+                kind: _,
+                version: _,
             } => {
                 let files_pb = vertical_progress_bar(file_states.len() as _, ProgressKind::WriteBSA, indicatif::ProgressFinish::AndLeave)
                     .attach_to(&PROGRESS_BAR)
@@ -168,7 +169,7 @@ impl CreateBSAHandler {
                         FileState::BA2File {
                             dir_hash,
                             extension,
-                            index,
+
                             name_hash,
                             path,
                             ..

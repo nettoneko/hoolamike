@@ -28,6 +28,8 @@ impl InlineFileHandler {
     ) -> Result<u64> {
         let output_path = self.output_directory.join(to.into_path());
         if let Err(message) = validate_hash(output_path.clone(), hash.clone()).await {
+            tracing::error!(?message);
+
             let wabbajack_file = self.wabbajack_file.clone();
             tokio::task::spawn_blocking(move || -> Result<_> {
                 let pb = vertical_progress_bar(size, ProgressKind::Extract, indicatif::ProgressFinish::AndClear)

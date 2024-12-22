@@ -8,7 +8,6 @@ use {
     modlist_json::DirectiveKind,
     std::path::PathBuf,
     tap::Pipe,
-    tracing::info,
 };
 pub const BUFFER_SIZE: usize = 1024 * 64;
 

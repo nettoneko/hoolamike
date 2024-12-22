@@ -72,7 +72,7 @@ impl TransformedTextureHandler {
                     format,
                     height,
                     mip_levels,
-                    perceptual_hash,
+                    perceptual_hash: _,
                     width,
                 },
             to,
@@ -83,6 +83,7 @@ impl TransformedTextureHandler {
         let output_path = self.output_directory.join(to.into_path());
 
         if let Err(message) = validate_hash_with_overrides(output_path.clone(), hash.clone(), size).await {
+            tracing::error!(?message);
             let source_file = self
                 .nested_archive_service
                 .lock()

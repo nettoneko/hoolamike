@@ -4,7 +4,6 @@ use {
     indexmap::IndexMap,
     serde::{Deserialize, Serialize},
     std::{
-        collections::HashSet,
         iter::{empty, once},
         path::{Path, PathBuf},
     },
@@ -44,7 +43,6 @@ pub struct InstallationConfig {
     pub wabbajack_file_path: PathBuf,
     #[derivative(Default(value = "std::env::current_dir().unwrap()"))]
     pub installation_path: PathBuf,
-    pub whitelist_failed_directives: HashSet<String>,
 }
 
 pub type GamesConfig = IndexMap<GameName, GameConfig>;

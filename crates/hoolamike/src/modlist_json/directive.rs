@@ -1,4 +1,4 @@
-use {super::*, nonempty::NonEmpty};
+use super::*;
 
 pub mod archive_hash_path;
 

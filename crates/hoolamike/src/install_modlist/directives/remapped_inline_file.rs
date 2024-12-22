@@ -5,6 +5,7 @@ use {
     tracing::instrument,
 };
 
+#[allow(dead_code)]
 pub mod wabbajack_consts {
     use std::path::Path;
 

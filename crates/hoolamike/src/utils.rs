@@ -1,8 +1,7 @@
 use {
-    anyhow::Context,
     itertools::Itertools,
     serde::{Deserialize, Serialize},
-    std::{io::Write, path::PathBuf},
+    std::path::PathBuf,
     tap::prelude::*,
 };
 

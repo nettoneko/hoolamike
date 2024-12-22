@@ -1,3 +1,4 @@
+#[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub enum DXGIFormat {
     UNKNOWN = 0,

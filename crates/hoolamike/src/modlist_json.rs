@@ -1,10 +1,7 @@
 use {
-    crate::{
-        install_modlist::download_cache::{to_base_64_from_u64, to_u64_from_base_64},
-        utils::MaybeWindowsPath,
-    },
+    crate::{install_modlist::download_cache::to_base_64_from_u64, utils::MaybeWindowsPath},
     serde::{Deserialize, Serialize},
-    std::{hash::Hasher, path::PathBuf},
+    std::hash::Hasher,
     tap::prelude::*,
 };
 
@@ -629,33 +626,6 @@ pub mod parsing_helpers {
         Other(&'a serde_json::Value),
     }
 
-    fn summarize_node(node: &Value) -> ValueSummary {
-        match node {
-            Value::Array(vec) => ValueSummary::Array {
-                first_element: vec.first().map(summarize_node).map(Box::new),
-                len: vec.len(),
-            },
-            Value::Object(map) => ValueSummary::Map {
-                fields: map
-                    .iter()
-                    .map(|(key, value)| (key.as_str(), summarize_node(value)))
-                    .collect(),
-            },
-            other => ValueSummary::Other(other),
-        }
-    }
-
-    #[allow(unexpected_cfgs)]
-    mod ad_hoc_test {
-        // #[cfg(ignore)]
-        #[test_log::test]
-        fn test_wasteland_reborn() -> anyhow::Result<()> {
-            use super::*;
-
-            include_str!("../../../../wasteland-reborn/test/modlist").pipe(validate_modlist_file)
-        }
-    }
-
     pub fn validate_modlist_file(input: &str) -> Result<()> {
         input
             .tap(|input| {
@@ -683,5 +653,36 @@ pub mod parsing_helpers {
                     .context("bad modlist")
             })
             .map(|_| ())
+    }
+
+    #[allow(unexpected_cfgs)]
+    #[cfg(test)]
+    mod ad_hoc_test {
+        use super::*;
+
+        #[allow(dead_code)]
+        fn summarize_node(node: &Value) -> ValueSummary {
+            match node {
+                Value::Array(vec) => ValueSummary::Array {
+                    first_element: vec.first().map(summarize_node).map(Box::new),
+                    len: vec.len(),
+                },
+                Value::Object(map) => ValueSummary::Map {
+                    fields: map
+                        .iter()
+                        .map(|(key, value)| (key.as_str(), summarize_node(value)))
+                        .collect(),
+                },
+                other => ValueSummary::Other(other),
+            }
+        }
+
+        // #[cfg(ignore)]
+        #[test_log::test]
+        fn test_wasteland_reborn() -> anyhow::Result<()> {
+            use super::*;
+
+            include_str!("../../../../wasteland-reborn/test/modlist").pipe(validate_modlist_file)
+        }
     }
 }

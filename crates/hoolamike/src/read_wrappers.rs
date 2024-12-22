@@ -53,7 +53,6 @@ pub mod validate_hash {
             hash::Hasher,
             io::{Error, ErrorKind, Read, Result},
         },
-        tap::prelude::*,
     };
 
     pub struct ValidateHashReader<R> {

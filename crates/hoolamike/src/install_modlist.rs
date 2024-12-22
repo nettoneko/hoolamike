@@ -11,11 +11,10 @@ use {
     anyhow::Context,
     directives::{DirectivesHandler, DirectivesHandlerConfig},
     downloads::Synchronizers,
-    futures::{FutureExt, TryFutureExt, TryStreamExt},
+    futures::{FutureExt, TryFutureExt},
     itertools::Itertools,
     std::{convert::identity, future::ready, sync::Arc},
     tap::prelude::*,
-    tracing::info,
 };
 
 pub mod download_cache;
@@ -28,12 +27,10 @@ pub mod directives;
 pub async fn install_modlist(
     HoolamikeConfig {
         downloaders,
-        installation:
-            InstallationConfig {
-                whitelist_failed_directives,
-                wabbajack_file_path: modlist_file,
-                installation_path,
-            },
+        installation: InstallationConfig {
+            wabbajack_file_path,
+            installation_path,
+        },
         games,
     }: HoolamikeConfig,
     DebugHelpers {
@@ -54,7 +51,7 @@ pub async fn install_modlist(
             wabbajack_entries: _,
             modlist,
         },
-    ) = tokio::task::spawn_blocking(move || WabbajackFile::load(modlist_file))
+    ) = tokio::task::spawn_blocking(move || WabbajackFile::load(wabbajack_file_path))
         .await
         .context("thread crashed")
         .and_then(identity)
@@ -116,7 +113,6 @@ pub async fn install_modlist(
                                     DirectivesHandlerConfig {
                                         wabbajack_file: wabbajack_file_handle,
                                         output_directory: installation_path,
-                                        failed_directives_whitelist: whitelist_failed_directives,
                                         game_directory: game_config.root_directory.clone(),
                                         downloads_directory: downloaders.downloads_directory.clone(),
                                     },
