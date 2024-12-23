@@ -2,7 +2,7 @@ use {
     super::ProcessArchive,
     crate::{
         progress_bars::{vertical_progress_bar, PROGRESS_BAR},
-        utils::{MaybeWindowsPath, ReadableCatchUnwindExt},
+        utils::{MaybeWindowsPath, PathReadWrite, ReadableCatchUnwindExt},
     },
     anyhow::{Context, Result},
     ba2::{
@@ -128,11 +128,9 @@ impl ProcessArchive for BethesdaArchive<'_> {
 
 impl BethesdaArchive<'_> {
     pub fn open(file: &Path) -> Result<Self> {
-        std::fs::OpenOptions::new()
-            .read(true)
-            .open(file)
+        file.open_file_read()
             .context("opening bethesda archive")
-            .and_then(|mut archive| {
+            .and_then(|(_path, mut archive)| {
                 ba2::guess_format(&mut archive)
                     .context("unrecognized format")
                     .and_then(|format| match format {

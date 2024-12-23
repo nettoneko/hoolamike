@@ -1,6 +1,6 @@
 use {
     super::*,
-    crate::modlist_json::directive::RemappedInlineFileDirective,
+    crate::{modlist_json::directive::RemappedInlineFileDirective, utils::PathReadWrite},
     std::{convert::identity, io::Read},
     tracing::instrument,
 };
@@ -123,13 +123,10 @@ impl RemappedInlineFileHandler {
                 })
                 .map(|file| remapping_context.remap_file_contents(&file))
                 .and_then(|output| {
-                    std::fs::OpenOptions::new()
-                        .write(true)
-                        .truncate(true)
-                        .create(true)
-                        .open(to.clone().into_path())
-                        .with_context(|| format!("opening [{to:?}] for writing"))
-                        .and_then(|mut file| std::io::copy(&mut pb.wrap_read(std::io::Cursor::new(output)), &mut file).context("writing remapped file"))
+                    to.clone()
+                        .into_path()
+                        .open_file_write()
+                        .and_then(|(_, mut file)| std::io::copy(&mut pb.wrap_read(std::io::Cursor::new(output)), &mut file).context("writing remapped file"))
                 })
         })
         .instrument(info_span!("loading and remapping a file", ?source_data_id))

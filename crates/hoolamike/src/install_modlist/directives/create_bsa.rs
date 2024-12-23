@@ -1,6 +1,9 @@
 use {
     super::*,
-    crate::modlist_json::{directive::CreateBSADirective, BA2DX10Entry, DirectiveState, FileState},
+    crate::{
+        modlist_json::{directive::CreateBSADirective, BA2DX10Entry, DirectiveState, FileState},
+        utils::PathReadWrite,
+    },
     ba2::{fo4::FileReadOptions, CompressableFrom, CompressionResult, ReaderWithOptions},
     std::{
         cell::RefCell,
@@ -101,20 +104,16 @@ impl<'a> BA2DX10File<'a> {
         temp_id_directory_path
             .join(path.into_path())
             .pipe(|source_path| {
-                std::fs::OpenOptions::new()
-                    .read(true)
-                    .open(&source_path)
-                    .with_context(|| format!("opening entry for readng at [{source_path:?}]"))
-                    .and_then(|file| {
-                        ba2::fo4::File::read(
-                            &file,
-                            &fo4_read_options()
-                                .mip_chunk_height(height.conv())
-                                .mip_chunk_width(width.conv())
-                                .build(),
-                        )
-                        .context("reading file")
-                    })
+                source_path.open_file_read().and_then(|(path, file)| {
+                    ba2::fo4::File::read(
+                        &file,
+                        &fo4_read_options()
+                            .mip_chunk_height(height.conv())
+                            .mip_chunk_width(width.conv())
+                            .build(),
+                    )
+                    .with_context(|| format!("reading file at {path:?}"))
+                })
             })
             .map(Self)
             .and_then(|file| create_key(&extension, name_hash, dir_hash).map(|key| (key, file)))
@@ -169,19 +168,13 @@ impl CreateBSAHandler {
                         FileState::BA2File {
                             dir_hash,
                             extension,
-
                             name_hash,
                             path,
                             ..
                         } => source_path
                             .join(path.into_path())
-                            .pipe(|path| {
-                                std::fs::OpenOptions::new()
-                                    .read(true)
-                                    .open(&path)
-                                    .with_context(|| format!("opening [{path:?}]"))
-                            })
-                            .and_then(|file| {
+                            .pipe(|path| path.open_file_read())
+                            .and_then(|(_path, file)| {
                                 LazyArchiveFile::new(&file, false)
                                     .and_then(|file| create_key(&extension, name_hash, dir_hash).map(|key| (key, file.pipe(PreparedEntry::Normal))))
                             }),
@@ -203,13 +196,11 @@ impl CreateBSAHandler {
                                 pb.set_message(format!("inserting [{}] entries into archive", entries.len()));
                                 pb.tick();
                             });
-                        std::fs::OpenOptions::new()
-                            .write(true)
-                            .truncate(true)
-                            .create(true)
-                            .open(output_directory.clone().join(to.into_path()))
-                            .context("opening output file")
-                            .and_then(|mut output| {
+                        output_directory
+                            .clone()
+                            .join(to.into_path())
+                            .open_file_write()
+                            .and_then(|(output_path, mut output)| {
                                 entries.pipe_ref(|entries| {
                                     entries
                                         .iter()
@@ -241,6 +232,7 @@ impl CreateBSAHandler {
                                                     })
                                                 })
                                         })
+                                        .with_context(|| format!("writing to [{:?}]", output_path))
                                 })
                             })
                     })

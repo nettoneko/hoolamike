@@ -82,27 +82,15 @@ impl PatchedFromArchiveHandler {
                     .get_handle(Path::new(&patch_id.hyphenated().to_string()))
                     .with_context(|| format!("patch {patch_id:?} does not exist"))?;
 
-                match source_file {
-                    nested_archive_manager::HandleKind::Cached(file) => file.inner.blocking_lock().pipe_deref_mut(|(named, file)| {
-                        file.try_clone().context("cloning file").and_then(|mut f| {
-                            f.rewind()
-                                .context("rewinding")
-                                .map(|_| (named.path().to_owned(), f))
+                source_file
+                    .open_file_read()
+                    .and_then(|(final_source_path, mut final_source)| {
+                        create_file_all(&output_path).and_then(|mut output_file| {
+                            perform_copy(pb, &mut final_source, delta_file, &mut output_file, size, hash)
+                                .with_context(|| format!("when extracting from [{final_source_path:?}] to [{output_path:?}]"))
+                                .with_context(|| format!("when handling [{archive_hash_path:?}] copy"))
                         })
-                    }),
-                    nested_archive_manager::HandleKind::JustHashPath(source_file_path) => std::fs::OpenOptions::new()
-                        .read(true)
-                        .open(&source_file_path)
-                        .with_context(|| format!("opening [{}]", source_file_path.display()))
-                        .map(|file| (source_file_path, file)),
-                }
-                .and_then(|(final_source_path, mut final_source)| {
-                    create_file_all(&output_path).and_then(|mut output_file| {
-                        perform_copy(pb, &mut final_source, delta_file, &mut output_file, size, hash)
-                            .with_context(|| format!("when extracting from [{final_source_path:?}] to [{output_path:?}]"))
-                            .with_context(|| format!("when handling [{archive_hash_path:?}] copy"))
                     })
-                })
             })
             .instrument(tracing::Span::current())
             .await

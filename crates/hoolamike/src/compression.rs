@@ -6,17 +6,14 @@ use {
     ::wrapped_7zip::WRAPPED_7ZIP,
     anyhow::{Context, Result},
     bethesda_archive::BethesdaArchiveFile,
-    futures::TryFutureExt,
     indicatif::ProgressBar,
     std::{
         convert::identity,
-        fs::File,
-        io::{Seek, Write},
+        io::Write,
         path::{Path, PathBuf},
         sync::Arc,
     },
     tap::prelude::*,
-    tokio::sync::Mutex,
 };
 
 pub mod bethesda_archive;
@@ -73,31 +70,20 @@ static_assertions::assert_impl_all!(self::bethesda_archive::BethesdaArchiveFile:
 static_assertions::assert_impl_all!(ArchiveFileHandle: Send , Sync);
 
 impl ArchiveHandle<'_> {
-    pub fn guess(file: std::fs::File, path: &Path) -> anyhow::Result<Self> {
+    pub fn guess(path: &Path) -> anyhow::Result<Self> {
         std::panic::catch_unwind(|| {
-            Err(file)
-                .or_else(|file| {
-                    file.try_clone()
-                        .context("cloning file")
-                        .and_then(|_file| bethesda_archive::BethesdaArchive::open(path).context("reading zip"))
+            Err(())
+                .or_else(|_| {
+                    bethesda_archive::BethesdaArchive::open(path)
+                        .context("reading zip")
                         .map(Self::Bethesda)
                         .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
-                        .map_err(|_| file)
                 })
-                .or_else(|file| {
+                .or_else(|_| {
                     WRAPPED_7ZIP
                         .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
                         .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
-                        .map_err(|_| file)
                 })
-                // .or_else(|file| {
-                //     file.try_clone()
-                //         .context("cloning file")
-                //         .and_then(|file| compress_tools::CompressToolsArchive::new(file).context("reading zip"))
-                //         .map(Self::CompressTools)
-                //         .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
-                //         .map_err(|_| file)
-                // })
                 .tap_ok(|a| tracing::trace!("succesfully opened an archive: {a:?}"))
                 .map_err(|_| anyhow::anyhow!("no defined archive handler could handle this file"))
         })
@@ -137,7 +123,7 @@ impl<T: std::io::Read + Sync + 'static> T
 where
     Self: Sized + Sync + Send + 'static,
 {
-    async fn seek_with_temp_file(self, pb: ProgressBar) -> Result<Arc<WithPermit<Mutex<(tempfile::NamedTempFile, File)>>>> {
+    async fn seek_with_temp_file(self, pb: ProgressBar) -> Result<WithPermit<tempfile::TempPath>> {
         let reader = Arc::new(std::sync::Mutex::new(self));
         WithPermit::new_blocking(&OPEN_FILE_PERMITS, move || {
             tempfile::NamedTempFile::new()
@@ -159,21 +145,12 @@ where
                             temp_file
                         })
                         .and_then(|mut file| {
-                            file.flush().context("flushing file").and_then(|_| {
-                                file.as_file()
-                                    .try_clone()
-                                    .context("cloning file handle")
-                                    .map(|file_handle| (file, file_handle))
-                                    .and_then(|(mut a, mut b)| -> Result<_> {
-                                        a.rewind()?;
-                                        b.rewind()?;
-                                        Ok(Mutex::new((a, b)))
-                                    })
-                            })
+                            file.flush()
+                                .context("flushing file")
+                                .map(|_| file.into_temp_path())
                         })
                 })
         })
-        .map_ok(Arc::new)
         .await
     }
 }
@@ -182,8 +159,8 @@ where
 mod tests {
     use {
         super::*,
-        futures::{StreamExt, TryStreamExt},
-        std::io::{BufReader, Read},
+        futures::{StreamExt, TryFutureExt, TryStreamExt},
+        std::io::BufReader,
     };
     #[test_log::test(tokio::test)]
     async fn test_seek_with_tempfile() -> Result<()> {
@@ -198,12 +175,9 @@ mod tests {
             reader
                 .seek_with_temp_file(ProgressBar::new(slice.len() as _))
                 .and_then(move |temp| async move {
-                    let mut buffer = vec![];
-                    temp.inner
-                        .lock()
-                        .await
-                        .1
-                        .read_to_end(&mut buffer)
+                    let buffer = temp
+                        .inner
+                        .pipe(|f| std::fs::read(&f))
                         .context("reading failed")?;
                     assert_eq!(slice, &buffer, "buffer mismatch");
                     Ok(())

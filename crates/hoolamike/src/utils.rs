@@ -1,4 +1,5 @@
 use {
+    anyhow::Context,
     itertools::Itertools,
     serde::{Deserialize, Serialize},
     std::path::PathBuf,
@@ -61,4 +62,24 @@ macro_rules! cloned {
         #[allow(unused_mut)]
         let mut $es = $es.clone();
     )*}
+}
+
+#[extension_traits::extension(pub(crate) trait PathReadWrite)]
+impl<T: AsRef<std::path::Path>> T {
+    fn open_file_read(&self) -> anyhow::Result<(PathBuf, std::fs::File)> {
+        std::fs::OpenOptions::new()
+            .read(true)
+            .open(self)
+            .with_context(|| format!("opening file for reading at [{}]", self.as_ref().display()))
+            .map(|file| (self.as_ref().to_owned(), file))
+    }
+    fn open_file_write(&self) -> anyhow::Result<(PathBuf, std::fs::File)> {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(self)
+            .with_context(|| format!("opening file for writing at [{}]", self.as_ref().display()))
+            .map(|file| (self.as_ref().to_owned(), file))
+    }
 }

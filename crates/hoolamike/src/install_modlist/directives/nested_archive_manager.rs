@@ -5,6 +5,7 @@ use {
         downloaders::helpers::FutureAnyhowExt,
         modlist_json::directive::ArchiveHashPath,
         progress_bars::{vertical_progress_bar, ProgressKind},
+        utils::PathReadWrite,
     },
     anyhow::{Context, Result},
     futures::{FutureExt, TryFutureExt},
@@ -14,17 +15,15 @@ use {
     once_cell::sync::Lazy,
     std::{
         future::ready,
-        io::Seek,
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::Arc,
     },
     tap::prelude::*,
-    tempfile::NamedTempFile,
     tokio::{
-        sync::{Mutex, OwnedSemaphorePermit, Semaphore},
+        sync::{OwnedSemaphorePermit, Semaphore},
         time::Instant,
     },
-    tracing::{info_span, instrument, Instrument},
+    tracing::instrument,
 };
 
 impl ArchiveHashPath {
@@ -94,10 +93,19 @@ where
     }
 }
 
-pub type CachedArchiveFile = Arc<WithPermit<Mutex<(NamedTempFile, std::fs::File)>>>;
+pub type CachedArchiveFile = Arc<WithPermit<tempfile::TempPath>>;
 pub enum HandleKind {
     Cached(CachedArchiveFile),
     JustHashPath(PathBuf),
+}
+
+impl HandleKind {
+    pub fn open_file_read(&self) -> Result<(PathBuf, std::fs::File)> {
+        match self {
+            HandleKind::Cached(cached) => cached.inner.open_file_read(),
+            HandleKind::JustHashPath(path_buf) => path_buf.open_file_read(),
+        }
+    }
 }
 
 fn ancestors(archive_hash_path: ArchiveHashPath) -> impl Iterator<Item = ArchiveHashPath> {
@@ -117,57 +125,29 @@ impl NestedArchivesService {
                         .expect("must serialize"),
                 );
             });
-        #[instrument(skip(pb, file), level = "INFO")]
-        async fn get_handle(pb: ProgressBar, file: std::fs::File, path: PathBuf, archive_path: PathBuf) -> Result<CachedArchiveFile> {
+        #[instrument(skip(pb), level = "INFO")]
+        async fn get_handle(pb: ProgressBar, source_path: &Path, archive_path: &Path) -> Result<CachedArchiveFile> {
+            let (source_path, archive_path) = (source_path.to_owned(), archive_path.to_owned());
             tokio::task::spawn_blocking(move || {
-                ArchiveHandle::guess(file, &path)
+                ArchiveHandle::guess(&source_path)
                     .context("could not guess archive format for [{path}]")
                     .and_then(|mut archive| archive.get_handle(&archive_path.clone()))
             })
             .map_context("thread crashed")
             .and_then(ready)
             .and_then(|handle| handle.seek_with_temp_file(pb))
+            .map_ok(Arc::new)
             .await
         }
         match archive_hash_path.clone().parent() {
             Some((parent, archive_path)) => match self.get(parent).boxed_local().await? {
                 HandleKind::Cached(cached) => {
-                    let file = cached
-                        .clone()
-                        .inner
-                        .lock()
-                        .instrument(info_span!("waiting_for_cached_file_entry_lock_to_roll_it_back"))
+                    get_handle(pb, &cached.inner, &archive_path.into_path())
+                        .map_ok(HandleKind::Cached)
                         .await
-                        .1
-                        .pipe_ref_mut(|file| {
-                            file.rewind()
-                                .context("rewinding file")
-                                .and_then(|_| file.try_clone().context("cloning file handle"))
-                        })?;
-
-                    get_handle(
-                        pb,
-                        file,
-                        cached
-                            .inner
-                            .lock()
-                            .instrument(info_span!("waiting_for_cached_file_entry_lock_to_clone_it"))
-                            .await
-                            .0
-                            .path()
-                            .to_owned(),
-                        archive_path.into_path(),
-                    )
-                    .await
-                    .map(HandleKind::Cached)
                 }
                 HandleKind::JustHashPath(path_buf) => {
-                    std::fs::OpenOptions::new()
-                        .read(true)
-                        .open(&path_buf)
-                        .with_context(|| format!("opening [{path_buf:?}]"))
-                        .pipe(ready)
-                        .and_then(|file| get_handle(pb, file, path_buf, archive_path.into_path()))
+                    get_handle(pb, &path_buf, &archive_path.into_path())
                         .map_ok(HandleKind::Cached)
                         .await
                 }
@@ -187,13 +167,6 @@ impl NestedArchivesService {
         match self.cache.get(&nested_archive).cloned() {
             Some((exists, _last_accessed)) => {
                 // WARN: this is dirty but it prevents small files from piling up
-                exists
-                    .inner
-                    .lock()
-                    .await
-                    .1
-                    .rewind()
-                    .context("rewinding file")?;
                 let exists = exists.pipe(HandleKind::Cached);
                 ancestors(nested_archive).for_each(|ancestor| {
                     let now = Instant::now();
