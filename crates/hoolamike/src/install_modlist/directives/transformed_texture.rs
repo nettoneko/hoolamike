@@ -11,10 +11,12 @@ use {
     },
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, derivative::Derivative)]
+#[derivative(Debug)]
 pub struct TransformedTextureHandler {
     pub output_directory: PathBuf,
-    pub nested_archive_service: Arc<Mutex<NestedArchivesService>>,
+    #[derivative(Debug = "ignore")]
+    pub nested_archive_service: Arc<NestedArchivesService>,
 }
 
 #[extension_traits::extension(pub trait IoResultValidateSizeExt)]
@@ -86,9 +88,7 @@ impl TransformedTextureHandler {
             tracing::error!(?message);
             let source_file = self
                 .nested_archive_service
-                .lock()
-                .instrument(info_span!("obtaining_archive_service_lock"))
-                .await
+                .clone()
                 .get(archive_hash_path.clone())
                 .instrument(info_span!("obtaining_nested_archive", ?archive_hash_path))
                 .await

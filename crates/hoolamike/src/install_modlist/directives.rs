@@ -76,7 +76,7 @@ pub struct DirectivesHandler {
     pub patched_from_archive: patched_from_archive::PatchedFromArchiveHandler,
     pub remapped_inline_file: remapped_inline_file::RemappedInlineFileHandler,
     pub transformed_texture: transformed_texture::TransformedTextureHandler,
-    pub nested_archive_manager: Arc<Mutex<nested_archive_manager::NestedArchivesService>>,
+    pub nested_archive_manager: Arc<NestedArchivesService>,
 }
 
 impl DirectiveKind {
@@ -178,9 +178,7 @@ impl DirectivesHandler {
             .collect::<BTreeMap<_, _>>()
             .pipe(Arc::new);
 
-        let nested_archive_service = NestedArchivesService::new(download_summary.clone(), max_open_files())
-            .pipe(Mutex::new)
-            .pipe(Arc::new);
+        let nested_archive_service = NestedArchivesService::new(download_summary.clone(), max_open_files()).pipe(Arc::new);
         Self {
             config,
             create_bsa: create_bsa::CreateBSAHandler {
@@ -364,7 +362,7 @@ impl DirectivesHandler {
                                                 match parent_archive.clone() {
                                                     Some(parent) => {
                                                         cloned![nested_archive_manager];
-                                                        async move { nested_archive_manager.lock().await.preheat(parent).await }
+                                                        async move { nested_archive_manager.clone().preheat(parent).await }
                                                     }
                                                     .boxed_local(),
                                                     None => ready(Ok(())).boxed_local(),
@@ -379,7 +377,13 @@ impl DirectivesHandler {
                                                 match parent_archive.clone() {
                                                     Some(parent) => {
                                                         cloned![nested_archive_manager];
-                                                        async move { nested_archive_manager.lock().await.cleanup(parent).pipe(Ok) }
+                                                        async move {
+                                                            nested_archive_manager
+                                                                .clone()
+                                                                .cleanup(parent)
+                                                                .await
+                                                                .pipe(Ok)
+                                                        }
                                                     }
                                                     .boxed_local(),
                                                     None => ready(Ok(())).boxed_local(),

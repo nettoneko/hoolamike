@@ -15,9 +15,11 @@ use {
     tracing::Instrument,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, derivative::Derivative)]
+#[derivative(Debug)]
 pub struct PatchedFromArchiveHandler {
-    pub nested_archive_service: Arc<Mutex<NestedArchivesService>>,
+    #[derivative(Debug = "ignore")]
+    pub nested_archive_service: Arc<NestedArchivesService>,
     pub wabbajack_file: WabbajackFileHandle,
     pub output_directory: PathBuf,
 }
@@ -41,8 +43,7 @@ impl PatchedFromArchiveHandler {
             tracing::error!(?message);
             let source_file = self
                 .nested_archive_service
-                .lock()
-                .await
+                .clone()
                 .get(archive_hash_path.clone())
                 .await
                 .context("could not get a handle to archive")?;

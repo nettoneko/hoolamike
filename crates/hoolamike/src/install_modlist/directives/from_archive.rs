@@ -6,7 +6,6 @@ use {
         progress_bars::{vertical_progress_bar, ProgressKind, PROGRESS_BAR},
         read_wrappers::ReadExt,
     },
-    nested_archive_manager::NestedArchivesService,
     std::{
         convert::identity,
         io::{Read, Write},
@@ -16,9 +15,11 @@ use {
     tracing::{info_span, Instrument},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, derivative::Derivative)]
+#[derivative(Debug)]
 pub struct FromArchiveHandler {
-    pub nested_archive_service: Arc<Mutex<NestedArchivesService>>,
+    #[derivative(Debug = "ignore")]
+    pub nested_archive_service: Arc<NestedArchivesService>,
     pub output_directory: PathBuf,
 }
 
@@ -61,9 +62,7 @@ impl FromArchiveHandler {
             tracing::error!(?message);
             let source_file = self
                 .nested_archive_service
-                .lock()
-                .instrument(info_span!("obtaining_archive_service_lock"))
-                .await
+                .clone()
                 .get(archive_hash_path.clone())
                 .instrument(info_span!("obtaining_nested_archive", ?archive_hash_path))
                 .await

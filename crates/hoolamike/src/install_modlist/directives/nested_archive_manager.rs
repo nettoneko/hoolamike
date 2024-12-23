@@ -20,7 +20,7 @@ use {
     },
     tap::prelude::*,
     tokio::{
-        sync::{OwnedSemaphorePermit, Semaphore},
+        sync::{Mutex, OwnedSemaphorePermit, Semaphore},
         time::Instant,
     },
     tracing::instrument,
@@ -35,29 +35,29 @@ impl ArchiveHashPath {
     }
 }
 
-#[derive(derivative::Derivative)]
-#[derivative(Debug(bound = ""))]
-pub struct NestedArchivesService {
-    pub download_summary: DownloadSummary,
-    pub max_size: usize,
-    #[derivative(Debug = "ignore")]
-    pub cache: IndexMap<ArchiveHashPath, (CachedArchiveFile, tokio::time::Instant)>,
-}
-
-impl NestedArchivesService {
-    pub fn new(download_summary: DownloadSummary, max_size: usize) -> Self {
-        Self {
-            max_size,
-            download_summary,
-            cache: Default::default(),
-        }
-    }
-}
-
 pub fn max_open_files() -> usize {
     concurrency() * 20
 }
 pub(crate) static OPEN_FILE_PERMITS: Lazy<Arc<Semaphore>> = Lazy::new(|| Arc::new(Semaphore::new(max_open_files())));
+
+pub type CachedArchiveFile = Arc<WithPermit<tempfile::TempPath>>;
+pub enum HandleKind {
+    Cached(CachedArchiveFile),
+    JustHashPath(PathBuf),
+}
+
+impl HandleKind {
+    pub fn open_file_read(&self) -> Result<(PathBuf, std::fs::File)> {
+        match self {
+            HandleKind::Cached(cached) => cached.inner.open_file_read(),
+            HandleKind::JustHashPath(path_buf) => path_buf.open_file_read(),
+        }
+    }
+}
+
+fn ancestors(archive_hash_path: ArchiveHashPath) -> impl Iterator<Item = ArchiveHashPath> {
+    std::iter::successors(Some(archive_hash_path), |p| p.clone().parent().map(|(parent, _)| parent))
+}
 
 pub struct WithPermit<T> {
     pub permit: OwnedSemaphorePermit,
@@ -93,26 +93,45 @@ where
     }
 }
 
-pub type CachedArchiveFile = Arc<WithPermit<tempfile::TempPath>>;
-pub enum HandleKind {
-    Cached(CachedArchiveFile),
-    JustHashPath(PathBuf),
-}
+pub struct NestedArchivesService(Mutex<NestedArchivesServiceInner>);
 
-impl HandleKind {
-    pub fn open_file_read(&self) -> Result<(PathBuf, std::fs::File)> {
-        match self {
-            HandleKind::Cached(cached) => cached.inner.open_file_read(),
-            HandleKind::JustHashPath(path_buf) => path_buf.open_file_read(),
-        }
+impl NestedArchivesService {
+    pub fn new(download_summary: DownloadSummary, max_size: usize) -> Self {
+        NestedArchivesServiceInner::new(download_summary, max_size)
+            .pipe(Mutex::new)
+            .pipe(Self)
+    }
+    #[instrument(skip(self), level = "INFO")]
+    pub async fn get(self: Arc<Self>, nested_archive: ArchiveHashPath) -> Result<HandleKind> {
+        self.0.lock().await.get(nested_archive).await
+    }
+    #[tracing::instrument(skip(self))]
+    pub async fn preheat(self: Arc<Self>, archive_hash_path: ArchiveHashPath) -> Result<()> {
+        self.0.lock().await.preheat(archive_hash_path).await
+    }
+    #[tracing::instrument(skip(self))]
+    pub async fn cleanup(self: Arc<Self>, archive_hash_path: ArchiveHashPath) {
+        self.0.lock().await.cleanup(archive_hash_path)
     }
 }
 
-fn ancestors(archive_hash_path: ArchiveHashPath) -> impl Iterator<Item = ArchiveHashPath> {
-    std::iter::successors(Some(archive_hash_path), |p| p.clone().parent().map(|(parent, _)| parent))
+#[derive(derivative::Derivative)]
+#[derivative(Debug(bound = ""))]
+struct NestedArchivesServiceInner {
+    download_summary: DownloadSummary,
+    max_size: usize,
+    #[derivative(Debug = "ignore")]
+    cache: IndexMap<ArchiveHashPath, (CachedArchiveFile, tokio::time::Instant)>,
 }
 
-impl NestedArchivesService {
+impl NestedArchivesServiceInner {
+    fn new(download_summary: DownloadSummary, max_size: usize) -> Self {
+        Self {
+            max_size,
+            download_summary,
+            cache: Default::default(),
+        }
+    }
     #[instrument(skip(self))]
     async fn init(&mut self, archive_hash_path: ArchiveHashPath) -> Result<(ArchiveHashPath, HandleKind)> {
         tracing::trace!("initializing entry");
@@ -163,7 +182,7 @@ impl NestedArchivesService {
         .map(|handle| (archive_hash_path, handle))
     }
     #[instrument(skip(self), level = "INFO")]
-    pub async fn get(&mut self, nested_archive: ArchiveHashPath) -> Result<HandleKind> {
+    async fn get(&mut self, nested_archive: ArchiveHashPath) -> Result<HandleKind> {
         match self.cache.get(&nested_archive).cloned() {
             Some((exists, _last_accessed)) => {
                 // WARN: this is dirty but it prevents small files from piling up
@@ -208,12 +227,12 @@ impl NestedArchivesService {
         }
     }
     #[tracing::instrument(skip(self))]
-    pub async fn preheat(&mut self, archive_hash_path: ArchiveHashPath) -> Result<()> {
+    async fn preheat(&mut self, archive_hash_path: ArchiveHashPath) -> Result<()> {
         tracing::trace!("preheating");
         self.get(archive_hash_path).await.map(|_| ())
     }
     #[tracing::instrument(skip(self))]
-    pub fn cleanup(&mut self, archive_hash_path: ArchiveHashPath) {
+    fn cleanup(&mut self, archive_hash_path: ArchiveHashPath) {
         tracing::trace!("preheating");
         ancestors(archive_hash_path).for_each(|ancestor| {
             self.cache.shift_remove(&ancestor);
