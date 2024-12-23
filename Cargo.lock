@@ -236,6 +236,7 @@ dependencies = [
 [[package]]
 name = "ba2"
 version = "3.0.0"
+source = "git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?branch=main#6d8aa2d369fdb9f9667ac93342c3ebae2f8f9b31"
 dependencies = [
  "bitflags",
  "bstr",
@@ -244,13 +245,12 @@ dependencies = [
  "lzzzz",
  "memmap2",
  "thiserror 1.0.69",
- "tracing",
 ]
 
 [[package]]
 name = "ba2"
-version = "3.0.0"
-source = "git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?branch=main#6d8aa2d369fdb9f9667ac93342c3ebae2f8f9b31"
+version = "3.0.1"
+source = "git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?rev=b716bcbbf51ec8f7d5e5261128fabfbe3357ddb3#b716bcbbf51ec8f7d5e5261128fabfbe3357ddb3"
 dependencies = [
  "bitflags",
  "bstr",
@@ -378,7 +378,7 @@ name = "bsa-cli"
 version = "0.1.4"
 dependencies = [
  "anyhow",
- "ba2 3.0.0 (git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?branch=main)",
+ "ba2 3.0.0",
  "clap",
  "derive_more 1.0.0",
  "tap",
@@ -1381,7 +1381,7 @@ name = "hoolamike"
 version = "0.1.4"
 dependencies = [
  "anyhow",
- "ba2 3.0.0",
+ "ba2 3.0.1",
  "base64 0.22.1",
  "binrw",
  "bon",

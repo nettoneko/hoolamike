@@ -9,8 +9,8 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-# ba2 = { git = "https://github.com/Ryan-rsm-McKenzie/bsa-rs", rev = "6d8aa2d369fdb9f9667ac93342c3ebae2f8f9b31" }
-ba2 = { path = "/home/niedzwiedz/Games/modding/bsa-rs" }
+ba2 = { git = "https://github.com/Ryan-rsm-McKenzie/bsa-rs", rev = "b716bcbbf51ec8f7d5e5261128fabfbe3357ddb3" }
+# ba2 = { path = "/home/niedzwiedz/Games/modding/bsa-rs" }
 base64.workspace = true
 binrw.workspace = true
 bon.workspace = true
