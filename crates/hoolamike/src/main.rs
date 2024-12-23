@@ -167,8 +167,6 @@ fn setup_logging() {
 async fn main() -> Result<()> {
     setup_logging();
     let Cli { command, hoolamike_config } = Cli::parse();
-    let (config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
-    tracing::info!("found config at [{}]", config_path.display());
 
     match command {
         Commands::ValidateModlist { path } => tokio::fs::read_to_string(&path)
@@ -184,16 +182,21 @@ async fn main() -> Result<()> {
         Commands::PrintDefaultConfig => config_file::HoolamikeConfig::default()
             .write()
             .map(|config| println!("{config}")),
-        Commands::Install { debug } => install_modlist::install_modlist(config, debug)
-            .await
-            .map_err(|errors| {
-                errors
-                    .iter()
-                    .enumerate()
-                    .for_each(|(idx, reason)| eprintln!("{idx}. {reason:?}", idx = idx + 1));
-                anyhow::anyhow!("could not finish installation due to [{}] errors", errors.len())
-            })
-            .map(|count| println!("successfully installed [{}] mods", count.len())),
+        Commands::Install { debug } => {
+            let (config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
+            tracing::info!("found config at [{}]", config_path.display());
+
+            install_modlist::install_modlist(config, debug)
+                .await
+                .map_err(|errors| {
+                    errors
+                        .iter()
+                        .enumerate()
+                        .for_each(|(idx, reason)| eprintln!("{idx}. {reason:?}", idx = idx + 1));
+                    anyhow::anyhow!("could not finish installation due to [{}] errors", errors.len())
+                })
+                .map(|count| println!("successfully installed [{}] mods", count.len()))
+        }
         Commands::HoolamikeDebug(HoolamikeDebug { command }) => match command {
             HoolamikeDebugCommand::ReserializeDirectives { modlist_file } => wabbajack_file::WabbajackFile::load(modlist_file)
                 .context("loading modlist file")
