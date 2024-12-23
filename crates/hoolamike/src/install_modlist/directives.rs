@@ -332,7 +332,7 @@ impl DirectivesHandler {
                                             .map(move |res| res.with_context(|| format!("handling directive [{directive:#?}]")))
                                     }
                                 })
-                                .buffered(concurrency()),
+                                .buffer_unordered(concurrency()),
                         )
                         .chain(
                             std::iter::empty()

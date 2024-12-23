@@ -211,6 +211,10 @@ async fn main() -> Result<()> {
         },
     }
     .with_context(|| {
+        progress_bars::DOWNLOAD_TOTAL_PROGRESS_BAR.finish_and_clear();
+        progress_bars::COPY_LOCAL_TOTAL_PROGRESS_BAR.finish_and_clear();
+        progress_bars::VALIDATE_TOTAL_PROGRESS_BAR.finish_and_clear();
+        // progress_bars::PROGRESS_BAR.clear().ok();
         format!(
             "\n\nerror occurred, run with --help, check your configuration or file a ticket at {}",
             env!("CARGO_PKG_REPOSITORY")
