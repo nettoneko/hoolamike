@@ -32,7 +32,7 @@ futures-util.workspace = true
 hex.workspace = true
 image_dds = { version = "0.6.2", features = ["serde"] }
 indexmap.workspace = true
-indicatif.workspace = true
+indicatif = { workspace = true, features = ["rayon"] }
 iter-read.workspace = true
 itertools.workspace = true
 memmap2 = "0.9.5"
@@ -45,6 +45,7 @@ once_cell.workspace = true
 os_pipe = "1.2.1"
 parking_lot.workspace = true
 rand = "0.8.5"
+rayon = "1.10.0"
 regex.workspace = true
 reqwest.workspace = true
 ringbuffer = "0.15.0"

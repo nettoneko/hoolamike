@@ -5,6 +5,8 @@ use {
         utils::PathReadWrite,
     },
     ba2::{fo4::FileReadOptions, CompressableFrom, CompressionResult, ReaderWithOptions},
+    indicatif::ParallelProgressIterator,
+    rayon::iter::{IntoParallelIterator, ParallelIterator},
     std::{
         cell::RefCell,
         convert::identity,
@@ -162,8 +164,8 @@ impl CreateBSAHandler {
                     .join(&temp_id);
 
                 file_states
-                    .into_iter()
-                    .pipe(|file_states| files_pb.wrap_iter(file_states))
+                    .into_par_iter()
+                    .progress()
                     .map(|file_state| match file_state {
                         FileState::BA2File {
                             dir_hash,
@@ -205,24 +207,37 @@ impl CreateBSAHandler {
                                     entries
                                         .iter()
                                         .pipe(|iter| insert_into_archive_pb.wrap_iter(iter))
-                                        .try_fold(ba2::fo4::Archive::new(), |mut acc, (key, file)| match file {
-                                            PreparedEntry::Normal(file) => file.as_archive_file().map(|file| {
-                                                acc.insert(key.clone(), file);
-                                                acc
-                                            }),
-                                            PreparedEntry::DX10(ba2_dx10_file) => ba2_dx10_file
-                                                .borrow_mut()
-                                                .take()
-                                                .context("come on")
-                                                .map(|file| {
-                                                    acc.insert(key.clone(), file.0);
-                                                    acc
+                                        .try_fold(
+                                            (ba2::fo4::Archive::new(), ba2::fo4::ArchiveOptions::builder()),
+                                            |(mut acc, options), (key, file)| match file {
+                                                PreparedEntry::Normal(file) => file.as_archive_file().map(|file| {
+                                                    let options = match file.header {
+                                                        ba2::fo4::FileHeader::GNRL => options.format(ba2::fo4::Format::GNRL),
+                                                        ba2::fo4::FileHeader::DX10(_) => options.format(ba2::fo4::Format::DX10),
+                                                        ba2::fo4::FileHeader::GNMF(_) => options.format(ba2::fo4::Format::GNMF),
+                                                    };
+                                                    acc.insert(key.clone(), file);
+                                                    (acc, options)
                                                 }),
-                                        })
-                                        .and_then(|archive| {
+                                                PreparedEntry::DX10(ba2_dx10_file) => ba2_dx10_file
+                                                    .borrow_mut()
+                                                    .take()
+                                                    .context("come on")
+                                                    .map(|file| {
+                                                        let options = match file.0.header {
+                                                            ba2::fo4::FileHeader::GNRL => options.format(ba2::fo4::Format::GNRL),
+                                                            ba2::fo4::FileHeader::DX10(_) => options.format(ba2::fo4::Format::DX10),
+                                                            ba2::fo4::FileHeader::GNMF(_) => options.format(ba2::fo4::Format::GNMF),
+                                                        };
+                                                        acc.insert(key.clone(), file.0);
+                                                        (acc, options)
+                                                    }),
+                                            },
+                                        )
+                                        .and_then(|(archive, options)| {
                                             let mut writer = pb.wrap_write(&mut output);
                                             archive
-                                                .write(&mut writer, &Default::default())
+                                                .write(&mut writer, &options.build())
                                                 .context("writing the built archive")
                                                 .and_then(|_| {
                                                     output.rewind().context("rewinding file").and_then(|_| {

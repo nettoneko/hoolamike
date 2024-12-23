@@ -11,7 +11,7 @@ use {
     anyhow::Context,
     directives::{DirectivesHandler, DirectivesHandlerConfig},
     downloads::Synchronizers,
-    futures::{FutureExt, TryFutureExt},
+    futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt},
     itertools::Itertools,
     std::{convert::identity, future::ready, sync::Arc},
     tap::prelude::*,
@@ -145,7 +145,11 @@ pub async fn install_modlist(
                                 })
                                 .collect_vec();
                         }))
-                        .multi_error_collect()
+                        .try_collect::<Vec<_>>()
+                        .map(|res| match res {
+                            Ok(out) => Ok(out),
+                            Err(e) => Err(vec![e]),
+                        })
                 })
             },
         )

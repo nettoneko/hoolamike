@@ -38,6 +38,18 @@ test-empty:
             --skip-kind inline-file \
             --skip-kind create-bsa \
             {{args}}
+@test-patched-from-archive +args:
+    cargo \
+            run --release \
+            -- \
+            install \
+            --skip-verify-and-downloads \
+            --skip-kind from-archive \
+            --skip-kind transformed-texture \
+            --skip-kind remapped-inline-file \
+            --skip-kind inline-file \
+            --skip-kind create-bsa \
+            {{args}}
 
 @test-create-bsa +args:
     cargo \
