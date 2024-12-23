@@ -173,7 +173,7 @@ impl Read for ArchiveFileHandle {
         let n = self
             .reader
             .read(buf)
-            .tap_err(|error| tracing::error!(?error, "reading from 7zip stopped"))?;
+            .tap_err(|error| tracing::warn!(?error, "reading from 7zip stopped"))?;
 
         if n == 0 {
             // EOF reached. Check for errors

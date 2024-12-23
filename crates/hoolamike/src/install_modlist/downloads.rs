@@ -320,7 +320,7 @@ impl Synchronizers {
                 }
                 .inspect_err({
                     let name = name.clone();
-                    move |message| tracing::error!(?name, ?message)
+                    move |message| tracing::warn!(?name, ?message)
                 })
                 .inspect_ok(move |_| tracing::info!(name, "[OK]"))
                 .pipe(tokio::task::spawn)

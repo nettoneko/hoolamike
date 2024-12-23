@@ -59,7 +59,7 @@ impl FromArchiveHandler {
         let output_path = self.output_directory.join(to.into_path());
 
         if let Err(message) = validate_hash_with_overrides(output_path.clone(), hash.clone(), size).await {
-            tracing::error!(?message);
+            tracing::warn!(?message);
             let source_file = self
                 .nested_archive_service
                 .clone()

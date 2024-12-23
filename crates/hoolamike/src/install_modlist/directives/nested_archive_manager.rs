@@ -20,7 +20,7 @@ use {
     },
     tap::prelude::*,
     tokio::{
-        sync::{Mutex, OwnedSemaphorePermit, Semaphore},
+        sync::{Mutex, OwnedSemaphorePermit, RwLock, Semaphore},
         time::Instant,
     },
     tracing::instrument,
@@ -55,6 +55,19 @@ impl HandleKind {
     }
 }
 
+pub enum OutputHandleKind {
+    FreshlyCreated(WithPermit<tempfile::TempPath>),
+    JustHashPath(PathBuf),
+}
+
+impl OutputHandleKind {
+    pub fn open_file_read(&self) -> Result<(PathBuf, std::fs::File)> {
+        match self {
+            OutputHandleKind::FreshlyCreated(cached) => cached.inner.open_file_read(),
+            OutputHandleKind::JustHashPath(path_buf) => path_buf.open_file_read(),
+        }
+    }
+}
 fn ancestors(archive_hash_path: ArchiveHashPath) -> impl Iterator<Item = ArchiveHashPath> {
     std::iter::successors(Some(archive_hash_path), |p| p.clone().parent().map(|(parent, _)| parent))
 }
@@ -93,28 +106,92 @@ where
     }
 }
 
-pub struct NestedArchivesService(Mutex<NestedArchivesServiceInner>);
+pub struct NestedArchivesService(RwLock<NestedArchivesServiceInner>);
 
 impl NestedArchivesService {
     pub fn new(download_summary: DownloadSummary, max_size: usize) -> Self {
         NestedArchivesServiceInner::new(download_summary, max_size)
-            .pipe(Mutex::new)
+            .pipe(RwLock::new)
             .pipe(Self)
     }
+
+    pub async fn get(self: Arc<Self>, nested_archive: ArchiveHashPath) -> Result<OutputHandleKind> {
+        match nested_archive.clone().parent() {
+            Some((parent, path)) => {
+                let pb = vertical_progress_bar(0, ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)
+                    .attach_to(&super::PROGRESS_BAR)
+                    .tap_mut({
+                        cloned![nested_archive];
+                        move |pb| {
+                            pb.set_message(
+                                nested_archive
+                                    .pipe_ref(serde_json::to_string)
+                                    .expect("must serialize"),
+                            );
+                        }
+                    });
+                match parent.path.len() {
+                    0 => {
+                        get_handle(pb, &self.0.read().await.translate_source_hash(&parent)?, &path.into_path())
+                            .map_ok(OutputHandleKind::FreshlyCreated)
+                            .await
+                    }
+                    _ => {
+                        get_handle(
+                            pb,
+                            &self
+                                .try_get(parent)
+                                .await
+                                .context("no entry in cache")?
+                                .inner,
+                            &path.into_path(),
+                        )
+                        .map_ok(OutputHandleKind::FreshlyCreated)
+                        .await
+                    }
+                }
+            }
+            None => self
+                .0
+                .read()
+                .await
+                .translate_source_hash(&nested_archive)
+                .map(OutputHandleKind::JustHashPath),
+        }
+    }
+
     #[instrument(skip(self), level = "INFO")]
-    pub async fn get(self: Arc<Self>, nested_archive: ArchiveHashPath) -> Result<HandleKind> {
-        self.0.lock().await.get(nested_archive).await
+    async fn try_get(self: Arc<Self>, nested_archive: ArchiveHashPath) -> Option<CachedArchiveFile> {
+        self.0
+            .read()
+            .await
+            .cache
+            .get(&nested_archive)
+            .map(|(e, _)| e.clone())
     }
     #[tracing::instrument(skip(self))]
     pub async fn preheat(self: Arc<Self>, archive_hash_path: ArchiveHashPath) -> Result<()> {
-        self.0.lock().await.preheat(archive_hash_path).await
+        self.0.write().await.preheat(archive_hash_path).await
     }
     #[tracing::instrument(skip(self))]
     pub async fn cleanup(self: Arc<Self>, archive_hash_path: ArchiveHashPath) {
-        self.0.lock().await.cleanup(archive_hash_path)
+        self.0.write().await.cleanup(archive_hash_path)
     }
 }
 
+#[instrument(skip(pb), level = "INFO")]
+async fn get_handle(pb: ProgressBar, source_path: &Path, archive_path: &Path) -> Result<WithPermit<tempfile::TempPath>> {
+    let (source_path, archive_path) = (source_path.to_owned(), archive_path.to_owned());
+    tokio::task::spawn_blocking(move || {
+        ArchiveHandle::guess(&source_path)
+            .context("could not guess archive format for [{path}]")
+            .and_then(|mut archive| archive.get_handle(&archive_path.clone()))
+    })
+    .map_context("thread crashed")
+    .and_then(ready)
+    .and_then(|handle| handle.seek_with_temp_file(pb))
+    .await
+}
 #[derive(derivative::Derivative)]
 #[derivative(Debug(bound = ""))]
 struct NestedArchivesServiceInner {
@@ -132,6 +209,13 @@ impl NestedArchivesServiceInner {
             cache: Default::default(),
         }
     }
+    fn translate_source_hash(&self, archive_hash_path: &ArchiveHashPath) -> Result<PathBuf> {
+        self.download_summary
+            .get(&archive_hash_path.source_hash)
+            .tap_some(|path| tracing::debug!("translated [{}] => [{}]\n\n\n", archive_hash_path.source_hash, path.inner.display()))
+            .with_context(|| format!("could not find file by hash path: {:#?}", archive_hash_path))
+            .map(|downloaded| downloaded.inner.clone())
+    }
     #[instrument(skip(self))]
     async fn init(&mut self, archive_hash_path: ArchiveHashPath) -> Result<(ArchiveHashPath, HandleKind)> {
         tracing::trace!("initializing entry");
@@ -144,39 +228,23 @@ impl NestedArchivesServiceInner {
                         .expect("must serialize"),
                 );
             });
-        #[instrument(skip(pb), level = "INFO")]
-        async fn get_handle(pb: ProgressBar, source_path: &Path, archive_path: &Path) -> Result<CachedArchiveFile> {
-            let (source_path, archive_path) = (source_path.to_owned(), archive_path.to_owned());
-            tokio::task::spawn_blocking(move || {
-                ArchiveHandle::guess(&source_path)
-                    .context("could not guess archive format for [{path}]")
-                    .and_then(|mut archive| archive.get_handle(&archive_path.clone()))
-            })
-            .map_context("thread crashed")
-            .and_then(ready)
-            .and_then(|handle| handle.seek_with_temp_file(pb))
-            .map_ok(Arc::new)
-            .await
-        }
         match archive_hash_path.clone().parent() {
             Some((parent, archive_path)) => match self.get(parent).boxed_local().await? {
                 HandleKind::Cached(cached) => {
                     get_handle(pb, &cached.inner, &archive_path.into_path())
+                        .map_ok(Arc::new)
                         .map_ok(HandleKind::Cached)
                         .await
                 }
                 HandleKind::JustHashPath(path_buf) => {
                     get_handle(pb, &path_buf, &archive_path.into_path())
+                        .map_ok(Arc::new)
                         .map_ok(HandleKind::Cached)
                         .await
                 }
             },
             None => self
-                .download_summary
-                .get(&archive_hash_path.source_hash)
-                .tap_some(|path| tracing::debug!("translated [{}] => [{}]\n\n\n", archive_hash_path.source_hash, path.inner.display()))
-                .with_context(|| format!("could not find file by hash path: {:#?}", archive_hash_path))
-                .map(|downloaded| downloaded.inner.clone())
+                .translate_source_hash(&archive_hash_path)
                 .map(HandleKind::JustHashPath),
         }
         .map(|handle| (archive_hash_path, handle))
