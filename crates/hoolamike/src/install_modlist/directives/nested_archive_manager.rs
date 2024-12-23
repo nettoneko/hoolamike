@@ -20,7 +20,7 @@ use {
     },
     tap::prelude::*,
     tokio::{
-        sync::{Mutex, OwnedSemaphorePermit, RwLock, Semaphore},
+        sync::{Mutex, OwnedSemaphorePermit, Semaphore},
         time::Instant,
     },
     tracing::instrument,
@@ -107,13 +107,11 @@ where
     }
 }
 
-pub struct NestedArchivesService(RwLock<NestedArchivesServiceInner>);
+pub struct NestedArchivesService(NestedArchivesServiceInner);
 
 impl NestedArchivesService {
     pub fn new(download_summary: DownloadSummary, max_size: usize) -> Self {
-        NestedArchivesServiceInner::new(download_summary, max_size)
-            .pipe(RwLock::new)
-            .pipe(Self)
+        NestedArchivesServiceInner::new(download_summary, max_size).pipe(Self)
     }
 
     pub async fn get(self: Arc<Self>, nested_archive: ArchiveHashPath) -> Result<OutputHandleKind> {
@@ -133,7 +131,7 @@ impl NestedArchivesService {
                     });
                 match parent.path.len() {
                     0 => {
-                        get_handle(pb, &self.0.read().await.translate_source_hash(&parent)?, &path.into_path())
+                        get_handle(pb, &self.0.translate_source_hash(&parent)?, &path.into_path())
                             .map_ok(OutputHandleKind::FreshlyCreated)
                             .await
                     }
@@ -154,8 +152,6 @@ impl NestedArchivesService {
             }
             None => self
                 .0
-                .read()
-                .await
                 .translate_source_hash(&nested_archive)
                 .map(OutputHandleKind::JustHashPath),
         }
@@ -164,19 +160,18 @@ impl NestedArchivesService {
     #[instrument(skip(self), level = "INFO")]
     async fn try_get(self: Arc<Self>, nested_archive: ArchiveHashPath) -> Option<CachedArchiveFile> {
         self.0
-            .read()
-            .await
             .cache
             .get(&nested_archive)
+            .as_deref()
             .map(|(e, _)| e.clone())
     }
     #[tracing::instrument(skip(self))]
     pub async fn preheat(self: Arc<Self>, archive_hash_path: ArchiveHashPath) -> Result<()> {
-        self.0.write().await.preheat(archive_hash_path).await
+        self.0.preheat(archive_hash_path).await
     }
     #[tracing::instrument(skip(self))]
     pub async fn cleanup(self: Arc<Self>, archive_hash_path: ArchiveHashPath) {
-        self.0.write().await.cleanup(archive_hash_path)
+        self.0.cleanup(archive_hash_path)
     }
 }
 
@@ -199,7 +194,7 @@ struct NestedArchivesServiceInner {
     download_summary: DownloadSummary,
     max_size: usize,
     #[derivative(Debug = "ignore")]
-    cache: IndexMap<ArchiveHashPath, (CachedArchiveFile, tokio::time::Instant)>,
+    cache: dashmap::DashMap<ArchiveHashPath, (CachedArchiveFile, tokio::time::Instant)>,
 }
 
 impl NestedArchivesServiceInner {
@@ -218,7 +213,7 @@ impl NestedArchivesServiceInner {
             .map(|downloaded| downloaded.inner.clone())
     }
     #[instrument(skip(self))]
-    async fn init(&mut self, archive_hash_path: ArchiveHashPath) -> Result<(ArchiveHashPath, HandleKind)> {
+    async fn init(&self, archive_hash_path: ArchiveHashPath) -> Result<(ArchiveHashPath, HandleKind)> {
         tracing::trace!("initializing entry");
         let pb = vertical_progress_bar(0, ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)
             .attach_to(&super::PROGRESS_BAR)
@@ -251,38 +246,20 @@ impl NestedArchivesServiceInner {
         .map(|handle| (archive_hash_path, handle))
     }
     #[instrument(skip(self), level = "INFO")]
-    async fn get(&mut self, nested_archive: ArchiveHashPath) -> Result<HandleKind> {
-        match self.cache.get(&nested_archive).cloned() {
+    async fn get(&self, nested_archive: ArchiveHashPath) -> Result<HandleKind> {
+        match self.cache.get(&nested_archive).as_deref().cloned() {
             Some((exists, _last_accessed)) => {
                 // WARN: this is dirty but it prevents small files from piling up
                 let exists = exists.pipe(HandleKind::Cached);
                 ancestors(nested_archive).for_each(|ancestor| {
                     let now = Instant::now();
-                    if let Some((_, accessed)) = self.cache.get_mut(&ancestor) {
+                    if let Some((_, accessed)) = self.cache.get_mut(&ancestor).as_deref_mut() {
                         *accessed = now;
                     }
                 });
                 Ok(exists)
             }
             None => {
-                if self.cache.len() == self.max_size {
-                    tracing::info!("dropping cached archive");
-                    if let Some(last_accessed_chunk) = self
-                        .cache
-                        .iter()
-                        .sorted_unstable_by_key(|(_key, (_, accessed))| accessed)
-                        .chunk_by(|(_, (_, accessed))| accessed)
-                        .into_iter()
-                        .next()
-                        .map(|(_, k)| k.map(|(key, _)| key.clone()).collect_vec())
-                        .into_iter()
-                        .next()
-                    {
-                        last_accessed_chunk.into_iter().for_each(|key| {
-                            self.cache.shift_remove(&key);
-                        })
-                    }
-                }
                 let (hash_path, handle) = self
                     .init(nested_archive)
                     .await
@@ -296,15 +273,15 @@ impl NestedArchivesServiceInner {
         }
     }
     #[tracing::instrument(skip(self))]
-    async fn preheat(&mut self, archive_hash_path: ArchiveHashPath) -> Result<()> {
+    async fn preheat(&self, archive_hash_path: ArchiveHashPath) -> Result<()> {
         tracing::trace!("preheating");
         self.get(archive_hash_path).await.map(|_| ())
     }
     #[tracing::instrument(skip(self))]
-    fn cleanup(&mut self, archive_hash_path: ArchiveHashPath) {
+    fn cleanup(&self, archive_hash_path: ArchiveHashPath) {
         tracing::trace!("preheating");
         ancestors(archive_hash_path).for_each(|ancestor| {
-            self.cache.shift_remove(&ancestor);
+            self.cache.remove(&ancestor);
         })
     }
 }
