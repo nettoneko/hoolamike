@@ -63,7 +63,7 @@ test-empty:
             --skip-kind remapped-inline-file \
             --skip-kind inline-file \
             {{args}}
-test-transformed-texture +args:
+@test-transformed-texture +args:
     cargo \
             run --release \
             -- \
@@ -76,7 +76,7 @@ test-transformed-texture +args:
             --skip-kind create-bsa \
             {{args}}
 
-test-remapped-inline-file:
+@test-remapped-inline-file +args:
     cargo \
             run --release \
             -- \
@@ -86,4 +86,18 @@ test-remapped-inline-file:
             --skip-kind patched-from-archive \
             --skip-kind transformed-texture \
             --skip-kind inline-file \
-            --skip-kind create-bsa
+            --skip-kind create-bsa \
+            {{args}}
+
+@test-inline-file +args:
+    cargo \
+            run --release \
+            -- \
+            install \
+            --skip-verify-and-downloads \
+            --skip-kind from-archive \
+            --skip-kind patched-from-archive \
+            --skip-kind transformed-texture \
+            --skip-kind remapped-inline-file \
+            --skip-kind create-bsa \
+            {{args}}
