@@ -9,9 +9,7 @@ use {
     },
     anyhow::{Context, Result},
     futures::{FutureExt, TryFutureExt},
-    indexmap::IndexMap,
     indicatif::ProgressBar,
-    itertools::Itertools,
     once_cell::sync::Lazy,
     std::{
         future::ready,
@@ -20,7 +18,7 @@ use {
     },
     tap::prelude::*,
     tokio::{
-        sync::{Mutex, OwnedSemaphorePermit, Semaphore},
+        sync::{OwnedSemaphorePermit, Semaphore},
         time::Instant,
     },
     tracing::instrument,

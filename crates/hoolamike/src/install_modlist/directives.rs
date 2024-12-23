@@ -31,7 +31,6 @@ use {
         time::Duration,
     },
     tap::prelude::*,
-    tokio::sync::Mutex,
     tracing::{info_span, Instrument},
 };
 
@@ -305,16 +304,6 @@ impl DirectivesHandler {
                         FromArchive(FromArchiveDirective),
                         PatchedFromArchive(PatchedFromArchiveDirective),
                         TransformedTexture(TransformedTextureDirective),
-                    }
-
-                    impl ArchivePathDirective {
-                        fn size(&self) -> u64 {
-                            match self {
-                                ArchivePathDirective::FromArchive(directive) => directive.size,
-                                ArchivePathDirective::PatchedFromArchive(directive) => directive.size,
-                                ArchivePathDirective::TransformedTexture(directive) => directive.size,
-                            }
-                        }
                     }
 
                     impl ArchivePathDirective {

@@ -11,7 +11,6 @@ use {
         io::{Read, Write},
         path::Path,
     },
-    tokio::sync::Mutex,
     tracing::{info_span, Instrument},
 };
 

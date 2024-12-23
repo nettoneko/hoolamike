@@ -2,7 +2,7 @@ use {
     crate::{
         config_file::{HoolamikeConfig, InstallationConfig},
         downloaders::WithArchiveDescriptor,
-        error::{MultiErrorCollectExt, TotalResult},
+        error::TotalResult,
         modlist_json::{Archive, Modlist},
         progress_bars::VALIDATE_TOTAL_PROGRESS_BAR,
         wabbajack_file::WabbajackFile,
@@ -11,17 +11,15 @@ use {
     anyhow::Context,
     directives::{DirectivesHandler, DirectivesHandlerConfig},
     downloads::Synchronizers,
-    futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt},
+    futures::{FutureExt, TryFutureExt, TryStreamExt},
     itertools::Itertools,
     std::{convert::identity, future::ready, sync::Arc},
     tap::prelude::*,
 };
 
-pub mod download_cache;
-
-pub mod downloads;
-
 pub mod directives;
+pub mod download_cache;
+pub mod downloads;
 
 #[allow(clippy::needless_as_bytes)]
 pub async fn install_modlist(

@@ -148,12 +148,6 @@ impl CreateBSAHandler {
                 kind: _,
                 version: _,
             } => {
-                let files_pb = vertical_progress_bar(file_states.len() as _, ProgressKind::WriteBSA, indicatif::ProgressFinish::AndLeave)
-                    .attach_to(&PROGRESS_BAR)
-                    .tap_mut(|pb| {
-                        pb.set_message(format!("handling [{}] file states", file_states.len()));
-                    });
-
                 enum PreparedEntry<'a> {
                     Normal(LazyArchiveFile),
                     DX10(RefCell<Option<BA2DX10File<'a>>>),
@@ -162,10 +156,11 @@ impl CreateBSAHandler {
                     .clone()
                     .join("TEMP_BSA_FILES")
                     .join(&temp_id);
-
                 file_states
                     .into_par_iter()
                     .progress()
+                    .with_prefix("[Build BSA]")
+                    .with_message(format!("building fresh bethesda archive at [{}]", to.clone().into_path().display()))
                     .map(|file_state| match file_state {
                         FileState::BA2File {
                             dir_hash,
