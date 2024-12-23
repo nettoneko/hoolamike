@@ -72,6 +72,7 @@ fn ancestors(archive_hash_path: ArchiveHashPath) -> impl Iterator<Item = Archive
     std::iter::successors(Some(archive_hash_path), |p| p.clone().parent().map(|(parent, _)| parent))
 }
 
+#[derive(Debug)]
 pub struct WithPermit<T> {
     pub permit: OwnedSemaphorePermit,
     pub inner: T,

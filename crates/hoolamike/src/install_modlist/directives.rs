@@ -104,6 +104,8 @@ pub struct DirectivesHandlerConfig {
 
 pub mod nested_archive_manager;
 
+pub mod planned_archive_hash_path_execution;
+
 fn concurrency() -> usize {
     #[cfg(not(debug_assertions))]
     {
