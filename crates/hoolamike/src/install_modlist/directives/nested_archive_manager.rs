@@ -210,7 +210,7 @@ impl NestedArchivesServiceInner {
             .with_context(|| format!("could not find file by hash path: {:#?}", archive_hash_path))
             .map(|downloaded| downloaded.inner.clone())
     }
-    #[instrument(skip(self))]
+    #[instrument(skip(self), fields(file_permits=%OPEN_FILE_PERMITS.available_permits(), cache_entries_count=%self.cache.len()))]
     async fn init(&self, archive_hash_path: ArchiveHashPath) -> Result<(ArchiveHashPath, HandleKind)> {
         tracing::trace!("initializing entry");
         let pb = vertical_progress_bar(0, ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)

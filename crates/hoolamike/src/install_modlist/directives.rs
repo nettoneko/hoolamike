@@ -351,7 +351,7 @@ impl DirectivesHandler {
                                 .into_iter()
                                 .map(|(parent_archive, chunk)| (parent_archive, chunk.into_iter().collect_vec()))
                                 .collect_vec()
-                                .chunks(concurrency())
+                                .chunks(concurrency() * 4)
                                 .map(|chunk| chunk.to_vec())
                                 .collect_vec()
                                 .pipe(futures::stream::iter)
