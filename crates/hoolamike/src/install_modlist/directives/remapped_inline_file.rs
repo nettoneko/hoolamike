@@ -111,9 +111,10 @@ impl RemappedInlineFileHandler {
                 .blocking_lock()
                 .get_file(Path::new(&source_data_id.hyphenated().to_string()))
                 .context("reading the file for remapping")
-                .and_then(|mut handle| {
+                .and_then(|handle| {
                     String::new().pipe(|mut out| {
-                        handle
+                        tracing::Span::current()
+                            .wrap_read(0, handle.1)
                             .read_to_string(&mut out)
                             .context("extracting file for remapping")
                             .map(|_| out)

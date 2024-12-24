@@ -1,10 +1,10 @@
 use {
     super::*,
     chrono::NaiveDateTime,
-    std::{collections::BTreeMap, ops::Not},
+    std::{collections::BTreeMap, ops::Not, str::FromStr},
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ListOutputEntry {
     pub modified: chrono::NaiveDateTime,
     pub original_path: String,
@@ -18,9 +18,11 @@ pub struct ListOutput {
     pub entries: Vec<ListOutputEntry>,
 }
 
-impl ListOutput {
-    pub fn from_str(output: &str) -> Result<Self> {
-        output.trim().to_string().pipe_ref(|trimmed| {
+impl FromStr for ListOutput {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        s.trim().to_string().pipe_ref(|trimmed| {
             trimmed
                 .split_once("----------")
                 .context("no indicator")

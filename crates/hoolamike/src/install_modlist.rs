@@ -4,7 +4,7 @@ use {
         downloaders::WithArchiveDescriptor,
         error::TotalResult,
         modlist_json::{Archive, Modlist},
-        progress_bars_v2::progress_style,
+        progress_bars_v2::io_progress_style,
         wabbajack_file::WabbajackFile,
         DebugHelpers,
     },
@@ -52,7 +52,7 @@ pub async fn install_modlist(
             wabbajack_entries: _,
             modlist,
         },
-    ) = tokio::task::spawn_blocking(move || WabbajackFile::load(wabbajack_file_path))
+    ) = tokio::task::spawn_blocking(move || WabbajackFile::load_wabbajack_file(wabbajack_file_path))
         .await
         .context("thread crashed")
         .and_then(identity)
@@ -67,7 +67,7 @@ pub async fn install_modlist(
                 .sum::<u64>()
                 .pipe(|total_size| {
                     tracing::Span::current().pipe_ref(|pb| {
-                        pb.pb_set_style(&progress_style());
+                        pb.pb_set_style(&io_progress_style());
                         pb.pb_set_length(total_size);
                     });
                 })

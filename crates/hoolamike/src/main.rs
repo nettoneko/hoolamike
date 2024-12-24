@@ -6,7 +6,7 @@ use {
     clap::{Args, Parser, Subcommand},
     modlist_data::ModlistSummary,
     modlist_json::DirectiveKind,
-    std::path::PathBuf,
+    std::{path::PathBuf, str::FromStr},
     tap::Pipe,
 };
 pub const BUFFER_SIZE: usize = 1024 * 64;
@@ -109,9 +109,9 @@ pub mod wabbajack_file {
 
     impl WabbajackFile {
         #[tracing::instrument]
-        pub fn load(path: PathBuf) -> Result<(WabbajackFileHandle, Self)> {
+        pub fn load_wabbajack_file(at_path: PathBuf) -> Result<(WabbajackFileHandle, Self)> {
             crate::compression::wrapped_7zip::WRAPPED_7ZIP
-                .with(|w| w.open_file(&path))
+                .with(|w| w.open_file(&at_path))
                 .context("reading archive")
                 .and_then(|mut archive| {
                     archive.list_paths().and_then(|entries| {
@@ -124,7 +124,7 @@ pub mod wabbajack_file {
                             })
                             .with_context(|| format!("reading [{MODLIST_JSON_FILENAME}]"))
                             .map(|modlist| Self {
-                                wabbajack_file_path: path,
+                                wabbajack_file_path: at_path,
                                 wabbajack_entries: entries,
                                 modlist,
                             })
@@ -143,7 +143,7 @@ fn setup_logging() {
     };
     let indicatif_layer = IndicatifLayer::new();
     let subscriber = tracing_subscriber::registry()
-        .with(EnvFilter::from_default_env())
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::from_str("info").unwrap()))
         .with(tracing_subscriber::fmt::layer().with_writer(indicatif_layer.get_stderr_writer()))
         .with(indicatif_layer);
     // .pipe(|registry| {
@@ -172,7 +172,7 @@ async fn main() -> Result<()> {
             .context("reading test file")
             .and_then(|input| modlist_json::parsing_helpers::validate_modlist_file(&input))
             .with_context(|| format!("testing file {}", path.display())),
-        Commands::ModlistInfo { path } => wabbajack_file::WabbajackFile::load(path)
+        Commands::ModlistInfo { path } => wabbajack_file::WabbajackFile::load_wabbajack_file(path)
             .context("reading modlist")
             .map(|(_, modlist)| ModlistSummary::new(&modlist.modlist))
             .map(|modlist| modlist.print())
@@ -196,7 +196,7 @@ async fn main() -> Result<()> {
                 .map(|count| println!("successfully installed [{}] mods", count.len()))
         }
         Commands::HoolamikeDebug(HoolamikeDebug { command }) => match command {
-            HoolamikeDebugCommand::ReserializeDirectives { modlist_file } => wabbajack_file::WabbajackFile::load(modlist_file)
+            HoolamikeDebugCommand::ReserializeDirectives { modlist_file } => wabbajack_file::WabbajackFile::load_wabbajack_file(modlist_file)
                 .context("loading modlist file")
                 .and_then(|modlist| {
                     modlist

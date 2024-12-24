@@ -1,7 +1,7 @@
 use {
     crate::{
         downloaders::WithArchiveDescriptor,
-        install_modlist::download_cache::validate_hash,
+        install_modlist::{download_cache::validate_hash, io_progress_style},
         modlist_json::{
             directive::{
                 ArchiveHashPath,
@@ -31,7 +31,7 @@ use {
         time::Duration,
     },
     tap::prelude::*,
-    tracing::{info_span, Instrument},
+    tracing::{info_span, instrument, Instrument},
     tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
@@ -216,11 +216,15 @@ impl DirectivesHandler {
     }
 
     #[allow(clippy::unnecessary_literal_unwrap)]
+    #[instrument(skip_all, fields(directives=%directives.len()))]
     pub fn handle_directives(self: Arc<Self>, directives: Vec<Directive>) -> impl Stream<Item = Result<()>> {
-        tracing::Span::current().tap(|pb| {
-            pb.pb_set_length(directives.iter().map(directive_size).sum());
-            pb.pb_set_style(&ProgressStyle::default_bar());
-        });
+        let handle_directives: &'static _ = tracing::Span::current()
+            .tap(|pb| {
+                pb.pb_set_length(directives.iter().map(directive_size).sum());
+                pb.pb_set_style(&io_progress_style());
+            })
+            .pipe(Box::new)
+            .pipe(Box::leak);
 
         fn directive_size(d: &Directive) -> u64 {
             match d {
@@ -249,11 +253,16 @@ impl DirectivesHandler {
                 }
                 .pipe(|(hash, size, to)| (hash, *size, output_directory.join(to.into_path())))
                 .pipe(move |(hash, size, to)| {
-                    validate_hash_with_overrides(to.clone(), hash, size).map(move |res| {
-                        res.tap_err(|reason| tracing::warn!(%kind, ?size, ?reason, ?to, "directive will be recomputed"))
-                            .tap_ok(|path| tracing::debug!(%kind, ?size, ?path, ?to,  "directive is ok"))
-                            .is_err()
-                    })
+                    validate_hash_with_overrides(to.clone(), hash, size)
+                        .map(move |res| {
+                            res.tap_err(|reason| tracing::warn!(%kind, ?size, ?reason, ?to, "directive will be recomputed"))
+                                .tap_ok(|path| {
+                                    tracing::debug!(%kind, ?size, ?path, ?to,  "directive is ok");
+                                    tracing::Span::current().pb_inc(size);
+                                })
+                                .is_err()
+                        })
+                        .instrument(handle_directives.clone())
                 })
             }
         };
@@ -323,6 +332,7 @@ impl DirectivesHandler {
                                             .inline_file
                                             .clone()
                                             .handle(directive.clone())
+                                            .instrument(handle_directives.clone())
                                             .map(move |res| res.with_context(|| format!("handling directive [{directive:#?}]")))
                                     }
                                 })
@@ -364,6 +374,7 @@ impl DirectivesHandler {
                                                         nested_archive_manager
                                                             .clone()
                                                             .preheat(parent_archive.clone())
+                                                            .instrument(handle_directives.clone())
                                                             .await
                                                     }
                                                 }
@@ -381,6 +392,7 @@ impl DirectivesHandler {
                                                         nested_archive_manager
                                                             .clone()
                                                             .cleanup(parent_archive.clone())
+                                                            .instrument(handle_directives.clone())
                                                             .await
                                                     }
                                                 }
@@ -431,18 +443,21 @@ impl DirectivesHandler {
                                                                 .transformed_texture
                                                                 .clone()
                                                                 .handle(transformed_texture.clone())
+                                                                .instrument(handle_directives.clone())
                                                                 .map(move |res| res.with_context(|| format!("handling directive: {transformed_texture:#?}")))
                                                                 .boxed_local(),
                                                             ArchivePathDirective::FromArchive(from_archive) => manager
                                                                 .from_archive
                                                                 .clone()
                                                                 .handle(from_archive.clone())
+                                                                .instrument(handle_directives.clone())
                                                                 .map(move |res| res.with_context(|| format!("handling directive: {from_archive:#?}")))
                                                                 .boxed_local(),
                                                             ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => manager
                                                                 .patched_from_archive
                                                                 .clone()
                                                                 .handle(patched_from_archive_directive.clone())
+                                                                .instrument(handle_directives.clone())
                                                                 .map(move |res| {
                                                                     res.with_context(|| format!("handling directive: {patched_from_archive_directive:#?}"))
                                                                 })
@@ -464,6 +479,7 @@ impl DirectivesHandler {
                                     .remapped_inline_file
                                     .clone()
                                     .handle(remapped_inline_file.clone())
+                                    .instrument(handle_directives.clone())
                                     .map(move |res| res.with_context(|| format!("handling {remapped_inline_file:#?}")))
                             }
                         }))
@@ -478,6 +494,7 @@ impl DirectivesHandler {
                                     .create_bsa
                                     .clone()
                                     .handle(create_bsa)
+                                    .instrument(handle_directives.clone())
                                     .map(move |res| res.with_context(|| format!("handling directive: [{debug}]")))
                             }
                         }))

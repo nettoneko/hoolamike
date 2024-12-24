@@ -10,6 +10,7 @@ use {
         iter::once,
         path::{Path, PathBuf},
         process::{Child, ChildStdout, Command, Output, Stdio},
+        str::FromStr,
         sync::{
             mpsc::{self, Receiver, Sender},
             Arc,
@@ -187,7 +188,7 @@ impl Read for ArchiveFileHandle {
     }
 }
 
-mod list_output;
+pub mod list_output;
 
 #[derive(Debug, PartialEq, PartialOrd, Hash)]
 pub(crate) struct MaybeWindowsPath(pub String);
@@ -220,20 +221,21 @@ impl ArchiveHandle {
             .and_then(|o| list_output::ListOutput::from_str(&o).with_context(|| format!("unexpected output from list command:\n{o}")))
             .map(|ListOutput { entries }| entries)
     }
-    pub fn get_file(&self, file: &Path) -> Result<ArchiveFileHandle> {
+    pub fn get_file(&self, file: &Path) -> Result<(ListOutputEntry, ArchiveFileHandle)> {
         self.list_files()
             .and_then(|files| {
                 files
                     .iter()
-                    .find_map(
+                    .find(
                         |ListOutputEntry {
                              modified: _,
-                             original_path,
+                             original_path: _,
                              created: _,
                              size: _,
                              path,
-                         }| { path.as_path().eq(file).then(|| original_path.clone()) },
+                         }| { path.as_path().eq(file) },
                     )
+                    .cloned()
                     .with_context(|| format!("file not found in {:#?}", files.into_iter().map(|file| file.path).collect::<Vec<_>>()))
             })
             .and_then(|file| {
@@ -243,30 +245,31 @@ impl ArchiveHandle {
                             // extract
                             .arg("x")
                             .arg(&self.archive)
-                            .arg(&file)
+                            .arg(&file.path)
                             // write data to stdout
                             .arg("-so")
                     })
                     .spawn()
                     .context("spawning extract command")
+                    .and_then(|mut child| {
+                        child
+                            .stdout
+                            .take()
+                            .context("no stdout")
+                            .map(|stdout| (stdout, child))
+                    })
+                    .map(|(stdout, child)| {
+                        let (tx, rx) = mpsc::channel();
+                        spawn_watcher(tx, child);
+                        ArchiveFileHandle {
+                            error_callback: rx.pipe(Mutex::new).pipe(Arc::new),
+                            reader: stdout.pipe(BufReader::new),
+                            finished: false,
+                        }
+                    })
+                    .with_context(|| format!("when initializing read from archive file [{}]", file.path.display()))
+                    .map(|handle| (file, handle))
             })
-            .and_then(|mut child| {
-                child
-                    .stdout
-                    .take()
-                    .context("no stdout")
-                    .map(|stdout| (stdout, child))
-            })
-            .map(|(stdout, child)| {
-                let (tx, rx) = mpsc::channel();
-                spawn_watcher(tx, child);
-                ArchiveFileHandle {
-                    error_callback: rx.pipe(Mutex::new).pipe(Arc::new),
-                    reader: stdout.pipe(BufReader::new),
-                    finished: false,
-                }
-            })
-            .with_context(|| format!("when initializing read from archive file [{}]", file.display()))
     }
 }
 

@@ -20,7 +20,7 @@ use {
     anyhow::Result,
     futures::{FutureExt, StreamExt, TryStreamExt},
     std::{path::PathBuf, sync::Arc},
-    tracing::{instrument, warn},
+    tracing::{instrument, warn, Instrument},
 };
 
 #[derive(Clone)]
@@ -55,12 +55,6 @@ enum Either<L, R> {
 
 #[instrument]
 async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
-    let file_name = to
-        .file_name()
-        .expect("file must have a name")
-        .to_string_lossy()
-        .to_string();
-
     let mut source_file = tokio::fs::OpenOptions::new()
         .read(true)
         .open(&from)
@@ -85,12 +79,6 @@ async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Resu
 }
 #[instrument]
 pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
-    let file_name = to
-        .file_name()
-        .expect("file must have a name")
-        .to_string_lossy()
-        .to_string();
-
     let target_file = tokio::fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -110,7 +98,6 @@ pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: 
             match chunk {
                 Ok(chunk) => {
                     downloaded += chunk.len() as u64;
-
                     tokio::io::copy(&mut chunk.as_ref(), &mut writer)
                         .await
                         .with_context(|| format!("writing to fd {}", to.display()))?;
@@ -125,14 +112,9 @@ pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: 
     }
     Ok(to)
 }
+
 #[instrument]
 pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
-    let file_name = to
-        .file_name()
-        .expect("file must have a name")
-        .to_string_lossy()
-        .to_string();
-
     let target_file = tokio::fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -237,20 +219,30 @@ impl Synchronizers {
         }
     }
 
+    #[instrument(skip_all, fields(archives=%archives.len()))]
     pub async fn sync_downloads(self, archives: Vec<Archive>) -> TotalResult<WithArchiveDescriptor<PathBuf>> {
         let base_concurrency = 5;
+        tracing::Span::current().pipe_ref(|pb| {
+            pb.pb_set_length(archives.iter().map(|a| a.descriptor.size).sum());
+            pb.pb_set_style(&io_progress_style());
+        });
+
         futures::stream::iter(archives)
             .map(|Archive { descriptor, state }| async {
                 match self
                     .cache
                     .clone()
                     .verify(descriptor.clone())
+                    .instrument(tracing::Span::current())
                     .pipe(tokio::task::spawn)
                     .map_context("task crashed")
                     .and_then(ready)
                     .await
                 {
-                    Ok(verified) => Ok(Either::Left(verified.tap(|verified| tracing::info!(?verified, "succesfully verified a file")))),
+                    Ok(verified) => Ok(Either::Left(verified.tap(|verified| {
+                        tracing::Span::current().pb_inc(verified.descriptor.size);
+                        tracing::debug!(?verified, "succesfully verified a file");
+                    }))),
                     Err(message) => self
                         .clone()
                         .prepare_sync_task(Archive {
@@ -298,7 +290,10 @@ impl Synchronizers {
                     let name = name.clone();
                     move |message| tracing::warn!(?name, ?message)
                 })
-                .inspect_ok(move |_| tracing::info!(name, "[OK]"))
+                .inspect_ok(move |res| {
+                    tracing::Span::current().pb_inc(res.descriptor.size);
+                    tracing::debug!(name, "[OK]");
+                })
                 .pipe(tokio::task::spawn)
                 .map_context("task crashed")
                 .and_then(ready)

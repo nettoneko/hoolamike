@@ -60,7 +60,7 @@ impl<T: ProcessArchive> FileHandleIterator<T> {
 #[enum_dispatch::enum_dispatch]
 pub enum ArchiveFileHandle {
     // CompressTools(compress_tools::CompressToolsFile),
-    Wrapped7Zip(::wrapped_7zip::ArchiveFileHandle),
+    Wrapped7Zip((::wrapped_7zip::list_output::ListOutputEntry, ::wrapped_7zip::ArchiveFileHandle)),
     Bethesda(self::bethesda_archive::BethesdaArchiveFile),
 }
 
@@ -98,7 +98,7 @@ impl std::io::Read for ArchiveFileHandle {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self {
             // ArchiveFileHandle::CompressTools(compress_tools_seek) => compress_tools_seek.read(buf),
-            ArchiveFileHandle::Wrapped7Zip(wrapped_7zip) => wrapped_7zip.read(buf),
+            ArchiveFileHandle::Wrapped7Zip(wrapped_7zip) => wrapped_7zip.1.read(buf),
             ArchiveFileHandle::Bethesda(bethesda_archive_file) => match bethesda_archive_file {
                 BethesdaArchiveFile::Fallout4(fo4) => fo4.read(buf),
             },

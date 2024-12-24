@@ -2,13 +2,14 @@ use {
     crate::{
         downloaders::{helpers::FutureAnyhowExt, WithArchiveDescriptor},
         modlist_json::ArchiveDescriptor,
-        progress_bars_v2::progress_style,
+        progress_bars_v2::io_progress_style,
     },
     anyhow::{Context, Result},
     futures::{FutureExt, TryFutureExt},
     std::{future::ready, hash::Hasher, os::unix::fs::MetadataExt, path::PathBuf, sync::Arc},
     tap::prelude::*,
     tokio::io::AsyncReadExt,
+    tracing::instrument,
     tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
@@ -47,7 +48,7 @@ async fn calculate_hash(path: PathBuf) -> Result<u64> {
         .to_string_lossy()
         .to_string();
     tracing::Span::current().pipe(|pb| {
-        pb.pb_set_style(&progress_style());
+        pb.pb_set_style(&io_progress_style());
         pb.pb_set_length(size);
         pb.pb_set_message(&file_name);
     });
