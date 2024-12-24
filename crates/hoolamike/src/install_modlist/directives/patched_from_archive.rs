@@ -7,7 +7,6 @@ use {
         progress_bars_v2::IndicatifWrapIoExt,
         read_wrappers::ReadExt,
     },
-    indicatif::ProgressBar,
     std::{
         convert::identity,
         io::{Read, Seek, Write},

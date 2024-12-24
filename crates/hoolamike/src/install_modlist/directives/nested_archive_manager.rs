@@ -8,7 +8,6 @@ use {
     },
     anyhow::{Context, Result},
     futures::{FutureExt, TryFutureExt},
-    indicatif::ProgressBar,
     once_cell::sync::Lazy,
     std::{
         future::ready,

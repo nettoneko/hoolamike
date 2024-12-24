@@ -4,15 +4,14 @@ use {
         pin::Pin,
         task::{Context, Poll},
     },
-    tokio::io::{self, AsyncWrite, AsyncWriteExt, ReadBuf},
+    tokio::io::{self},
 };
 
 impl<W: tokio::io::AsyncWrite + Unpin, F: Fn(usize)> tokio::io::AsyncWrite for IoHook<W, F> {
     fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         Pin::new(&mut self.inner).poll_write(cx, buf).map(|poll| {
-            poll.map(|inc| {
-                (self.callback)(inc);
-                inc
+            poll.inspect(|inc| {
+                (self.callback)(*inc);
             })
         })
     }

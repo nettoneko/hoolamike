@@ -12,7 +12,7 @@ fn test_stat_example_file() -> Result<()> {
 fn extract_example_file() -> Result<()> {
     let archive = Wrapped7Zip::find_bin()?.open_file(Path::new("./test-data/example-1.rar"))?;
     let files = archive.list_files()?;
-    let mut file = archive.get_file(&files[0].path)?;
+    let (_, mut file) = archive.get_file(&files[0].path)?;
     let mut out = Vec::new();
 
     let read = std::io::copy(&mut file, &mut std::io::Cursor::new(&mut out)).context("copy failed")?;

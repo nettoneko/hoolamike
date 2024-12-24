@@ -8,8 +8,9 @@ pub struct IoHook<R, F> {
 }
 
 impl<T, F> Unpin for IoHook<T, F> {}
+
 impl<R, F> IoHook<R, F> {
-    fn new(inner: R, callback: F) -> Self {
+    pub fn new(inner: R, callback: F) -> Self {
         IoHook { inner, callback }
     }
 }

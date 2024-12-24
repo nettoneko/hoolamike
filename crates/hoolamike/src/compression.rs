@@ -7,7 +7,6 @@ use {
     ::wrapped_7zip::WRAPPED_7ZIP,
     anyhow::{Context, Result},
     bethesda_archive::BethesdaArchiveFile,
-    indicatif::ProgressBar,
     std::{
         convert::identity,
         io::Write,

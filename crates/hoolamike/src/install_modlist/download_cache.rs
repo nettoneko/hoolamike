@@ -9,7 +9,6 @@ use {
     std::{future::ready, hash::Hasher, os::unix::fs::MetadataExt, path::PathBuf, sync::Arc},
     tap::prelude::*,
     tokio::io::AsyncReadExt,
-    tracing::instrument,
     tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
