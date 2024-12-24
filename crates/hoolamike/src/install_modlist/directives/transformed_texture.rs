@@ -67,6 +67,7 @@ fn supported_image_format(format: crate::modlist_json::image_format::DXGIFormat)
 }
 
 impl TransformedTextureHandler {
+    #[instrument(skip(self))]
     pub async fn handle(
         self,
         TransformedTextureDirective {
