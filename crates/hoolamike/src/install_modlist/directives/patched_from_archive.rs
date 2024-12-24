@@ -4,7 +4,7 @@ use {
         compression::{forward_only_seek::ForwardOnlySeek, ProcessArchive},
         install_modlist::download_cache::{to_u64_from_base_64, validate_hash},
         modlist_json::directive::PatchedFromArchiveDirective,
-        progress_bars::{vertical_progress_bar, ProgressKind, PROGRESS_BAR},
+        progress_bars_v2::IndicatifWrapIoExt,
         read_wrappers::ReadExt,
     },
     indicatif::ProgressBar,
@@ -49,15 +49,9 @@ impl PatchedFromArchiveHandler {
                 .context("could not get a handle to archive")?;
 
             tokio::task::spawn_blocking(move || -> Result<_> {
-                let pb = vertical_progress_bar(size, ProgressKind::Extract, indicatif::ProgressFinish::AndClear)
-                    .attach_to(&PROGRESS_BAR)
-                    .tap_mut(|pb| {
-                        pb.set_message(output_path.display().to_string());
-                    });
-
                 let mut wabbajack_file = self.wabbajack_file.blocking_lock();
-                #[tracing::instrument(skip(pb, source, delta, target), level = "INFO")]
-                fn perform_copy<S, D, T>(pb: ProgressBar, source: S, delta: D, target: T, expected_size: u64, expected_hash: String) -> Result<()>
+                #[tracing::instrument(skip(source, delta, target), level = "INFO")]
+                fn perform_copy<S, D, T>(source: S, delta: D, target: T, expected_size: u64, expected_hash: String) -> Result<()>
                 where
                     S: Read + Seek,
                     D: Read,
@@ -69,8 +63,8 @@ impl PatchedFromArchiveHandler {
                         .context("delta is empty")?;
                     let mut writer = &mut std::io::BufWriter::new(target);
                     std::io::copy(
-                        &mut pb
-                            .wrap_read(from)
+                        &mut tracing::Span::current()
+                            .wrap_read(expected_size, from)
                             .and_validate_size(expected_size)
                             .and_validate_hash(to_u64_from_base_64(expected_hash)?),
                         &mut writer,
@@ -87,7 +81,7 @@ impl PatchedFromArchiveHandler {
                     .open_file_read()
                     .and_then(|(final_source_path, mut final_source)| {
                         create_file_all(&output_path).and_then(|mut output_file| {
-                            perform_copy(pb, &mut final_source, delta_file, &mut output_file, size, hash)
+                            perform_copy(&mut final_source, delta_file, &mut output_file, size, hash)
                                 .with_context(|| format!("when extracting from [{final_source_path:?}] to [{output_path:?}]"))
                                 .with_context(|| format!("when handling [{archive_hash_path:?}] copy"))
                         })

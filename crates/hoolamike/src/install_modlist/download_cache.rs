@@ -2,13 +2,14 @@ use {
     crate::{
         downloaders::{helpers::FutureAnyhowExt, WithArchiveDescriptor},
         modlist_json::ArchiveDescriptor,
-        progress_bars::{vertical_progress_bar, PROGRESS_BAR, VALIDATE_TOTAL_PROGRESS_BAR},
+        progress_bars_v2::progress_style,
     },
     anyhow::{Context, Result},
     futures::{FutureExt, TryFutureExt},
-    std::{future::ready, hash::Hasher, path::PathBuf, sync::Arc},
+    std::{future::ready, hash::Hasher, os::unix::fs::MetadataExt, path::PathBuf, sync::Arc},
     tap::prelude::*,
     tokio::io::AsyncReadExt,
+    tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
 #[derive(Debug, Clone)]
@@ -33,20 +34,22 @@ async fn read_file_size(path: &PathBuf) -> Result<u64> {
         .await
 }
 
+#[tracing::instrument]
 async fn calculate_hash(path: PathBuf) -> Result<u64> {
+    let size = tokio::fs::metadata(&path)
+        .await
+        .context("no such file")?
+        .size();
+
     let file_name = path
         .file_name()
         .context("file must have a name")?
         .to_string_lossy()
         .to_string();
-    let pb = vertical_progress_bar(
-        tokio::fs::metadata(&path).await?.len(),
-        crate::progress_bars::ProgressKind::Validate,
-        indicatif::ProgressFinish::AndClear,
-    )
-    .attach_to(&PROGRESS_BAR)
-    .tap_mut(|pb| {
-        pb.set_message(file_name.clone());
+    tracing::Span::current().pipe(|pb| {
+        pb.pb_set_style(&progress_style());
+        pb.pb_set_length(size);
+        pb.pb_set_message(&file_name);
     });
 
     let mut file = tokio::fs::File::open(&path)
@@ -59,8 +62,7 @@ async fn calculate_hash(path: PathBuf) -> Result<u64> {
             0 => break,
             read => {
                 hasher.update(&buffer[..read]);
-                pb.inc(read as u64);
-                VALIDATE_TOTAL_PROGRESS_BAR.inc(read as u64);
+                tracing::Span::current().pb_inc(read as u64);
             }
         }
     }

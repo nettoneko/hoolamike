@@ -2,6 +2,7 @@ use {
     super::*,
     crate::{
         modlist_json::{directive::CreateBSADirective, BA2DX10Entry, DirectiveState, FileState},
+        progress_bars_v2::IndicatifWrapIoExt,
         utils::PathReadWrite,
     },
     ba2::{fo4::FileReadOptions, CompressableFrom, CompressionResult, ReaderWithOptions},
@@ -136,11 +137,6 @@ impl CreateBSAHandler {
         }: CreateBSADirective,
     ) -> Result<u64> {
         let Self { output_directory } = self;
-        let pb = vertical_progress_bar(size, ProgressKind::WriteBSA, indicatif::ProgressFinish::AndLeave)
-            .attach_to(&PROGRESS_BAR)
-            .tap_mut(|pb| {
-                pb.set_message(to.clone().into_path().display().to_string());
-            });
         tokio::task::spawn_blocking(move || match state {
             DirectiveState::CompressionBsa {
                 has_name_table: _,
@@ -187,12 +183,6 @@ impl CreateBSAHandler {
                     })
                     .collect::<Result<Vec<_>>>()
                     .and_then(|entries| {
-                        let insert_into_archive_pb = vertical_progress_bar(entries.len() as _, ProgressKind::WriteBSA, indicatif::ProgressFinish::AndLeave)
-                            .attach_to(&PROGRESS_BAR)
-                            .tap_mut(|pb| {
-                                pb.set_message(format!("inserting [{}] entries into archive", entries.len()));
-                                pb.tick();
-                            });
                         output_directory
                             .clone()
                             .join(to.into_path())
@@ -201,7 +191,6 @@ impl CreateBSAHandler {
                                 entries.pipe_ref(|entries| {
                                     entries
                                         .iter()
-                                        .pipe(|iter| insert_into_archive_pb.wrap_iter(iter))
                                         .try_fold(
                                             (ba2::fo4::Archive::new(), ba2::fo4::ArchiveOptions::builder()),
                                             |(mut acc, options), (key, file)| match file {
@@ -230,17 +219,17 @@ impl CreateBSAHandler {
                                             },
                                         )
                                         .and_then(|(archive, options)| {
-                                            let mut writer = pb.wrap_write(&mut output);
-                                            archive
-                                                .write(&mut writer, &options.build())
-                                                .context("writing the built archive")
-                                                .and_then(|_| {
-                                                    output.rewind().context("rewinding file").and_then(|_| {
-                                                        let wrote = writer.progress.length().unwrap_or(0);
-                                                        debug!(%wrote, "finished dumping bethesda archive");
-                                                        output.flush().context("flushing").map(|_| output)
-                                                    })
+                                            {
+                                                let mut writer = tracing::Span::current().wrap_write(0, &mut output);
+                                                archive.write(&mut writer, &options.build())
+                                            }
+                                            .context("writing the built archive")
+                                            .and_then(|_| {
+                                                output.rewind().context("rewinding file").and_then(|_| {
+                                                    debug!("finished dumping bethesda archive");
+                                                    output.flush().context("flushing").map(|_| output)
                                                 })
+                                            })
                                         })
                                         .with_context(|| format!("writing to [{:?}]", output_path))
                                 })

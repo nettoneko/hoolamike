@@ -1,6 +1,6 @@
 use {
     super::*,
-    crate::{modlist_json::directive::RemappedInlineFileDirective, utils::PathReadWrite},
+    crate::{modlist_json::directive::RemappedInlineFileDirective, progress_bars_v2::IndicatifWrapIoExt, utils::PathReadWrite},
     std::{convert::identity, io::Read},
     tracing::instrument,
 };
@@ -106,11 +106,6 @@ impl RemappedInlineFileHandler {
             remapping_context,
             wabbajack_file,
         } = self;
-        let pb = vertical_progress_bar(size, ProgressKind::Extract, indicatif::ProgressFinish::AndClear)
-            .attach_to(&PROGRESS_BAR)
-            .tap_mut(|pb| {
-                pb.set_message(to.to_string());
-            });
         tokio::task::spawn_blocking(move || {
             wabbajack_file
                 .blocking_lock()
@@ -129,7 +124,10 @@ impl RemappedInlineFileHandler {
                     to.clone()
                         .into_path()
                         .open_file_write()
-                        .and_then(|(_, mut file)| std::io::copy(&mut pb.wrap_read(std::io::Cursor::new(output)), &mut file).context("writing remapped file"))
+                        .and_then(|(_, mut file)| {
+                            std::io::copy(&mut tracing::Span::current().wrap_read(size, std::io::Cursor::new(output)), &mut file)
+                                .context("writing remapped file")
+                        })
                 })
         })
         .instrument(info_span!("loading and remapping a file", ?source_data_id))

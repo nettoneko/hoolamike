@@ -15,12 +15,12 @@ use {
         },
         error::{MultiErrorCollectExt, TotalResult},
         modlist_json::{Archive, GoogleDriveState, HttpState, ManualState, NexusState, State},
-        progress_bars::{vertical_progress_bar, ProgressKind, COPY_LOCAL_TOTAL_PROGRESS_BAR, DOWNLOAD_TOTAL_PROGRESS_BAR, PROGRESS_BAR},
+        progress_bars_v2::IndicatifWrapIoExt,
     },
     anyhow::Result,
     futures::{FutureExt, StreamExt, TryStreamExt},
     std::{path::PathBuf, sync::Arc},
-    tracing::warn,
+    tracing::{instrument, warn},
 };
 
 #[derive(Clone)]
@@ -53,20 +53,13 @@ enum Either<L, R> {
     Right(R),
 }
 
+#[instrument]
 async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
     let file_name = to
         .file_name()
         .expect("file must have a name")
         .to_string_lossy()
         .to_string();
-    let pb = {
-        COPY_LOCAL_TOTAL_PROGRESS_BAR.inc_length(expected_size);
-        vertical_progress_bar(expected_size, ProgressKind::Copy, indicatif::ProgressFinish::AndClear)
-            .attach_to(&PROGRESS_BAR)
-            .tap_mut(|pb| {
-                pb.set_message(file_name.clone());
-            })
-    };
 
     let mut source_file = tokio::fs::OpenOptions::new()
         .read(true)
@@ -81,7 +74,7 @@ async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Resu
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
 
-    let copied = tokio::io::copy(&mut source_file, &mut pb.wrap_async_write(target_file))
+    let copied = tokio::io::copy(&mut source_file, &mut tracing::Span::current().wrap_async_write(expected_size, target_file))
         .await
         .context("copying")?;
 
@@ -90,21 +83,13 @@ async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Resu
     }
     Ok(to)
 }
-
+#[instrument]
 pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
     let file_name = to
         .file_name()
         .expect("file must have a name")
         .to_string_lossy()
         .to_string();
-    let pb = {
-        DOWNLOAD_TOTAL_PROGRESS_BAR.inc_length(expected_size);
-        vertical_progress_bar(expected_size, ProgressKind::Download, indicatif::ProgressFinish::AndClear)
-            .attach_to(&PROGRESS_BAR)
-            .tap_mut(|pb| {
-                pb.set_message(file_name.clone());
-            })
-    };
 
     let target_file = tokio::fs::OpenOptions::new()
         .write(true)
@@ -114,7 +99,7 @@ pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: 
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
 
-    let mut writer = &mut pb.wrap_async_write(target_file);
+    let mut writer = &mut tracing::Span::current().wrap_async_write(expected_size, target_file);
     let mut downloaded = 0;
     for from_chunk in from.clone().into_iter() {
         let mut byte_stream = reqwest::get(from_chunk.to_string())
@@ -125,8 +110,7 @@ pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: 
             match chunk {
                 Ok(chunk) => {
                     downloaded += chunk.len() as u64;
-                    pb.inc(chunk.len() as u64);
-                    DOWNLOAD_TOTAL_PROGRESS_BAR.inc(chunk.len() as u64);
+
                     tokio::io::copy(&mut chunk.as_ref(), &mut writer)
                         .await
                         .with_context(|| format!("writing to fd {}", to.display()))?;
@@ -141,29 +125,22 @@ pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: 
     }
     Ok(to)
 }
+#[instrument]
 pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
     let file_name = to
         .file_name()
         .expect("file must have a name")
         .to_string_lossy()
         .to_string();
-    let pb = {
-        DOWNLOAD_TOTAL_PROGRESS_BAR.inc_length(expected_size);
-        vertical_progress_bar(expected_size, ProgressKind::Download, indicatif::ProgressFinish::AndClear)
-            .attach_to(&PROGRESS_BAR)
-            .tap_mut(|pb| {
-                pb.set_message(file_name.clone());
-            })
-    };
 
-    let mut target_file = tokio::fs::OpenOptions::new()
+    let target_file = tokio::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .open(&to)
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
-    let mut writer = &mut target_file;
+    let mut writer = &mut tracing::Span::current().wrap_async_write(expected_size, target_file);
     let mut byte_stream = reqwest::get(from.to_string())
         .await
         .with_context(|| format!("making request to {from}"))?
@@ -173,8 +150,7 @@ pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Res
         match chunk {
             Ok(chunk) => {
                 downloaded += chunk.len() as u64;
-                pb.inc(chunk.len() as u64);
-                DOWNLOAD_TOTAL_PROGRESS_BAR.inc(chunk.len() as u64);
+
                 tokio::io::copy(&mut chunk.as_ref(), &mut writer)
                     .await
                     .with_context(|| format!("writing to fd {}", to.display()))?;

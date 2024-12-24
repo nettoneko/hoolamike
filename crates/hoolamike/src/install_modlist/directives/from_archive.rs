@@ -3,7 +3,7 @@ use {
     crate::{
         install_modlist::download_cache::{to_u64_from_base_64, validate_file_size, validate_hash},
         modlist_json::directive::FromArchiveDirective,
-        progress_bars::{vertical_progress_bar, ProgressKind, PROGRESS_BAR},
+        progress_bars_v2::IndicatifWrapIoExt,
         read_wrappers::ReadExt,
     },
     std::{
@@ -68,22 +68,17 @@ impl FromArchiveHandler {
                 .context("could not get a handle to archive")?;
 
             tokio::task::spawn_blocking(move || -> Result<_> {
-                let pb = vertical_progress_bar(size, ProgressKind::Extract, indicatif::ProgressFinish::AndClear)
-                    .attach_to(&PROGRESS_BAR)
-                    .tap_mut(|pb| {
-                        pb.set_message(output_path.display().to_string());
-                    });
                 let perform_copy = move |from: &mut dyn Read, to: &mut dyn Write, target_path: PathBuf| {
                     info_span!("perform_copy").in_scope(|| {
                         let mut writer = to;
                         let mut reader: Box<dyn Read> = match is_whitelisted_by_path(&target_path) {
-                            true => pb
+                            true => tracing::Span::current()
                                 // WARN: hashes are not gonna match for bsa stuff because we write headers differentlys
-                                .wrap_read(from)
+                                .wrap_read(size, from)
                                 .and_validate_size(size)
                                 .pipe(Box::new),
-                            false => pb
-                                .wrap_read(from)
+                            false => tracing::Span::current()
+                                .wrap_read(size, from)
                                 .and_validate_size(size)
                                 .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
                                 .pipe(Box::new),

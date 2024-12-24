@@ -77,25 +77,25 @@ pub mod read_wrappers;
 #[macro_use]
 pub mod utils;
 
-pub mod error;
-
 pub mod compression;
 pub mod config_file;
 pub mod downloaders;
+pub mod error;
 pub mod helpers;
 pub mod install_modlist;
 pub mod modlist_data;
 pub mod modlist_json;
 pub mod octadiff_reader;
+pub mod progress_bars_v2;
 pub mod wabbajack_file {
     use {
         crate::{
             compression::ProcessArchive,
             install_modlist::directives::{WabbajackFileHandle, WabbajackFileHandleExt},
+            progress_bars_v2::IndicatifWrapIoExt,
         },
         anyhow::{Context, Result},
         std::path::{Path, PathBuf},
-        tap::prelude::*,
     };
 
     #[derive(Debug)]
@@ -108,10 +108,8 @@ pub mod wabbajack_file {
     const MODLIST_JSON_FILENAME: &str = "modlist";
 
     impl WabbajackFile {
+        #[tracing::instrument]
         pub fn load(path: PathBuf) -> Result<(WabbajackFileHandle, Self)> {
-            let pb = indicatif::ProgressBar::new_spinner()
-                .with_prefix(path.display().to_string())
-                .tap_mut(|pb| crate::progress_bars::ProgressKind::Validate.stylize(pb));
             crate::compression::wrapped_7zip::WRAPPED_7ZIP
                 .with(|w| w.open_file(&path))
                 .context("reading archive")
@@ -121,7 +119,8 @@ pub mod wabbajack_file {
                             .get_handle(Path::new(MODLIST_JSON_FILENAME))
                             .context("looking up file by name")
                             .and_then(|handle| {
-                                serde_json::from_reader::<_, crate::modlist_json::Modlist>(&mut pb.wrap_read(handle)).context("reading archive contents")
+                                serde_json::from_reader::<_, crate::modlist_json::Modlist>(&mut tracing::Span::current().wrap_read(0, handle))
+                                    .context("reading archive contents")
                             })
                             .with_context(|| format!("reading [{MODLIST_JSON_FILENAME}]"))
                             .map(|modlist| Self {
@@ -135,7 +134,6 @@ pub mod wabbajack_file {
         }
     }
 }
-pub(crate) mod progress_bars;
 
 #[allow(unused_imports)]
 fn setup_logging() {
@@ -211,10 +209,6 @@ async fn main() -> Result<()> {
         },
     }
     .with_context(|| {
-        progress_bars::DOWNLOAD_TOTAL_PROGRESS_BAR.finish_and_clear();
-        progress_bars::COPY_LOCAL_TOTAL_PROGRESS_BAR.finish_and_clear();
-        progress_bars::VALIDATE_TOTAL_PROGRESS_BAR.finish_and_clear();
-        // progress_bars::PROGRESS_BAR.clear().ok();
         format!(
             "\n\nerror occurred, run with --help, check your configuration or file a ticket at {}",
             env!("CARGO_PKG_REPOSITORY")

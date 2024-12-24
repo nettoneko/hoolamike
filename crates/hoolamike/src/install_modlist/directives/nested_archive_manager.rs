@@ -4,7 +4,6 @@ use {
         compression::{ArchiveHandle, ProcessArchive, SeekWithTempFileExt},
         downloaders::helpers::FutureAnyhowExt,
         modlist_json::directive::ArchiveHashPath,
-        progress_bars::{vertical_progress_bar, ProgressKind},
         utils::PathReadWrite,
     },
     anyhow::{Context, Result},
@@ -112,42 +111,28 @@ impl NestedArchivesService {
         NestedArchivesServiceInner::new(download_summary, max_size).pipe(Self)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get(self: Arc<Self>, nested_archive: ArchiveHashPath) -> Result<OutputHandleKind> {
         match nested_archive.clone().parent() {
-            Some((parent, path)) => {
-                let pb = vertical_progress_bar(0, ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)
-                    .attach_to(&super::PROGRESS_BAR)
-                    .tap_mut({
-                        cloned![nested_archive];
-                        move |pb| {
-                            pb.set_message(
-                                nested_archive
-                                    .pipe_ref(serde_json::to_string)
-                                    .expect("must serialize"),
-                            );
-                        }
-                    });
-                match parent.path.len() {
-                    0 => {
-                        get_handle(pb, &self.0.translate_source_hash(&parent)?, &path.into_path())
-                            .map_ok(OutputHandleKind::FreshlyCreated)
-                            .await
-                    }
-                    _ => {
-                        get_handle(
-                            pb,
-                            &self
-                                .try_get(parent)
-                                .await
-                                .context("no entry in cache")?
-                                .inner,
-                            &path.into_path(),
-                        )
+            Some((parent, path)) => match parent.path.len() {
+                0 => {
+                    get_handle(&self.0.translate_source_hash(&parent)?, &path.into_path())
                         .map_ok(OutputHandleKind::FreshlyCreated)
                         .await
-                    }
                 }
-            }
+                _ => {
+                    get_handle(
+                        &self
+                            .try_get(parent)
+                            .await
+                            .context("no entry in cache")?
+                            .inner,
+                        &path.into_path(),
+                    )
+                    .map_ok(OutputHandleKind::FreshlyCreated)
+                    .await
+                }
+            },
             None => self
                 .0
                 .translate_source_hash(&nested_archive)
@@ -173,8 +158,8 @@ impl NestedArchivesService {
     }
 }
 
-#[instrument(skip(pb), level = "INFO")]
-async fn get_handle(pb: ProgressBar, source_path: &Path, archive_path: &Path) -> Result<WithPermit<tempfile::TempPath>> {
+#[instrument(level = "INFO")]
+async fn get_handle(source_path: &Path, archive_path: &Path) -> Result<WithPermit<tempfile::TempPath>> {
     let (source_path, archive_path) = (source_path.to_owned(), archive_path.to_owned());
     tokio::task::spawn_blocking(move || {
         ArchiveHandle::guess(&source_path)
@@ -183,7 +168,7 @@ async fn get_handle(pb: ProgressBar, source_path: &Path, archive_path: &Path) ->
     })
     .map_context("thread crashed")
     .and_then(ready)
-    .and_then(|handle| handle.seek_with_temp_file(pb))
+    .and_then(|handle| handle.seek_with_temp_file())
     .await
 }
 #[derive(derivative::Derivative)]
@@ -213,25 +198,16 @@ impl NestedArchivesServiceInner {
     #[instrument(skip(self), fields(file_permits=%OPEN_FILE_PERMITS.available_permits(), cache_entries_count=%self.cache.len()))]
     async fn init(&self, archive_hash_path: ArchiveHashPath) -> Result<(ArchiveHashPath, HandleKind)> {
         tracing::trace!("initializing entry");
-        let pb = vertical_progress_bar(0, ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)
-            .attach_to(&super::PROGRESS_BAR)
-            .tap_mut(|pb| {
-                pb.set_message(
-                    archive_hash_path
-                        .pipe_ref(serde_json::to_string)
-                        .expect("must serialize"),
-                );
-            });
         match archive_hash_path.clone().parent() {
             Some((parent, archive_path)) => match self.get(parent).boxed_local().await? {
                 HandleKind::Cached(cached) => {
-                    get_handle(pb, &cached.inner, &archive_path.into_path())
+                    get_handle(&cached.inner, &archive_path.into_path())
                         .map_ok(Arc::new)
                         .map_ok(HandleKind::Cached)
                         .await
                 }
                 HandleKind::JustHashPath(path_buf) => {
-                    get_handle(pb, &path_buf, &archive_path.into_path())
+                    get_handle(&path_buf, &archive_path.into_path())
                         .map_ok(Arc::new)
                         .map_ok(HandleKind::Cached)
                         .await

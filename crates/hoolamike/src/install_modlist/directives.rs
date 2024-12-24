@@ -14,11 +14,11 @@ use {
             },
             DirectiveKind,
         },
-        progress_bars::{vertical_progress_bar, ProgressKind, PROGRESS_BAR},
         utils::PathReadWrite,
     },
     anyhow::{Context, Result},
     futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt},
+    indicatif::ProgressStyle,
     itertools::Itertools,
     nested_archive_manager::{max_open_files, NestedArchivesService},
     remapped_inline_file::RemappingContext,
@@ -32,6 +32,7 @@ use {
     },
     tap::prelude::*,
     tracing::{info_span, Instrument},
+    tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
 pub(crate) fn create_file_all(path: &Path) -> Result<std::fs::File> {
@@ -216,15 +217,9 @@ impl DirectivesHandler {
 
     #[allow(clippy::unnecessary_literal_unwrap)]
     pub fn handle_directives(self: Arc<Self>, directives: Vec<Directive>) -> impl Stream<Item = Result<()>> {
-        let pb = vertical_progress_bar(
-            directives.iter().map(directive_size).sum(),
-            ProgressKind::InstallDirectives,
-            indicatif::ProgressFinish::AndClear,
-        )
-        .attach_to(&PROGRESS_BAR)
-        .tap_mut(|pb| {
-            pb.set_message("TOTAL");
-            pb.enable_steady_tick(Duration::from_secs(2));
+        tracing::Span::current().tap(|pb| {
+            pb.pb_set_length(directives.iter().map(directive_size).sum());
+            pb.pb_set_style(&ProgressStyle::default_bar());
         });
 
         fn directive_size(d: &Directive) -> u64 {
@@ -256,7 +251,7 @@ impl DirectivesHandler {
                 .pipe(move |(hash, size, to)| {
                     validate_hash_with_overrides(to.clone(), hash, size).map(move |res| {
                         res.tap_err(|reason| tracing::warn!(%kind, ?size, ?reason, ?to, "directive will be recomputed"))
-                            .tap_ok(|path| tracing::info!(%kind, ?size, ?path, ?to,  "directive is ok"))
+                            .tap_ok(|path| tracing::debug!(%kind, ?size, ?path, ?to,  "directive is ok"))
                             .is_err()
                     })
                 })
@@ -351,7 +346,7 @@ impl DirectivesHandler {
                                 .into_iter()
                                 .map(|(parent_archive, chunk)| (parent_archive, chunk.into_iter().collect_vec()))
                                 .collect_vec()
-                                .chunks(concurrency() * 4)
+                                .chunks(concurrency())
                                 .map(|chunk| chunk.to_vec())
                                 .collect_vec()
                                 .pipe(futures::stream::iter)
@@ -487,9 +482,8 @@ impl DirectivesHandler {
                             }
                         }))
                         .map_ok({
-                            cloned![pb];
                             move |size| {
-                                pb.inc(size);
+                                tracing::Span::current().pb_inc(size);
                             }
                         })
                 },

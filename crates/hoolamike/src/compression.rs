@@ -1,6 +1,7 @@
 use {
     crate::{
         install_modlist::directives::nested_archive_manager::{WithPermit, OPEN_FILE_PERMITS},
+        progress_bars_v2::IndicatifWrapIoExt,
         utils::{boxed_iter, ReadableCatchUnwindExt},
     },
     ::wrapped_7zip::WRAPPED_7ZIP,
@@ -123,35 +124,41 @@ impl<T: std::io::Read + Sync + 'static> T
 where
     Self: Sized + Sync + Send + 'static,
 {
-    async fn seek_with_temp_file(self, pb: ProgressBar) -> Result<WithPermit<tempfile::TempPath>> {
-        let reader = Arc::new(std::sync::Mutex::new(self));
-        WithPermit::new_blocking(&OPEN_FILE_PERMITS, move || {
-            tempfile::NamedTempFile::new()
-                .context("creating a tempfile")
-                .and_then(|mut temp_file| {
-                    let _ = tracing::debug_span!("seek_with_temp_file", temp_file=?temp_file).entered();
-                    let mut reader = reader.lock().unwrap();
-                    std::io::copy(&mut *reader, &mut pb.wrap_write(&mut temp_file))
-                        .context("creating a seekable temp file")
-                        .map(|wrote_size| {
-                            match wrote_size {
-                                0 => {
-                                    tracing::error!("wrote 0 bytes")
-                                }
-                                other => {
-                                    tracing::debug!("wrote {other} bytes")
-                                }
+    async fn seek_with_temp_file(self) -> Result<WithPermit<tempfile::TempPath>> {
+        tracing::info_span!("seek_with_temp_file")
+            .in_scope(|| {
+                let reader = Arc::new(std::sync::Mutex::new(self));
+                WithPermit::new_blocking(&OPEN_FILE_PERMITS, move || {
+                    tempfile::NamedTempFile::new()
+                        .context("creating a tempfile")
+                        .and_then(|mut temp_file| {
+                            let _ = tracing::debug_span!("seek_with_temp_file", temp_file=?temp_file).entered();
+                            {
+                                let mut reader = reader.lock().unwrap();
+                                let writer = &mut tracing::Span::current().wrap_write(0, &mut temp_file);
+                                std::io::copy(&mut *reader, writer)
                             }
-                            temp_file
-                        })
-                        .and_then(|mut file| {
-                            file.flush()
-                                .context("flushing file")
-                                .map(|_| file.into_temp_path())
+                            .context("creating a seekable temp file")
+                            .map(|wrote_size| {
+                                match wrote_size {
+                                    0 => {
+                                        tracing::error!("wrote 0 bytes")
+                                    }
+                                    other => {
+                                        tracing::debug!("wrote {other} bytes")
+                                    }
+                                }
+                                temp_file
+                            })
+                            .and_then(|mut file| {
+                                file.flush()
+                                    .context("flushing file")
+                                    .map(|_| file.into_temp_path())
+                            })
                         })
                 })
-        })
-        .await
+            })
+            .await
     }
 }
 
@@ -173,7 +180,7 @@ mod tests {
         .map(Ok)
         .try_for_each(|(slice, reader)| {
             reader
-                .seek_with_temp_file(ProgressBar::new(slice.len() as _))
+                .seek_with_temp_file()
                 .and_then(move |temp| async move {
                     let buffer = temp
                         .inner

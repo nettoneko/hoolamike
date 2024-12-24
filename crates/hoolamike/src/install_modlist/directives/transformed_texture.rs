@@ -3,6 +3,7 @@ use {
     crate::{
         install_modlist::download_cache::to_u64_from_base_64,
         modlist_json::{directive::TransformedTextureDirective, ImageState},
+        progress_bars_v2::IndicatifWrapIoExt,
         read_wrappers::ReadExt,
     },
     std::{
@@ -97,20 +98,16 @@ impl TransformedTextureHandler {
                 .context("could not get a handle to archive")?;
 
             tokio::task::spawn_blocking(move || -> Result<_> {
-                let pb = vertical_progress_bar(size, ProgressKind::Extract, indicatif::ProgressFinish::AndClear)
-                    .attach_to(&PROGRESS_BAR)
-                    .tap_mut(|pb| {
-                        pb.set_message(output_path.display().to_string());
-                    });
                 let perform_copy = {
-                    cloned![pb];
                     move |from: &mut dyn Read, to: &mut dyn Write, target_path: PathBuf| {
                         info_span!("perform_copy").in_scope(|| {
                             let mut writer = to;
                             let mut reader: Box<dyn Read> = match is_whitelisted_by_path(&target_path) {
-                                true => pb.wrap_read(from).pipe(Box::new),
-                                false => pb
-                                    .wrap_read(from)
+                                true => tracing::Span::current()
+                                    .wrap_read(size, from)
+                                    .pipe(Box::new),
+                                false => tracing::Span::current()
+                                    .wrap_read(size, from)
                                     .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
                                     .pipe(Box::new),
                             };
@@ -128,14 +125,14 @@ impl TransformedTextureHandler {
                         create_file_all(&output_path).and_then(|mut output_file| {
                             perform_copy(&mut final_source, &mut output_file, output_path.clone())
                                 .or_else(|reason| {
-                                    tracing::error!(?reason, "could not resize texture, copying the original");
+                                    let _span = tracing::error_span!("could not resize texture, copying the original", ?reason).entered();
                                     final_source
                                         .rewind()
                                         .context("rewinding original file")
                                         .map(|_| final_source)
                                         .and_then(|final_source| {
                                             output_path.open_file_write().and_then(|(_, mut output)| {
-                                                std::io::copy(&mut pb.wrap_read(final_source), &mut output)
+                                                std::io::copy(&mut tracing::Span::current().wrap_read(size, final_source), &mut output)
                                                     .with_context(|| format!("writing original because resizing could not be performed due to: {reason:?}"))
                                             })
                                         })

@@ -4,7 +4,7 @@ use {
         downloaders::WithArchiveDescriptor,
         error::TotalResult,
         modlist_json::{Archive, Modlist},
-        progress_bars::VALIDATE_TOTAL_PROGRESS_BAR,
+        progress_bars_v2::progress_style,
         wabbajack_file::WabbajackFile,
         DebugHelpers,
     },
@@ -15,6 +15,8 @@ use {
     itertools::Itertools,
     std::{convert::identity, future::ready, sync::Arc},
     tap::prelude::*,
+    tracing::instrument,
+    tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
 pub mod directives;
@@ -22,6 +24,7 @@ pub mod download_cache;
 pub mod downloads;
 
 #[allow(clippy::needless_as_bytes)]
+#[instrument(skip_all)]
 pub async fn install_modlist(
     HoolamikeConfig {
         downloaders,
@@ -63,7 +66,10 @@ pub async fn install_modlist(
                 .map(|archive| archive.descriptor.size)
                 .sum::<u64>()
                 .pipe(|total_size| {
-                    VALIDATE_TOTAL_PROGRESS_BAR.set_length(total_size);
+                    tracing::Span::current().pipe_ref(|pb| {
+                        pb.pb_set_style(&progress_style());
+                        pb.pb_set_length(total_size);
+                    });
                 })
         })
         .map_err(|e| vec![e])?;

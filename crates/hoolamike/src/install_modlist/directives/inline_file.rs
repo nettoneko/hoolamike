@@ -4,7 +4,7 @@ use {
         compression::ProcessArchive,
         install_modlist::download_cache::validate_hash,
         modlist_json::directive::InlineFileDirective,
-        progress_bars::{vertical_progress_bar, ProgressKind, PROGRESS_BAR},
+        progress_bars_v2::IndicatifWrapIoExt,
     },
     std::{convert::identity, io::Write, path::Path},
 };
@@ -32,10 +32,6 @@ impl InlineFileHandler {
 
             let wabbajack_file = self.wabbajack_file.clone();
             tokio::task::spawn_blocking(move || -> Result<_> {
-                let pb = vertical_progress_bar(size, ProgressKind::Extract, indicatif::ProgressFinish::AndClear)
-                    .attach_to(&PROGRESS_BAR)
-                    .tap_mut(|pb| pb.set_message(output_path.display().to_string()));
-
                 let output_file = create_file_all(&output_path)?;
 
                 let mut archive = wabbajack_file.blocking_lock();
@@ -44,7 +40,7 @@ impl InlineFileHandler {
                     .and_then(|file| {
                         let mut writer = std::io::BufWriter::new(output_file);
                         std::io::copy(
-                            &mut pb.wrap_read(file),
+                            &mut tracing::Span::current().wrap_read(size, file),
                             // WARN: stuff that's inside modlist.wabbajack/modlist(.json) is incorrect
                             // .and_validate_size(size)
                             // .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on")),

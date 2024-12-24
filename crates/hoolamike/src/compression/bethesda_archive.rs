@@ -1,7 +1,7 @@
 use {
     super::ProcessArchive,
     crate::{
-        progress_bars::{vertical_progress_bar, PROGRESS_BAR},
+        progress_bars_v2::IndicatifWrapIoExt,
         utils::{MaybeWindowsPath, PathReadWrite, ReadableCatchUnwindExt},
     },
     anyhow::{Context, Result},
@@ -63,9 +63,7 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
         let options = FileWriteOptionsBuilder::new()
             .compression_format(self.1.compression_format())
             .build();
-        let pb = vertical_progress_bar(0, crate::progress_bars::ProgressKind::ExtractTemporaryFile, indicatif::ProgressFinish::AndClear)
-            .attach_to(&PROGRESS_BAR)
-            .tap_mut(|pb| pb.set_message(path.display().to_string()));
+
         self.list_paths_with_originals()
             .context("listing entries")
             .and_then(|paths| {
@@ -81,16 +79,17 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
                     })
                     .and_then(|file| {
                         catch_unwind(|| {
-                            pb.set_length(file.iter().map(|chunk| chunk.len() as u64).sum());
-                            pb.tick();
-                            let mut writer = pb.wrap_write(&mut output);
-                            file.write(&mut writer, &options)
-                                // file.write(&mut output, &options)
-                                .context("writing fallout 4 bsa to output buffer")
-                                .and_then(|_| {
+                            file.iter()
+                                .map(|chunk| chunk.len() as u64)
+                                .sum::<u64>()
+                                .pipe(|size| {
+                                    let mut writer = tracing::Span::current().wrap_write(size, &mut output);
+                                    file.write(&mut writer, &options)
+                                        .context("writing fallout 4 bsa to output buffer")
+                                })
+                                .and_then(move |_| {
                                     output.rewind().context("rewinding file").and_then(|_| {
-                                        let wrote = writer.progress.length().unwrap_or(0);
-                                        tracing::debug!(%wrote, "finished dumping bethesda archive");
+                                        tracing::debug!("finished dumping bethesda archive");
                                         output.flush().context("flushing").map(|_| output)
                                     })
                                 })
