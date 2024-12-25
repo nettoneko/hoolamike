@@ -2,7 +2,7 @@ use {
     anyhow::Context,
     itertools::Itertools,
     serde::{Deserialize, Serialize},
-    std::path::PathBuf,
+    std::{path::PathBuf, sync::Arc},
     tap::prelude::*,
 };
 
@@ -81,5 +81,34 @@ impl<T: AsRef<std::path::Path>> T {
             .open(self)
             .with_context(|| format!("opening file for writing at [{}]", self.as_ref().display()))
             .map(|file| (self.as_ref().to_owned(), file))
+    }
+}
+
+#[derive(derive_more::Display, Debug, Clone)]
+pub(crate) struct ArcError(Arc<anyhow::Error>);
+
+pub(crate) type ArcResult<T> = std::result::Result<T, ArcError>;
+
+#[extension_traits::extension(pub(crate) trait AnyhowArcResultExt)]
+impl<T> anyhow::Result<T> {
+    fn arced(self) -> ArcResult<T> {
+        self.map_err(Arc::new).map_err(ArcError)
+    }
+}
+
+#[extension_traits::extension(pub(crate) trait ArcResultExt)]
+impl<T> ArcResult<T> {
+    fn into_inner_err(self) -> anyhow::Result<T> {
+        self.map_err(|e| Arc::try_unwrap(e.0.clone()).unwrap_or_else(|_| anyhow::anyhow!("{e:#?}")))
+    }
+}
+
+impl std::error::Error for ArcError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.0.source()
+    }
+
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        self.source()
     }
 }

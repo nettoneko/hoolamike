@@ -7,7 +7,7 @@ use {
         utils::PathReadWrite,
     },
     anyhow::{Context, Result},
-    futures::{FutureExt, TryFutureExt},
+    futures::TryFutureExt,
     once_cell::sync::Lazy,
     std::{
         future::ready,
@@ -108,11 +108,13 @@ where
     }
 }
 
-pub struct NestedArchivesService(NestedArchivesServiceInner);
+pub struct NestedArchivesService(Arc<NestedArchivesServiceInner>);
 
 impl NestedArchivesService {
     pub fn new(download_summary: DownloadSummary, max_size: usize) -> Self {
-        NestedArchivesServiceInner::new(download_summary, max_size).pipe(Self)
+        NestedArchivesServiceInner::new(download_summary, max_size)
+            .pipe(Arc::new)
+            .pipe(Self)
     }
 
     #[tracing::instrument(skip(self))]
@@ -120,7 +122,7 @@ impl NestedArchivesService {
         match nested_archive.clone().parent() {
             Some((parent, path)) => match parent.path.len() {
                 0 => {
-                    get_handle(&self.0.translate_source_hash(&parent)?, &path.into_path())
+                    get_handle(&self.0.clone().translate_source_hash(&parent)?, &path.into_path())
                         .map_ok(OutputHandleKind::FreshlyCreated)
                         .await
                 }
@@ -139,6 +141,7 @@ impl NestedArchivesService {
             },
             None => self
                 .0
+                .clone()
                 .translate_source_hash(&nested_archive)
                 .map(OutputHandleKind::JustHashPath),
         }
@@ -154,11 +157,11 @@ impl NestedArchivesService {
     }
     #[tracing::instrument(skip(self))]
     pub async fn preheat(self: Arc<Self>, archive_hash_path: ArchiveHashPath) -> Result<()> {
-        self.0.preheat(archive_hash_path).await
+        self.0.clone().preheat(archive_hash_path).await
     }
     #[tracing::instrument(skip(self))]
     pub async fn cleanup(self: Arc<Self>, archive_hash_path: ArchiveHashPath) {
-        self.0.cleanup(archive_hash_path)
+        self.0.clone().cleanup(archive_hash_path)
     }
 }
 
@@ -206,7 +209,7 @@ impl NestedArchivesServiceInner {
             cache: Default::default(),
         }
     }
-    fn translate_source_hash(&self, archive_hash_path: &ArchiveHashPath) -> Result<PathBuf> {
+    fn translate_source_hash(self: Arc<Self>, archive_hash_path: &ArchiveHashPath) -> Result<PathBuf> {
         self.download_summary
             .get(&archive_hash_path.source_hash)
             .tap_some(|path| tracing::debug!("translated [{}] => [{}]\n\n\n", archive_hash_path.source_hash, path.inner.display()))
@@ -214,10 +217,10 @@ impl NestedArchivesServiceInner {
             .map(|downloaded| downloaded.inner.clone())
     }
     #[instrument(skip(self), fields(file_permits=%OPEN_FILE_PERMITS.available_permits(), cache_entries_count=%self.cache.len()))]
-    async fn init(&self, archive_hash_path: ArchiveHashPath) -> Result<(ArchiveHashPath, HandleKind)> {
+    async fn init(self: Arc<Self>, archive_hash_path: ArchiveHashPath) -> Result<(ArchiveHashPath, HandleKind)> {
         tracing::trace!("initializing entry");
         match archive_hash_path.clone().parent() {
-            Some((parent, archive_path)) => match self.get(parent).boxed_local().await? {
+            Some((parent, archive_path)) => match self.get(parent).pipe(Box::pin).await? {
                 HandleKind::Cached(cached) => {
                     get_handle(&cached.inner, &archive_path.into_path())
                         .map_ok(Arc::new)
@@ -238,7 +241,7 @@ impl NestedArchivesServiceInner {
         .map(|handle| (archive_hash_path, handle))
     }
     #[instrument(skip(self), level = "INFO")]
-    async fn get(&self, nested_archive: ArchiveHashPath) -> Result<HandleKind> {
+    async fn get(self: Arc<Self>, nested_archive: ArchiveHashPath) -> Result<HandleKind> {
         match self.cache.get(&nested_archive).as_deref().cloned() {
             Some((exists, _last_accessed)) => {
                 let exists = exists.pipe(HandleKind::Cached);
@@ -252,6 +255,7 @@ impl NestedArchivesServiceInner {
             }
             None => {
                 let (hash_path, handle) = self
+                    .clone()
                     .init(nested_archive)
                     .await
                     .context("initializing a new archive handle")?;
@@ -264,12 +268,12 @@ impl NestedArchivesServiceInner {
         }
     }
     #[tracing::instrument(skip(self))]
-    async fn preheat(&self, archive_hash_path: ArchiveHashPath) -> Result<()> {
+    async fn preheat(self: Arc<Self>, archive_hash_path: ArchiveHashPath) -> Result<()> {
         tracing::trace!("preheating");
         self.get(archive_hash_path).await.map(|_| ())
     }
     #[tracing::instrument(skip(self))]
-    fn cleanup(&self, archive_hash_path: ArchiveHashPath) {
+    fn cleanup(self: Arc<Self>, archive_hash_path: ArchiveHashPath) {
         tracing::trace!("preheating");
         ancestors(archive_hash_path).for_each(|ancestor| {
             self.cache.remove(&ancestor);
