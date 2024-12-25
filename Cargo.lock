@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "bsa-cli"
-version = "0.1.7"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "ba2 3.0.0",
@@ -1398,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "hoolamike"
-version = "0.1.7"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "ba2 3.0.1",
@@ -4103,7 +4103,7 @@ checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
 name = "wrapped-7zip"
-version = "0.1.7"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
