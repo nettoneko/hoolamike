@@ -57,12 +57,12 @@ pub mod transformed_texture;
 
 use crate::modlist_json::Directive;
 
-pub type WabbajackFileHandle = Arc<tokio::sync::Mutex<crate::compression::wrapped_7zip::ArchiveHandle>>;
+pub type WabbajackFileHandle = Arc<crate::compression::wrapped_7zip::ArchiveHandle>;
 
 #[extension_traits::extension(pub trait WabbajackFileHandleExt)]
 impl WabbajackFileHandle {
     fn from_archive(archive: crate::compression::wrapped_7zip::ArchiveHandle) -> Self {
-        Arc::new(tokio::sync::Mutex::new(archive))
+        Arc::new(archive)
     }
 }
 

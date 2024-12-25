@@ -1,7 +1,7 @@
 use {
     super::*,
     crate::{
-        compression::{forward_only_seek::ForwardOnlySeek, ProcessArchive},
+        compression::forward_only_seek::ForwardOnlySeek,
         install_modlist::download_cache::{to_u64_from_base_64, validate_hash},
         modlist_json::directive::PatchedFromArchiveDirective,
         progress_bars_v2::IndicatifWrapIoExt,
@@ -48,7 +48,7 @@ impl PatchedFromArchiveHandler {
                 .context("could not get a handle to archive")?;
 
             tokio::task::spawn_blocking(move || -> Result<_> {
-                let mut wabbajack_file = self.wabbajack_file.blocking_lock();
+                let wabbajack_file = self.wabbajack_file.clone();
                 #[tracing::instrument(skip(source, delta, target), level = "INFO")]
                 fn perform_copy<S, D, T>(source: S, delta: D, target: T, expected_size: u64, expected_hash: String) -> Result<()>
                 where
@@ -73,7 +73,8 @@ impl PatchedFromArchiveHandler {
                     .map(|_| ())
                 }
                 let delta_file = wabbajack_file
-                    .get_handle(Path::new(&patch_id.hyphenated().to_string()))
+                    .get_file(Path::new(&patch_id.hyphenated().to_string()))
+                    .map(|(_, delta_file)| delta_file)
                     .with_context(|| format!("patch {patch_id:?} does not exist"))?;
 
                 source_file

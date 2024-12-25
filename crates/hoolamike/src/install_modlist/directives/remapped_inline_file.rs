@@ -108,7 +108,6 @@ impl RemappedInlineFileHandler {
         } = self;
         tokio::task::spawn_blocking(move || {
             wabbajack_file
-                .blocking_lock()
                 .get_file(Path::new(&source_data_id.hyphenated().to_string()))
                 .context("reading the file for remapping")
                 .and_then(|handle| {

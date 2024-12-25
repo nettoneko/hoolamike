@@ -1,11 +1,6 @@
 use {
     super::*,
-    crate::{
-        compression::ProcessArchive,
-        install_modlist::download_cache::validate_hash,
-        modlist_json::directive::InlineFileDirective,
-        progress_bars_v2::IndicatifWrapIoExt,
-    },
+    crate::{install_modlist::download_cache::validate_hash, modlist_json::directive::InlineFileDirective, progress_bars_v2::IndicatifWrapIoExt},
     std::{convert::identity, io::Write, path::Path},
 };
 
@@ -34,10 +29,10 @@ impl InlineFileHandler {
             tokio::task::spawn_blocking(move || -> Result<_> {
                 let output_file = create_file_all(&output_path)?;
 
-                let mut archive = wabbajack_file.blocking_lock();
+                let archive = wabbajack_file;
                 archive
-                    .get_handle(Path::new(&source_data_id.as_hyphenated().to_string()))
-                    .and_then(|file| {
+                    .get_file(Path::new(&source_data_id.as_hyphenated().to_string()))
+                    .and_then(|(_, file)| {
                         let mut writer = std::io::BufWriter::new(output_file);
                         std::io::copy(
                             &mut tracing::Span::current().wrap_read(size, file),
