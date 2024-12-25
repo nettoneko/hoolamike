@@ -92,6 +92,15 @@ pub async fn install_modlist(
                       wabbajack_version: _,
                       website: _,
                   }| {
+                let archives: Vec<_> = archives
+                    .into_iter()
+                    .filter(|archive| {
+                        serde_json::to_string(&archive)
+                            .tap_err(|e| tracing::error!("{e:#?}"))
+                            .map(|directive| contains.iter().all(|contains| directive.contains(contains)))
+                            .unwrap_or(false)
+                    })
+                    .collect();
                 match skip_verify_and_downloads {
                     true => archives
                         .into_iter()

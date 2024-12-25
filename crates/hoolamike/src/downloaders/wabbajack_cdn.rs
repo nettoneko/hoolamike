@@ -30,10 +30,9 @@ pub struct Part {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
-#[serde(deny_unknown_fields)]
 pub struct WabbajackCdnFile {
     pub author: String,
-    pub server_assigned_unique_id: uuid::Uuid,
+    pub server_assigned_unique_id: Option<uuid::Uuid>,
     pub hash: String,
     pub munged_name: String,
     pub original_file_name: String,

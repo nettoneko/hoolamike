@@ -157,7 +157,7 @@ impl Synchronizers {
     }
 
     pub async fn prepare_sync_task(self, Archive { descriptor, state }: Archive) -> Result<SyncTask> {
-        match state {
+        match state.clone() {
             State::Nexus(NexusState {
                 game_name, file_id, mod_id, ..
             }) => {
@@ -208,24 +208,29 @@ impl Synchronizers {
                 })
                 .pipe(SyncTask::from)
                 .pipe(Ok),
-            State::Manual(ManualState { prompt, url }) => Err(anyhow::anyhow!("Manual action is required:\n\nURL: {url}\n{prompt}")),
             State::WabbajackCDN(state) => WabbajackCDNDownloader::prepare_download(state)
                 .await
-                .context("wabbajack... :)")
+                .context("fetching from wabbajack cdn")
                 .map(|source_urls| MergeDownloadTask {
                     inner: (source_urls, self.cache.download_output_path(descriptor.name.clone())),
                     descriptor,
                 })
                 .map(SyncTask::from),
-            State::MediaFire(MediaFireState { url }) => MediaFireDownloader::download(url)
-                .await
-                .context("mediafire")
-                .map(|url| DownloadTask {
-                    inner: (url, self.cache.download_output_path(descriptor.name.clone())),
-                    descriptor,
-                })
-                .map(SyncTask::from),
+            State::Manual(ManualState { prompt, url }) => Err(anyhow::anyhow!("Manual action is required:\n\nURL: {url}\n{prompt}")),
+            State::MediaFire(MediaFireState { url }) => {
+                // it cannot be done
+                MediaFireDownloader::download(url.clone())
+                    .await
+                    .context("mediafire")
+                    .map(|url| DownloadTask {
+                        inner: (url, self.cache.download_output_path(descriptor.name.clone())),
+                        descriptor,
+                    })
+                    .map(SyncTask::from)
+                    .with_context(|| format!("Manual action is required:\n\nURL: {url}\nGo to the website and download the file(s) manually"))
+            }
         }
+        .with_context(|| format!("when preparing download for\n{state:#?}"))
     }
 
     #[instrument(skip_all, fields(archives=%archives.len()))]

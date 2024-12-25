@@ -96,7 +96,7 @@ pub struct Archive {
 mod type_guard;
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Serialize, Deserialize, enum_kinds::EnumKind)]
+#[derive(Debug, Serialize, Deserialize, enum_kinds::EnumKind, Clone)]
 #[serde(tag = "$type")]
 #[serde(deny_unknown_fields)]
 #[enum_kind(DownloadKind, derive(Serialize, Deserialize, PartialOrd, Ord, derive_more::Display,))]
@@ -123,7 +123,7 @@ impl State {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct HttpState {
@@ -132,7 +132,7 @@ pub struct HttpState {
     pub url: url::Url,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct ManualState {
@@ -140,28 +140,28 @@ pub struct ManualState {
     pub url: url::Url,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct WabbajackCDNDownloaderState {
     pub url: url::Url,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct GoogleDriveState {
     pub id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct MediaFireState {
     pub url: url::Url,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct GameFileSourceState {
@@ -174,7 +174,7 @@ pub struct GameFileSourceState {
 #[derive(Debug, Serialize, Deserialize, Clone, derive_more::AsRef, derive_more::Display, PartialEq, Eq, PartialOrd, Ord, Hash, derive_more::Constructor)]
 pub struct GameName(String);
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct NexusState {
