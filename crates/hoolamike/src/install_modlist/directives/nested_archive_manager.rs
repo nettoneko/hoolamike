@@ -192,6 +192,7 @@ async fn get_handle(source_path: &Path, archive_path: &Path) -> Result<WithPermi
         )
     })
 }
+
 #[derive(derivative::Derivative)]
 #[derivative(Debug(bound = ""))]
 struct NestedArchivesServiceInner {

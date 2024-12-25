@@ -545,7 +545,11 @@ impl DirectivesHandler {
                                         .map(ArchivePathDirective::from),
                                 )
                                 .collect_vec()
-                                .pipe(|directives| handle_nested_archive_directives(manager.clone(), nested_archive_manager.clone(), directives, concurrency()))
+                                .pipe(|directives| {
+                                    handle_directives.in_scope(|| {
+                                        handle_nested_archive_directives(manager.clone(), nested_archive_manager.clone(), directives, concurrency())
+                                    })
+                                })
                                 .map(|r| r.into_inner_err()),
                         )
                         .chain(remapped_inline_file.pipe(futures::stream::iter).then({
