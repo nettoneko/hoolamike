@@ -8,6 +8,7 @@ pub mod http {
 pub mod manual {
     pub struct ManualDownloader {}
 }
+pub mod mediafire;
 pub mod nexus;
 pub mod wabbajack_cdn;
 

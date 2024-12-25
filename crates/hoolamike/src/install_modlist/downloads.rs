@@ -5,6 +5,7 @@ use {
         downloaders::{
             gamefile_source_downloader::{get_game_file_source_synchronizers, GameFileSourceSynchronizers},
             helpers::FutureAnyhowExt,
+            mediafire::MediaFireDownloader,
             nexus::{self, NexusDownloader},
             wabbajack_cdn::WabbajackCDNDownloader,
             CopyFileTask,
@@ -14,7 +15,7 @@ use {
             WithArchiveDescriptor,
         },
         error::{MultiErrorCollectExt, TotalResult},
-        modlist_json::{Archive, GoogleDriveState, HttpState, ManualState, NexusState, State},
+        modlist_json::{Archive, GoogleDriveState, HttpState, ManualState, MediaFireState, NexusState, State},
         progress_bars_v2::IndicatifWrapIoExt,
     },
     anyhow::Result,
@@ -186,7 +187,7 @@ impl Synchronizers {
                     inner: (url, self.cache.download_output_path(descriptor.name.clone())),
                     descriptor,
                 })
-                .map(SyncTask::Download),
+                .map(SyncTask::from),
             State::GameFileSource(state) => self
                 .game_synchronizers
                 .get(&state.game)
@@ -198,14 +199,14 @@ impl Synchronizers {
                     inner: (source_path, self.cache.download_output_path(descriptor.name.clone())),
                     descriptor,
                 })
-                .map(SyncTask::Copy),
+                .map(SyncTask::from),
 
             State::Http(HttpState { url, headers: _ }) => url
                 .pipe(|url| DownloadTask {
                     inner: (url, self.cache.download_output_path(descriptor.name.clone())),
                     descriptor,
                 })
-                .pipe(SyncTask::Download)
+                .pipe(SyncTask::from)
                 .pipe(Ok),
             State::Manual(ManualState { prompt, url }) => Err(anyhow::anyhow!("Manual action is required:\n\nURL: {url}\n{prompt}")),
             State::WabbajackCDN(state) => WabbajackCDNDownloader::prepare_download(state)
@@ -215,7 +216,15 @@ impl Synchronizers {
                     inner: (source_urls, self.cache.download_output_path(descriptor.name.clone())),
                     descriptor,
                 })
-                .map(SyncTask::MergeDownload),
+                .map(SyncTask::from),
+            State::MediaFire(MediaFireState { url }) => MediaFireDownloader::download(url)
+                .await
+                .context("mediafire")
+                .map(|url| DownloadTask {
+                    inner: (url, self.cache.download_output_path(descriptor.name.clone())),
+                    descriptor,
+                })
+                .map(SyncTask::from),
         }
     }
 

@@ -107,6 +107,8 @@ pub enum State {
     GameFileSource(GameFileSourceState),
     #[serde(rename = "GoogleDriveDownloader, Wabbajack.Lib")]
     GoogleDrive(GoogleDriveState),
+    #[serde(rename = "MediaFireDownloader+State, Wabbajack.Lib")]
+    MediaFire(MediaFireState),
     #[serde(rename = "HttpDownloader, Wabbajack.Lib")]
     Http(HttpState),
     #[serde(rename = "ManualDownloader, Wabbajack.Lib")]
@@ -150,6 +152,13 @@ pub struct WabbajackCDNDownloaderState {
 #[serde(deny_unknown_fields)]
 pub struct GoogleDriveState {
     pub id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[serde(deny_unknown_fields)]
+pub struct MediaFireState {
+    pub url: url::Url,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
