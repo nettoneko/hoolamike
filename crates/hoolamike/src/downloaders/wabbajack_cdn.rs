@@ -9,6 +9,7 @@ use {
     serde::{Deserialize, Serialize},
     std::{future::ready, io::Read},
     tap::prelude::*,
+    url::Url,
 };
 
 pub struct WabbajackCDNDownloader {}
@@ -20,7 +21,6 @@ mod test_responses;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
-#[serde(deny_unknown_fields)]
 pub struct Part {
     pub hash: String,
     pub index: usize,
@@ -40,8 +40,67 @@ pub struct WabbajackCdnFile {
     pub parts: Vec<Part>,
 }
 
+#[test]
+fn test_example_cdn_files() -> Result<()> {
+    #[rustfmt::skip]
+    const EXAMPLES: &[&str] = &[
+        r#"{"$type":"CDNFileDefinition, Wabbajack.Lib","Author":"lively","OriginalFileName":"splash.7z","Size":87967,"Hash":"eOiJRFeBuzY=","Parts":[{"$type":"CDNFilePartDefinition, Wabbajack.Lib","Size":87967,"Offset":0,"Hash":"eOiJRFeBuzY=","Index":0}],"ServerAssignedUniqueId":"3075fd8a-1970-45b4-be96-a82463f37f3f","MungedName":"splash.7z_3075fd8a-1970-45b4-be96-a82463f37f3f"}"#,
+        include_str!("wabbajack_cdn/test_raw_responses/bad-response-1.bytes"),
+
+    ];
+    EXAMPLES
+        .iter()
+        .try_for_each(|example| parse_wabbajack_cdn_file_response(example).map(|_| ()))
+}
+
+pub fn remap_wabbajack_cdn_url(url: Url) -> Result<url::Url> {
+    url.to_string()
+        .pipe(|url| {
+            [
+                ("wabbajack.b-cdn.net", "authored-files.wabbajack.org"),
+                ("wabbajack-mirror.b-cdn.net", "mirror.wabbajack.org"),
+                ("wabbajack-patches.b-cdn.net", "patches.wabbajack.org"),
+                ("wabbajacktest.b-cdn.net", "test-files.wabbajack.org"),
+            ]
+            .into_iter()
+            .fold(url, |url, (from, to)| url.replace(from, to))
+        })
+        .pipe_deref(url::Url::parse)
+        .context("remapping url doesnt work")
+}
+
+fn parse_wabbajack_cdn_file_response(contents: &str) -> Result<WabbajackCdnFile> {
+    Err(())
+        .or_else(|e| {
+            serde_json::from_str::<WabbajackCdnFile>(contents.trim())
+                .context("checking just object")
+                .with_context(|| format!("trying because: {e:#?}"))
+        })
+        .or_else(|e| {
+            serde_json::from_str::<WabbajackCdnFile>(
+                // some wild unicode in the response
+                &contents
+                    .trim()
+                    .chars()
+                    .skip_while(|c| c != &'{')
+                    .collect::<String>(),
+            )
+            .context("checking checking object with wild unicode characters")
+            .with_context(|| format!("trying because: {e:#?}"))
+        })
+        .with_context(|| {
+            format!(
+                "deserializing:\n\n{contents:#?}\n\n({:#?})",
+                serde_json::from_str::<serde_json::Value>(contents.trim())
+            )
+        })
+        .context("invalid wabbajack cdn response")
+}
+
 impl WabbajackCDNDownloader {
     pub async fn prepare_download(WabbajackCDNDownloaderState { url }: WabbajackCDNDownloaderState) -> Result<Vec<url::Url>> {
+        let url = url.clone().pipe(remap_wabbajack_cdn_url)?;
+
         let deduced_url = format!("{url}/{MAGIC_FILENAME}");
         Client::new()
             .get(deduced_url.to_string())
@@ -54,14 +113,14 @@ impl WabbajackCDNDownloader {
                         String::new()
                             .pipe(|mut output| {
                                 gzip.read_to_string(&mut output)
-                                    .context("decomplessing gzip archive")
+                                    .context("decompressing gzipped contents")
                                     .with_context(|| {
                                         let maybe_string = String::from_utf8_lossy(&bytes);
                                         format!("some context in uncompressed response maybe?:\n'{maybe_string}'")
                                     })
                                     .map(|_| output)
                             })
-                            .and_then(|contents| serde_json::from_str::<WabbajackCdnFile>(&contents).with_context(|| format!("deserializing:\n\n{contents}")))
+                            .and_then(|contents| parse_wabbajack_cdn_file_response(&contents))
                     })
                 })
                 .map_context("thread crashed")
