@@ -245,7 +245,7 @@ impl ArchiveHandle {
                             // extract
                             .arg("x")
                             .arg(&self.archive)
-                            .arg(&file.path)
+                            .arg(&file.original_path)
                             // write data to stdout
                             .arg("-so")
                     })

@@ -87,9 +87,9 @@ impl TransformedTextureHandler {
     ) -> Result<u64> {
         let format = supported_image_format(format).context("checking for format support")?;
         let output_path = self.output_directory.join(to.into_path());
+        let handle = tracing::Span::current();
 
-        if let Err(message) = validate_hash_with_overrides(output_path.clone(), hash.clone(), size).await {
-            tracing::warn!(?message);
+        if let Err(_message) = validate_hash_with_overrides(output_path.clone(), hash.clone(), size).await {
             let source_file = self
                 .nested_archive_service
                 .clone()
@@ -99,50 +99,53 @@ impl TransformedTextureHandler {
                 .context("could not get a handle to archive")?;
 
             tokio::task::spawn_blocking(move || -> Result<_> {
-                let perform_copy = {
-                    move |from: &mut dyn Read, to: &mut dyn Write, target_path: PathBuf| {
-                        info_span!("perform_copy").in_scope(|| {
-                            let mut writer = to;
-                            let mut reader: Box<dyn Read> = match is_whitelisted_by_path(&target_path) {
-                                true => tracing::Span::current()
-                                    .wrap_read(size, from)
-                                    .pipe(Box::new),
-                                false => tracing::Span::current()
-                                    .wrap_read(size, from)
-                                    .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
-                                    .pipe(Box::new),
-                            };
-                            dds_recompression::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
-                                .context("copying file from archive")
-                                .and_then(|_| writer.flush().context("flushing write"))
-                                .map(|_| ())
-                        })
-                    }
-                };
+                handle.in_scope(|| {
+                    let perform_copy = {
+                        move |from: &mut dyn Read, to: &mut dyn Write, target_path: PathBuf| {
+                            info_span!("perform_copy").in_scope(|| {
+                                let mut writer = to;
+                                let mut reader: Box<dyn Read> = match is_whitelisted_by_path(&target_path) {
+                                    true => tracing::Span::current()
+                                        .wrap_read(size, from)
+                                        .pipe(Box::new),
+                                    false => tracing::Span::current()
+                                        .wrap_read(size, from)
+                                        .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
+                                        .pipe(Box::new),
+                                };
+                                dds_recompression::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
+                                    .context("copying file from archive")
+                                    .and_then(|_| writer.flush().context("flushing write"))
+                                    .map(|_| ())
+                            })
+                        }
+                    };
 
-                source_file
-                    .open_file_read()
-                    .and_then(|(source_path, mut final_source)| {
-                        create_file_all(&output_path).and_then(|mut output_file| {
-                            perform_copy(&mut final_source, &mut output_file, output_path.clone())
-                                .or_else(|reason| {
-                                    let _span = tracing::error_span!("could not resize texture, copying the original", ?reason).entered();
-                                    final_source
-                                        .rewind()
-                                        .context("rewinding original file")
-                                        .map(|_| final_source)
-                                        .and_then(|final_source| {
-                                            output_path.open_file_write().and_then(|(_, mut output)| {
-                                                std::io::copy(&mut tracing::Span::current().wrap_read(size, final_source), &mut output)
-                                                    .with_context(|| format!("writing original because resizing could not be performed due to: {reason:?}"))
+                    source_file
+                        .open_file_read()
+                        .and_then(|(source_path, mut final_source)| {
+                            create_file_all(&output_path).and_then(|mut output_file| {
+                                perform_copy(&mut final_source, &mut output_file, output_path.clone())
+                                    .or_else(|reason| {
+                                        let _span = tracing::error_span!("could not resize texture, copying the original", ?reason).entered();
+                                        tracing::error!("could not resize the file, but it should still work");
+                                        final_source
+                                            .rewind()
+                                            .context("rewinding original file")
+                                            .map(|_| final_source)
+                                            .and_then(|final_source| {
+                                                output_path.open_file_write().and_then(|(_, mut output)| {
+                                                    std::io::copy(&mut tracing::Span::current().wrap_read(size, final_source), &mut output)
+                                                        .with_context(|| format!("writing original because resizing could not be performed due to: {reason:?}"))
+                                                })
                                             })
-                                        })
-                                        .map(|_| ())
-                                })
-                                .with_context(|| format!("when extracting from [{source_path:?}]({:?}) to [{}]", archive_hash_path, output_path.display()))
-                        })
-                    })?;
-                Ok(())
+                                            .map(|_| ())
+                                    })
+                                    .with_context(|| format!("when extracting from [{source_path:?}]({:?}) to [{}]", archive_hash_path, output_path.display()))
+                            })
+                        })?;
+                    Ok(())
+                })
             })
             .instrument(tracing::Span::current())
             .await

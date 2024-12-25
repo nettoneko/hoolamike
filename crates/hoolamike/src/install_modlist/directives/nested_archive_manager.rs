@@ -19,7 +19,7 @@ use {
         sync::{OwnedSemaphorePermit, Semaphore},
         time::Instant,
     },
-    tracing::instrument,
+    tracing::{info_span, instrument, Instrument},
 };
 
 impl ArchiveHashPath {
@@ -78,6 +78,7 @@ impl<T> WithPermit<T>
 where
     T: Send + 'static,
 {
+    #[instrument(skip_all, level = "DEBUG")]
     pub async fn new<Fut, F>(semaphore: &Arc<Semaphore>, new: F) -> Result<Self>
     where
         Fut: std::future::Future<Output = Result<T>>,
@@ -86,16 +87,20 @@ where
         semaphore
             .clone()
             .acquire_owned()
+            .instrument(info_span!("waiting_for_file_permit"))
             .map_context("semaphore closed")
             .and_then(move |permit| new().map_ok(|inner| Self { permit, inner }))
             .await
     }
+    #[instrument(skip_all, level = "DEBUG")]
     pub async fn new_blocking<F>(semaphore: &Arc<Semaphore>, new: F) -> Result<Self>
     where
         F: FnOnce() -> Result<T> + Clone + Send + 'static,
     {
-        Self::new(semaphore, || {
-            tokio::task::spawn_blocking(new)
+        let span = tracing::Span::current();
+        Self::new(semaphore, move || {
+            tokio::task::spawn_blocking(move || span.in_scope(new))
+                .instrument(tracing::Span::current())
                 .map_context("thread crashed")
                 .and_then(ready)
         })
@@ -159,16 +164,30 @@ impl NestedArchivesService {
 
 #[instrument(level = "INFO")]
 async fn get_handle(source_path: &Path, archive_path: &Path) -> Result<WithPermit<tempfile::TempPath>> {
-    let (source_path, archive_path) = (source_path.to_owned(), archive_path.to_owned());
-    tokio::task::spawn_blocking(move || {
-        ArchiveHandle::guess(&source_path)
-            .context("could not guess archive format for [{path}]")
-            .and_then(|mut archive| archive.get_handle(&archive_path.clone()))
+    tokio::task::spawn_blocking({
+        let (source_path, archive_path) = (source_path.to_owned(), archive_path.to_owned());
+        move || {
+            ArchiveHandle::guess(&source_path)
+                .context("could not guess archive format for [{path}]")
+                .and_then(|mut archive| archive.get_handle(&archive_path.clone()))
+        }
     })
     .map_context("thread crashed")
     .and_then(ready)
-    .and_then(|handle| handle.seek_with_temp_file())
+    .and_then(|mut handle| {
+        handle
+            .size()
+            .pipe(ready)
+            .and_then(|size| handle.seek_with_temp_file(size))
+    })
     .await
+    .with_context(|| {
+        format!(
+            "when extracting path {} from within archive at {}",
+            archive_path.display(),
+            source_path.display(),
+        )
+    })
 }
 #[derive(derivative::Derivative)]
 #[derivative(Debug(bound = ""))]
@@ -222,7 +241,6 @@ impl NestedArchivesServiceInner {
     async fn get(&self, nested_archive: ArchiveHashPath) -> Result<HandleKind> {
         match self.cache.get(&nested_archive).as_deref().cloned() {
             Some((exists, _last_accessed)) => {
-                // WARN: this is dirty but it prevents small files from piling up
                 let exists = exists.pipe(HandleKind::Cached);
                 ancestors(nested_archive).for_each(|ancestor| {
                     let now = Instant::now();

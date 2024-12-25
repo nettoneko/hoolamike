@@ -302,7 +302,7 @@ impl Synchronizers {
                 }
                 .inspect_err({
                     let name = name.clone();
-                    move |message| tracing::warn!(?name, ?message)
+                    move |message| tracing::debug!(?name, ?message)
                 })
                 .inspect_ok(move |res| {
                     tracing::Span::current().pb_inc(res.descriptor.size);

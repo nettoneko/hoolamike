@@ -215,7 +215,7 @@ impl DirectivesHandler {
 
     #[allow(clippy::unnecessary_literal_unwrap)]
     #[instrument(skip_all, fields(directives=%directives.len()))]
-    pub fn handle_directives(self: Arc<Self>, directives: Vec<Directive>) -> impl Stream<Item = Result<()>> {
+    pub fn handle_directives(self: Arc<Self>, directives: Vec<Directive>) -> impl Stream<Item = Result<u64>> {
         let handle_directives: &'static _ = tracing::Span::current()
             .tap(|pb| {
                 pb.pb_set_length(directives.iter().map(directive_size).sum());
@@ -237,11 +237,16 @@ impl DirectivesHandler {
 
         let manager = self.clone();
         let nested_archive_manager = self.nested_archive_manager.clone();
+        enum DirectiveStatus {
+            Completed(u64),
+            NeedsRebuild { reason: anyhow::Error, directive: Directive },
+        }
+
         let check_completed = {
             let output_directory = self.from_archive.output_directory.clone();
-            move |directive: &Directive| {
-                let kind = DirectiveKind::from(directive);
-                match directive {
+            move |directive: Directive| {
+                let _kind = DirectiveKind::from(&directive);
+                match &directive {
                     Directive::CreateBSA(CreateBSADirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
                     Directive::FromArchive(FromArchiveDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
                     Directive::InlineFile(InlineFileDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
@@ -252,13 +257,9 @@ impl DirectivesHandler {
                 .pipe(|(hash, size, to)| (hash, *size, output_directory.join(to.into_path())))
                 .pipe(move |(hash, size, to)| {
                     validate_hash_with_overrides(to.clone(), hash, size)
-                        .map(move |res| {
-                            res.tap_err(|reason| tracing::warn!(%kind, ?size, ?reason, ?to, "directive will be recomputed"))
-                                .tap_ok(|path| {
-                                    tracing::debug!(%kind, ?size, ?path, ?to,  "directive is ok");
-                                    tracing::Span::current().pb_inc(size);
-                                })
-                                .is_err()
+                        .map(move |res| match res {
+                            Ok(_) => DirectiveStatus::Completed(size),
+                            Err(reason) => DirectiveStatus::NeedsRebuild { reason, directive },
                         })
                         .instrument(handle_directives.clone())
                 })
@@ -266,23 +267,42 @@ impl DirectivesHandler {
         };
         directives
             .pipe(futures::stream::iter)
-            .map(move |directive| check_completed(&directive).map(move |validated| validated.then_some(directive)))
+            .map(check_completed)
             .buffer_unordered(concurrency())
-            .filter_map(ready)
             .collect::<Vec<_>>()
             .then(|directives| {
-                (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new())
+                (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new())
                     .pipe(
-                        |(mut create_bsa, mut from_archive, mut inline_file, mut patched_from_archive, mut remapped_inline_file, mut transformed_texture)| {
+                        |(
+                            mut create_bsa,
+                            mut from_archive,
+                            mut inline_file,
+                            mut patched_from_archive,
+                            mut remapped_inline_file,
+                            mut transformed_texture,
+                            mut completed,
+                        )| {
                             directives
                                 .into_iter()
                                 .for_each(|directive| match directive {
-                                    Directive::CreateBSA(create_bsadirective) => create_bsa.push(create_bsadirective),
-                                    Directive::FromArchive(from_archive_directive) => from_archive.push(from_archive_directive),
-                                    Directive::InlineFile(inline_file_directive) => inline_file.push(inline_file_directive),
-                                    Directive::PatchedFromArchive(patched_from_archive_directive) => patched_from_archive.push(patched_from_archive_directive),
-                                    Directive::RemappedInlineFile(remapped_inline_file_directive) => remapped_inline_file.push(remapped_inline_file_directive),
-                                    Directive::TransformedTexture(transformed_texture_directive) => transformed_texture.push(transformed_texture_directive),
+                                    DirectiveStatus::Completed(size) => completed.push(size),
+                                    DirectiveStatus::NeedsRebuild { reason, directive } => {
+                                        tracing::debug!("recomputing directive:\n{reason:?}");
+                                        match directive {
+                                            Directive::CreateBSA(create_bsadirective) => create_bsa.push(create_bsadirective),
+                                            Directive::FromArchive(from_archive_directive) => from_archive.push(from_archive_directive),
+                                            Directive::InlineFile(inline_file_directive) => inline_file.push(inline_file_directive),
+                                            Directive::PatchedFromArchive(patched_from_archive_directive) => {
+                                                patched_from_archive.push(patched_from_archive_directive)
+                                            }
+                                            Directive::RemappedInlineFile(remapped_inline_file_directive) => {
+                                                remapped_inline_file.push(remapped_inline_file_directive)
+                                            }
+                                            Directive::TransformedTexture(transformed_texture_directive) => {
+                                                transformed_texture.push(transformed_texture_directive)
+                                            }
+                                        }
+                                    }
                                 })
                                 .pipe(|_| {
                                     (
@@ -292,6 +312,7 @@ impl DirectivesHandler {
                                         patched_from_archive,
                                         remapped_inline_file,
                                         transformed_texture,
+                                        completed,
                                     )
                                 })
                         },
@@ -300,7 +321,7 @@ impl DirectivesHandler {
             })
             .into_stream()
             .flat_map(
-                move |(create_bsa, from_archive, inline_file, patched_from_archive, remapped_inline_file, transformed_texture)| {
+                move |(create_bsa, from_archive, inline_file, patched_from_archive, remapped_inline_file, transformed_texture, completed)| {
                     #[derive(derive_more::From, Clone)]
                     enum ArchivePathDirective {
                         FromArchive(FromArchiveDirective),
@@ -319,6 +340,7 @@ impl DirectivesHandler {
                     }
 
                     futures::stream::empty()
+                        .chain(completed.pipe(futures::stream::iter).map(Ok))
                         .chain(
                             inline_file
                                 .pipe(futures::stream::iter)
@@ -496,9 +518,9 @@ impl DirectivesHandler {
                                     .map(move |res| res.with_context(|| format!("handling directive: [{debug}]")))
                             }
                         }))
-                        .map_ok({
+                        .inspect_ok({
                             move |size| {
-                                tracing::Span::current().pb_inc(size);
+                                handle_directives.pb_inc(*size);
                             }
                         })
                 },

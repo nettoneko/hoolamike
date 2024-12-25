@@ -4,10 +4,11 @@
 use {
     anyhow::{Context, Result},
     clap::{Args, Parser, Subcommand},
+    itertools::Itertools,
     modlist_data::ModlistSummary,
     modlist_json::DirectiveKind,
-    std::{path::PathBuf, str::FromStr},
-    tap::Pipe,
+    std::{ops::Div, path::PathBuf, str::FromStr},
+    tap::{Pipe, TapFallible},
 };
 pub const BUFFER_SIZE: usize = 1024 * 64;
 
@@ -141,22 +142,29 @@ fn setup_logging() {
         tracing_indicatif::IndicatifLayer,
         tracing_subscriber::{fmt, layer::SubscriberExt, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter},
     };
-    let indicatif_layer = IndicatifLayer::new();
+    let indicatif_layer = console::Term::stdout()
+        .size_checked()
+        .map(|(_width, height)| height)
+        .unwrap_or(16)
+        .div(2)
+        .pipe(|half_height| {
+            IndicatifLayer::new()
+                .with_max_progress_bars(
+                    half_height as _,
+                    Some(indicatif::ProgressStyle::with_template("...and {pending_progress_bars} more not shown above.").expect("bad footer template")),
+                )
+                .with_tick_settings(tracing_indicatif::TickSettings {
+                    term_draw_hz: 4,
+                    default_tick_interval: Some(std::time::Duration::from_millis(250)),
+                    footer_tick_interval: None,
+                    ..Default::default()
+                })
+        });
+    // let indicatif_layer = ;
     let subscriber = tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::from_str("info").unwrap()))
         .with(tracing_subscriber::fmt::layer().with_writer(indicatif_layer.get_stderr_writer()))
         .with(indicatif_layer);
-    // .pipe(|registry| {
-    //     // #[cfg(debug_assertions)]
-    //     {
-    //         // registry.with(console_subscriber::spawn())
-    //     }
-    //     // #[cfg(not(debug_assertions))]
-    //     // {
-    //     // registry.with(fmt::Layer::new().with_writer(std::io::stderr))
-    //     // }
-    //     // registry
-    // });
     tracing::subscriber::set_global_default(subscriber)
         .context("Unable to set a global subscriber")
         .expect("logging failed");
@@ -191,7 +199,21 @@ async fn main() -> Result<()> {
                         .iter()
                         .enumerate()
                         .for_each(|(idx, reason)| eprintln!("{idx}. {reason:?}", idx = idx + 1));
-                    anyhow::anyhow!("could not finish installation due to [{}] errors", errors.len())
+
+                    anyhow::anyhow!(
+                        "could not finish installation due to errors:\n{}",
+                        errors
+                            .iter()
+                            .map(|e| format!(
+                                "{e}:\n{}",
+                                e.chain()
+                                    .map(|c| c.to_string())
+                                    .enumerate()
+                                    .map(|(idx, error)| format!("{idx}. {error}"))
+                                    .join("\n")
+                            ))
+                            .join("\n")
+                    )
                 })
                 .map(|count| println!("successfully installed [{}] mods", count.len()))
         }
@@ -213,5 +235,8 @@ async fn main() -> Result<()> {
             "\n\nerror occurred, run with --help, check your configuration or file a ticket at {}",
             env!("CARGO_PKG_REPOSITORY")
         )
+    })
+    .tap_err(|e| {
+        tracing::error!("\n\n{e:?}");
     })
 }

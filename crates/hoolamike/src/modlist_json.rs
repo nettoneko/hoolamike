@@ -304,6 +304,16 @@ pub enum Directive {
 }
 
 impl Directive {
+    pub fn directive_size(&self) -> u64 {
+        match self {
+            Directive::CreateBSA(d) => d.size,
+            Directive::FromArchive(d) => d.size,
+            Directive::InlineFile(d) => d.size,
+            Directive::PatchedFromArchive(d) => d.size,
+            Directive::RemappedInlineFile(d) => d.size,
+            Directive::TransformedTexture(d) => d.size,
+        }
+    }
     pub fn directive_hash(&self) -> String {
         serde_json::to_string(self).unwrap().pipe(|out| {
             let mut hasher = xxhash_rust::xxh64::Xxh64::new(0);

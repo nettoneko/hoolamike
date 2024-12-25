@@ -64,6 +64,13 @@ pub async fn install_modlist(
                 .archives
                 .iter()
                 .map(|archive| archive.descriptor.size)
+                .chain(
+                    wabbajack
+                        .modlist
+                        .directives
+                        .iter()
+                        .map(|directive| directive.directive_size()),
+                )
                 .sum::<u64>()
                 .pipe(|total_size| {
                     tracing::Span::current().pipe_ref(|pb| {
@@ -118,6 +125,7 @@ pub async fn install_modlist(
                 }
                 .and_then({
                     move |summary| {
+                        tracing::Span::current().pb_inc(summary.iter().map(|d| d.descriptor.size).sum());
                         games
                             .get(&game_type)
                             .with_context(|| format!("[{game_type}] not found in {:?}", games.keys().collect::<Vec<_>>()))
@@ -158,6 +166,7 @@ pub async fn install_modlist(
                                 })
                                 .collect_vec();
                         }))
+                        .map_ok(|size| tracing::Span::current().pb_inc(size))
                         .try_collect::<Vec<_>>()
                         .map(|res| match res {
                             Ok(out) => Ok(out),

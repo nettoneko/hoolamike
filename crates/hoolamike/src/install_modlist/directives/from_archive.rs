@@ -57,59 +57,56 @@ impl FromArchiveHandler {
     ) -> Result<u64> {
         let output_path = self.output_directory.join(to.into_path());
 
-        if let Err(message) = validate_hash_with_overrides(output_path.clone(), hash.clone(), size).await {
-            tracing::warn!(?message);
-            let source_file = self
-                .nested_archive_service
-                .clone()
-                .get(archive_hash_path.clone())
-                .instrument(info_span!("obtaining_nested_archive", ?archive_hash_path))
-                .await
-                .context("could not get a handle to archive")?;
-
-            tokio::task::spawn_blocking(move || -> Result<_> {
-                let perform_copy = move |from: &mut dyn Read, to: &mut dyn Write, target_path: PathBuf| {
-                    info_span!("perform_copy").in_scope(|| {
-                        let mut writer = to;
-                        let mut reader: Box<dyn Read> = match is_whitelisted_by_path(&target_path) {
-                            true => tracing::Span::current()
-                                // WARN: hashes are not gonna match for bsa stuff because we write headers differentlys
-                                .wrap_read(size, from)
-                                .and_validate_size(size)
-                                .pipe(Box::new),
-                            false => tracing::Span::current()
-                                .wrap_read(size, from)
-                                .and_validate_size(size)
-                                .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
-                                .pipe(Box::new),
-                        };
-                        std::io::copy(&mut reader, &mut writer)
-                            .context("copying file from archive")
-                            .and_then(|_| writer.flush().context("flushing write"))
-                            .map(|_| ())
-                    })
-                };
-
-                source_file
-                    .open_file_read()
-                    .and_then(|(source_path, mut final_source)| {
-                        create_file_all(&output_path).and_then(|mut output_file| {
-                            perform_copy(&mut final_source, &mut output_file, output_path.clone()).with_context(|| {
-                                format!(
-                                    "when extracting from [{source_path:?}] ({:?}) to [{}]",
-                                    archive_hash_path,
-                                    output_path.display()
-                                )
-                            })
-                        })
-                    })?;
-                Ok(())
-            })
-            .instrument(tracing::Span::current())
+        let source_file = self
+            .nested_archive_service
+            .clone()
+            .get(archive_hash_path.clone())
+            .instrument(info_span!("obtaining_nested_archive", ?archive_hash_path))
             .await
-            .context("thread crashed")
-            .and_then(identity)?;
-        }
+            .context("could not get a handle to archive")?;
+
+        tokio::task::spawn_blocking(move || -> Result<_> {
+            let perform_copy = move |from: &mut dyn Read, to: &mut dyn Write, target_path: PathBuf| {
+                info_span!("perform_copy").in_scope(|| {
+                    let mut writer = to;
+                    let mut reader: Box<dyn Read> = match is_whitelisted_by_path(&target_path) {
+                        true => tracing::Span::current()
+                            // WARN: hashes are not gonna match for bsa stuff because we write headers differentlys
+                            .wrap_read(size, from)
+                            .and_validate_size(size)
+                            .pipe(Box::new),
+                        false => tracing::Span::current()
+                            .wrap_read(size, from)
+                            .and_validate_size(size)
+                            .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
+                            .pipe(Box::new),
+                    };
+                    std::io::copy(&mut reader, &mut writer)
+                        .context("copying file from archive")
+                        .and_then(|_| writer.flush().context("flushing write"))
+                        .map(|_| ())
+                })
+            };
+
+            source_file
+                .open_file_read()
+                .and_then(|(source_path, mut final_source)| {
+                    create_file_all(&output_path).and_then(|mut output_file| {
+                        perform_copy(&mut final_source, &mut output_file, output_path.clone()).with_context(|| {
+                            format!(
+                                "when extracting from [{source_path:?}] ({:?}) to [{}]",
+                                archive_hash_path,
+                                output_path.display()
+                            )
+                        })
+                    })
+                })?;
+            Ok(())
+        })
+        .instrument(tracing::Span::current())
+        .await
+        .context("thread crashed")
+        .and_then(identity)?;
         Ok(size)
     }
 }

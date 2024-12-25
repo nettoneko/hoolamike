@@ -9,11 +9,12 @@ use {
     bethesda_archive::BethesdaArchiveFile,
     std::{
         convert::identity,
-        io::Write,
+        io::{Seek, Write},
         path::{Path, PathBuf},
         sync::Arc,
     },
     tap::prelude::*,
+    tracing::Instrument,
 };
 
 pub mod bethesda_archive;
@@ -61,6 +62,19 @@ pub enum ArchiveFileHandle {
     // CompressTools(compress_tools::CompressToolsFile),
     Wrapped7Zip((::wrapped_7zip::list_output::ListOutputEntry, ::wrapped_7zip::ArchiveFileHandle)),
     Bethesda(self::bethesda_archive::BethesdaArchiveFile),
+}
+
+impl ArchiveFileHandle {
+    pub fn size(&mut self) -> Result<u64> {
+        match self {
+            ArchiveFileHandle::Wrapped7Zip((entry, _)) => Ok(entry.size),
+            ArchiveFileHandle::Bethesda(bethesda_archive_file) => match bethesda_archive_file {
+                BethesdaArchiveFile::Fallout4(spooled_temp_file) => spooled_temp_file
+                    .stream_len()
+                    .context("could not seek to find the stream length"),
+            },
+        }
+    }
 }
 
 // static_assertions::assert_impl_all!(zip::ZipFile<'static>: Send, Sync);
@@ -123,7 +137,7 @@ impl<T: std::io::Read + Sync + 'static> T
 where
     Self: Sized + Sync + Send + 'static,
 {
-    async fn seek_with_temp_file(self) -> Result<WithPermit<tempfile::TempPath>> {
+    async fn seek_with_temp_file(self, expected_size: u64) -> Result<WithPermit<tempfile::TempPath>> {
         tracing::info_span!("seek_with_temp_file")
             .in_scope(|| {
                 let reader = Arc::new(std::sync::Mutex::new(self));
@@ -131,24 +145,19 @@ where
                     tempfile::NamedTempFile::new()
                         .context("creating a tempfile")
                         .and_then(|mut temp_file| {
-                            let _ = tracing::debug_span!("seek_with_temp_file", temp_file=?temp_file).entered();
                             {
                                 let mut reader = reader.lock().unwrap();
-                                let writer = &mut tracing::Span::current().wrap_write(0, &mut temp_file);
+                                let writer = &mut tracing::Span::current().wrap_write(expected_size, &mut temp_file);
                                 std::io::copy(&mut *reader, writer)
                             }
                             .context("creating a seekable temp file")
-                            .map(|wrote_size| {
-                                match wrote_size {
-                                    0 => {
-                                        tracing::error!("wrote 0 bytes")
-                                    }
-                                    other => {
-                                        tracing::debug!("wrote {other} bytes")
-                                    }
-                                }
-                                temp_file
+                            .and_then(|wrote_size| {
+                                wrote_size
+                                    .eq(&expected_size)
+                                    .then_some(wrote_size)
+                                    .with_context(|| format!("error when writing temp file: expected [{expected_size}], found [{wrote_size}]"))
                             })
+                            .map(|_| temp_file)
                             .and_then(|mut file| {
                                 file.flush()
                                     .context("flushing file")
@@ -156,6 +165,7 @@ where
                             })
                         })
                 })
+                .instrument(tracing::Span::current())
             })
             .await
     }
@@ -179,7 +189,7 @@ mod tests {
         .map(Ok)
         .try_for_each(|(slice, reader)| {
             reader
-                .seek_with_temp_file()
+                .seek_with_temp_file(slice.len() as _)
                 .and_then(move |temp| async move {
                     let buffer = temp
                         .inner
