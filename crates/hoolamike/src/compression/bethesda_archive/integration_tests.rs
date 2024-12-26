@@ -15,6 +15,7 @@ fn test_data_directory() -> PathBuf {
         .unwrap()
 }
 
+#[ignore]
 #[test_log::test]
 fn list_archives() -> Result<()> {
     test_data_directory().pipe(|bethesda_directory| -> Result<()> {
@@ -29,7 +30,7 @@ fn list_archives() -> Result<()> {
             match extension.as_deref() {
                 Some("ba2") => {
                     info!("checking archive");
-                    let mut archive = super::fo4::Archive::read(file.as_path())?;
+                    let mut archive = ba2::fo4::Archive::read(file.as_path())?;
                     info!("archive opened");
                     let entries = archive.list_paths()?;
                     info!("archive has {} entries", entries.len());

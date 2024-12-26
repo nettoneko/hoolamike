@@ -6,7 +6,6 @@ use {
     },
     ::wrapped_7zip::WRAPPED_7ZIP,
     anyhow::{Context, Result},
-    bethesda_archive::BethesdaArchiveFile,
     std::{
         convert::identity,
         io::{Seek, Write},
@@ -68,11 +67,9 @@ impl ArchiveFileHandle {
     pub fn size(&mut self) -> Result<u64> {
         match self {
             ArchiveFileHandle::Wrapped7Zip((entry, _)) => Ok(entry.size),
-            ArchiveFileHandle::Bethesda(bethesda_archive_file) => match bethesda_archive_file {
-                BethesdaArchiveFile::Fallout4(spooled_temp_file) => spooled_temp_file
-                    .stream_len()
-                    .context("could not seek to find the stream length"),
-            },
+            ArchiveFileHandle::Bethesda(bethesda_archive_file) => bethesda_archive_file
+                .stream_len()
+                .context("could not seek to find the stream length"),
         }
     }
 }
@@ -112,9 +109,7 @@ impl std::io::Read for ArchiveFileHandle {
         match self {
             // ArchiveFileHandle::CompressTools(compress_tools_seek) => compress_tools_seek.read(buf),
             ArchiveFileHandle::Wrapped7Zip(wrapped_7zip) => wrapped_7zip.1.read(buf),
-            ArchiveFileHandle::Bethesda(bethesda_archive_file) => match bethesda_archive_file {
-                BethesdaArchiveFile::Fallout4(fo4) => fo4.read(buf),
-            },
+            ArchiveFileHandle::Bethesda(bethesda_archive_file) => bethesda_archive_file.read(buf),
         }
     }
 }

@@ -2,17 +2,13 @@ use {
     super::ProcessArchive,
     crate::{
         progress_bars_v2::IndicatifWrapIoExt,
-        utils::{MaybeWindowsPath, PathReadWrite, ReadableCatchUnwindExt},
+        utils::{MaybeWindowsPath, PathReadWrite, ReadableCatchUnwindExt, ResultZipExt},
     },
     anyhow::{Context, Result},
-    ba2::{
-        fo4::{self, FileWriteOptionsBuilder},
-        ByteSlice,
-        Reader,
-    },
+    ba2::{ByteSlice, Reader},
     std::{
         convert::identity,
-        io::{Read, Seek, Write},
+        io::{Seek, Write},
         panic::catch_unwind,
         path::{Path, PathBuf},
     },
@@ -22,6 +18,7 @@ use {
 mod integration_tests;
 
 type Fallout4Archive<'a> = (ba2::fo4::Archive<'a>, ba2::fo4::ArchiveOptions);
+type Tes4Archive<'a> = (ba2::tes4::Archive<'a>, ba2::tes4::ArchiveOptions);
 
 fn bethesda_path_to_path(bethesda_path: &[u8]) -> Result<PathBuf> {
     bethesda_path
@@ -32,9 +29,9 @@ fn bethesda_path_to_path(bethesda_path: &[u8]) -> Result<PathBuf> {
         .map(MaybeWindowsPath::into_path)
 }
 
-#[extension_traits::extension(pub trait BethesdaArchiveCompat)]
+#[extension_traits::extension(pub trait Fallout4ArchiveCompat)]
 impl Fallout4Archive<'_> {
-    fn list_paths_with_originals(&self) -> Result<Vec<(PathBuf, fo4::ArchiveKey<'_>)>> {
+    fn list_paths_with_originals(&self) -> Result<Vec<(PathBuf, ba2::fo4::ArchiveKey<'_>)>> {
         self.0
             .iter()
             .map(|(key, _file)| {
@@ -44,6 +41,39 @@ impl Fallout4Archive<'_> {
                     .map(|s| s.as_bytes())
                     .and_then(bethesda_path_to_path)
                     .map(|path| (path, key.to_owned()))
+            })
+            .collect::<Result<Vec<_>>>()
+            .context("listing paths for bethesda archive")
+    }
+}
+#[extension_traits::extension(pub trait Tes4ArchiveCompat)]
+impl Tes4Archive<'_> {
+    fn list_paths_with_originals(&self) -> Result<Vec<(PathBuf, (ba2::tes4::ArchiveKey<'_>, ba2::tes4::DirectoryKey<'_>))>> {
+        self.0
+            .iter()
+            .flat_map(|(archive_key, directory)| {
+                directory
+                    .iter()
+                    .map(|(directory_key, _)| (archive_key.clone(), directory_key.clone()))
+            })
+            .map(|(archive_key, directory_key)| {
+                archive_key
+                    .name()
+                    .to_str()
+                    .context("directory name is not a valid string")
+                    .zip(
+                        directory_key
+                            .name()
+                            .to_str()
+                            .context("file name is not a valid string"),
+                    )
+                    .context("validating entry")
+                    .map(|(directory, filename)| {
+                        MaybeWindowsPath(directory.into())
+                            .into_path()
+                            .join(filename)
+                    })
+                    .map(|path| (path, (archive_key, directory_key)))
             })
             .collect::<Result<Vec<_>>>()
             .context("listing paths for bethesda archive")
@@ -60,7 +90,7 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
         use tap::prelude::*;
 
         let mut output = tempfile::SpooledTempFile::new(256 * 1024 * 1024);
-        let options = FileWriteOptionsBuilder::new()
+        let options = ba2::fo4::FileWriteOptionsBuilder::new()
             .compression_format(self.1.compression_format())
             .build();
 
@@ -98,7 +128,59 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
                         .and_then(identity)
                         .context("extracting fallout 4 bsa")
                     })
-                    .map(BethesdaArchiveFile::Fallout4)
+                    .map(super::ArchiveFileHandle::Bethesda)
+                    .with_context(|| format!("getting file handle for [{}] out of derived paths [{:#?}]", path.display(), paths))
+            })
+            .context("getting fallout4 archive handle")
+    }
+}
+
+impl super::ProcessArchive for Tes4Archive<'_> {
+    fn list_paths(&mut self) -> Result<Vec<PathBuf>> {
+        self.list_paths_with_originals()
+            .map(|paths| paths.into_iter().map(|(p, _)| p).collect())
+    }
+    #[tracing::instrument(skip(self))]
+    fn get_handle(&mut self, path: &Path) -> Result<super::ArchiveFileHandle> {
+        use tap::prelude::*;
+
+        let mut output = tempfile::SpooledTempFile::new(256 * 1024 * 1024);
+        let options = ba2::tes4::FileCompressionOptions::builder().version(self.1.version());
+
+        self.list_paths_with_originals()
+            .context("listing entries")
+            .and_then(|paths| {
+                paths
+                    .iter()
+                    .find_map(|(entry, repr)| entry.eq(path).then_some(repr))
+                    .with_context(|| format!("[{}] not found in [{paths:?}]", path.display()))
+                    .and_then(|(archive_key, directory_key)| {
+                        self.0
+                            .get(archive_key)
+                            .context("could not read directory")
+                            .and_then(|directory| directory.get(directory_key).context("no file in directory"))
+                            .context("reading archive entry")
+                    })
+                    .and_then(|file| {
+                        catch_unwind(|| {
+                            file.len()
+                                .pipe(|size| {
+                                    let mut writer = tracing::Span::current().wrap_write(size as _, &mut output);
+                                    // TODO: compression codec?
+                                    file.write(&mut writer, &options.build())
+                                        .context("writing fallout 4 bsa to output buffer")
+                                })
+                                .and_then(move |_| {
+                                    output.rewind().context("rewinding file").and_then(|_| {
+                                        tracing::debug!("finished dumping bethesda archive");
+                                        output.flush().context("flushing").map(|_| output)
+                                    })
+                                })
+                        })
+                        .for_anyhow()
+                        .and_then(identity)
+                        .context("extracting fallout 4 bsa")
+                    })
                     .map(super::ArchiveFileHandle::Bethesda)
                     .with_context(|| format!("getting file handle for [{}] out of derived paths [{:#?}]", path.display(), paths))
             })
@@ -109,18 +191,21 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
 #[derive(Debug)]
 pub enum BethesdaArchive<'a> {
     Fallout4(Fallout4Archive<'a>),
+    Tes4(Tes4Archive<'a>),
 }
 
 impl ProcessArchive for BethesdaArchive<'_> {
     fn list_paths(&mut self) -> Result<Vec<PathBuf>> {
         match self {
             BethesdaArchive::Fallout4(fo4) => fo4.list_paths(),
+            BethesdaArchive::Tes4(tes4) => tes4.list_paths(),
         }
     }
 
     fn get_handle(&mut self, path: &Path) -> Result<super::ArchiveFileHandle> {
         match self {
             BethesdaArchive::Fallout4(fo4) => fo4.get_handle(path),
+            BethesdaArchive::Tes4(tes4) => tes4.get_handle(path),
         }
     }
 }
@@ -137,20 +222,12 @@ impl BethesdaArchive<'_> {
                             .context("opening fo4")
                             .map(BethesdaArchive::Fallout4),
                         ba2::FileFormat::TES3 => anyhow::bail!("{format:?} is not supported"),
-                        ba2::FileFormat::TES4 => anyhow::bail!("{format:?} is not supported"),
+                        ba2::FileFormat::TES4 => ba2::tes4::Archive::read(file)
+                            .context("opening fo4")
+                            .map(BethesdaArchive::Tes4),
                     })
             })
     }
 }
 
-pub enum BethesdaArchiveFile {
-    Fallout4(tempfile::SpooledTempFile),
-}
-
-impl Read for BethesdaArchiveFile {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        match self {
-            BethesdaArchiveFile::Fallout4(file) => file.read(buf),
-        }
-    }
-}
+pub type BethesdaArchiveFile = tempfile::SpooledTempFile;
