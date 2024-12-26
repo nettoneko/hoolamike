@@ -21,6 +21,8 @@ pub struct CreateBSAHandler {
 
 pub mod fallout_4;
 
+pub mod tes_4;
+
 #[allow(unused_variables)]
 fn try_optimize_memory_mapping(memmap: &memmap2::Mmap) {
     #[cfg(unix)]
@@ -74,7 +76,7 @@ impl CreateBSAHandler {
                     file_states
                         .into_par_iter()
                         .map(move |file_state| match file_state {
-                            FileState::BSAFile { .. } => Err(anyhow::anyhow!("mismatched type of file")),
+                            FileState::BSAFile { flip_compression, index, path } => Err(anyhow::anyhow!("mismatched type of file")),
                             FileState::BA2File {
                                 dir_hash,
                                 extension,
