@@ -1,6 +1,6 @@
 use {
     crate::{
-        install_modlist::directives::nested_archive_manager::{WithPermit, OPEN_FILE_PERMITS},
+        install_modlist::directives::nested_archive_manager::{max_open_files, WithPermit, OPEN_FILE_PERMITS},
         progress_bars_v2::IndicatifWrapIoExt,
         utils::{boxed_iter, ReadableCatchUnwindExt},
     },
@@ -138,34 +138,43 @@ where
     Self: Sized + Sync + Send + 'static,
 {
     async fn seek_with_temp_file(self, expected_size: u64) -> Result<WithPermit<tempfile::TempPath>> {
-        let span = tracing::info_span!("seek_with_temp_file");
+        OPEN_FILE_PERMITS.available_permits();
+
+        let span = tracing::info_span!(
+            "seek_with_temp_file",
+            acquired_file_permits=%(max_open_files() - OPEN_FILE_PERMITS.available_permits()),
+            max_open_files=%max_open_files(),
+        );
         let reader = Arc::new(std::sync::Mutex::new(self));
-        WithPermit::new_blocking(&OPEN_FILE_PERMITS, move || {
-            let span = span.entered();
-            tempfile::NamedTempFile::new()
-                .context("creating a tempfile")
-                .and_then(|mut temp_file| {
-                    {
-                        let mut reader = reader.lock().unwrap();
-                        let writer = &mut span.clone().wrap_write(expected_size, &mut temp_file);
-                        std::io::copy(&mut *reader, writer)
-                    }
-                    .context("creating a seekable temp file")
-                    .and_then(|wrote_size| {
-                        wrote_size
-                            .eq(&expected_size)
-                            .then_some(wrote_size)
-                            .with_context(|| format!("error when writing temp file: expected [{expected_size}], found [{wrote_size}]"))
+        WithPermit::new_blocking(&OPEN_FILE_PERMITS, {
+            cloned![span];
+            move || {
+                let span = span.entered();
+                tempfile::NamedTempFile::new()
+                    .context("creating a tempfile")
+                    .and_then(|mut temp_file| {
+                        {
+                            let mut reader = reader.lock().unwrap();
+                            let writer = &mut span.clone().wrap_write(expected_size, &mut temp_file);
+                            std::io::copy(&mut *reader, writer)
+                        }
+                        .context("creating a seekable temp file")
+                        .and_then(|wrote_size| {
+                            wrote_size
+                                .eq(&expected_size)
+                                .then_some(wrote_size)
+                                .with_context(|| format!("error when writing temp file: expected [{expected_size}], found [{wrote_size}]"))
+                        })
+                        .map(|_| temp_file)
+                        .and_then(|mut file| {
+                            file.flush()
+                                .context("flushing file")
+                                .map(|_| file.into_temp_path())
+                        })
                     })
-                    .map(|_| temp_file)
-                    .and_then(|mut file| {
-                        file.flush()
-                            .context("flushing file")
-                            .map(|_| file.into_temp_path())
-                    })
-                })
+            }
         })
-        .instrument(tracing::Span::current())
+        .instrument(span)
         .await
     }
 }

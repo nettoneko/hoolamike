@@ -32,7 +32,7 @@ impl ArchiveHashPath {
 }
 
 pub fn max_open_files() -> usize {
-    concurrency() * 20
+    concurrency() * 40
 }
 pub(crate) static OPEN_FILE_PERMITS: Lazy<Arc<Semaphore>> = Lazy::new(|| Arc::new(Semaphore::new(max_open_files())));
 
@@ -84,6 +84,7 @@ where
         Fut: std::future::Future<Output = Result<T>>,
         F: FnOnce() -> Fut,
     {
+        tokio::task::yield_now().await;
         semaphore
             .clone()
             .acquire_owned()

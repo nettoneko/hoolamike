@@ -132,6 +132,7 @@ impl CreateBSAHandler {
             state,
         }: CreateBSADirective,
     ) -> Result<u64> {
+        tokio::task::yield_now().await;
         let Self { output_directory } = self;
         tokio::task::spawn_blocking(move || match state {
             DirectiveState::CompressionBsa {

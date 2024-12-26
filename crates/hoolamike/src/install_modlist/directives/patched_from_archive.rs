@@ -36,6 +36,7 @@ impl PatchedFromArchiveHandler {
             patch_id,
         }: PatchedFromArchiveDirective,
     ) -> Result<u64> {
+        tokio::task::yield_now().await;
         let output_path = self.output_directory.join(to.into_path());
 
         let source_file = self

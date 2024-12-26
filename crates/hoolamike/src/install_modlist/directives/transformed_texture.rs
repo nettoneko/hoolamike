@@ -85,6 +85,7 @@ impl TransformedTextureHandler {
             archive_hash_path,
         }: TransformedTextureDirective,
     ) -> Result<u64> {
+        tokio::task::yield_now().await;
         let format = supported_image_format(format).context("checking for format support")?;
         let output_path = self.output_directory.join(to.into_path());
         let handle = tracing::Span::current();

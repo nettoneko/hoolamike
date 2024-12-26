@@ -21,6 +21,7 @@ impl InlineFileHandler {
             to,
         }: InlineFileDirective,
     ) -> Result<u64> {
+        tokio::task::yield_now().await;
         let output_path = self.output_directory.join(to.into_path());
         let wabbajack_file = self.wabbajack_file.clone();
         tokio::task::spawn_blocking(move || -> Result<_> {

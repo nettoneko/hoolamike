@@ -102,6 +102,7 @@ impl RemappedInlineFileHandler {
             to,
         }: RemappedInlineFileDirective,
     ) -> Result<u64> {
+        tokio::task::yield_now().await;
         let Self {
             remapping_context,
             wabbajack_file,
