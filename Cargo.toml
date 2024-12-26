@@ -4,7 +4,7 @@ members = ["crates/bsa-cli", "crates/hoolamike", "crates/wrapped-7zip"]
 default-members = ["crates/hoolamike"]
 
 [workspace.package]
-version = "0.2.1"
+version = "0.2.2"
 license = "MIT"
 repository = "https://github.com/Niedzwiedzw/hoolamike"
 categories = ["modding"]
