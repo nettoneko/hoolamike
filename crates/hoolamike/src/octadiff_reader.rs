@@ -235,7 +235,7 @@ where
         WithEof::<OctodiffMetadata>::read_le(&mut delta)
             .context("reading metadata of delta file with eof")
             .map(|WithEof { inner, eof: _ }| inner)
-            .tap_ok(|metadata| tracing::info!(?metadata, "metadata parsed correctly"))
+            .tap_ok(|metadata| tracing::debug!(?metadata, "metadata parsed correctly"))
             .map(|metadata| Self {
                 metadata,
                 source,

@@ -116,24 +116,25 @@ serde_type_guard!(BA2DirectiveStateGuard, "BA2State, Compression.BSA");
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[serde(rename_all = "PascalCase")]
 pub struct DirectiveStateData {
     /// has_name_table: bool
     /// Description: Indicates if the file contains a name table.
     /// Usage: Important for processing certain file formats.
-    has_name_table: bool,
+    pub has_name_table: bool,
     /// header_magic: String
     /// Description: Magic number or signature in the file header.
     /// Usage: Verify file format before processing.
-    header_magic: String,
+    pub header_magic: String,
     #[serde(rename = "Type")]
     /// kind: u64 (renamed from Type)
     /// Description: Numeric code representing the directive's kind.
     /// Usage: May influence processing logic.
-    kind: u64,
+    pub kind: u64,
     /// version: u64
     /// Description: Version number of the directive or file format.
     /// Usage: Ensure compatibility with processing routines.
-    version: u64,
+    pub version: u64,
 }
 
 pub type DirectiveState = WithTypeGuard<DirectiveStateData, BA2DirectiveStateGuard>;

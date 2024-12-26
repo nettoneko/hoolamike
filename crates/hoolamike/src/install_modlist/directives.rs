@@ -461,7 +461,7 @@ impl DirectivesHandler {
         directives
             .pipe(futures::stream::iter)
             .map(check_completed)
-            .buffer_unordered(concurrency())
+            .buffer_unordered(num_cpus::get())
             .collect::<Vec<_>>()
             .then(|directives| {
                 (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new())

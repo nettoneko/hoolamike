@@ -1,6 +1,6 @@
 use {
     super::helpers::FutureAnyhowExt,
-    crate::modlist_json::WabbajackCDNDownloaderState,
+    crate::modlist_json::{HumanUrl, WabbajackCDNDownloaderState},
     anyhow::{Context, Result},
     flate2::read::GzDecoder,
     futures::TryFutureExt,
@@ -98,8 +98,12 @@ fn parse_wabbajack_cdn_file_response(contents: &str) -> Result<WabbajackCdnFile>
 }
 
 impl WabbajackCDNDownloader {
-    pub async fn prepare_download(WabbajackCDNDownloaderState { url }: WabbajackCDNDownloaderState) -> Result<Vec<url::Url>> {
-        let url = url.clone().pipe(remap_wabbajack_cdn_url)?;
+    pub async fn prepare_download(WabbajackCDNDownloaderState { url }: WabbajackCDNDownloaderState) -> Result<Vec<HumanUrl>> {
+        let url = url
+            .clone()
+            .conv::<url::Url>()
+            .pipe(remap_wabbajack_cdn_url)?
+            .conv::<HumanUrl>();
 
         let deduced_url = format!("{url}/{MAGIC_FILENAME}");
         Client::new()
@@ -140,8 +144,10 @@ impl WabbajackCDNDownloader {
                     parts
                         .into_iter()
                         .map(move |Part { index, .. }| {
-                            url.clone()
-                                .tap_mut(|url| url.set_path(&format!("{munged_name}/parts/{index}")))
+                            url.clone().tap_mut(|url| {
+                                url.as_mut()
+                                    .set_path(&format!("{munged_name}/parts/{index}"))
+                            })
                         })
                         .collect_vec()
                 }

@@ -34,8 +34,14 @@ impl<T, E> std::result::Result<T, E> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Hash, derive_more::Display, Clone, Ord)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Hash, derive_more::Display, Clone, Ord)]
 pub struct MaybeWindowsPath(pub String);
+
+impl std::fmt::Debug for MaybeWindowsPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 impl MaybeWindowsPath {
     pub fn into_path(self) -> PathBuf {

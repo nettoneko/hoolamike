@@ -5,6 +5,42 @@ use {
     tap::prelude::*,
 };
 
+macro_rules! test_example {
+    ($input:literal, $name:ident, $ty:ty) => {
+        #[test]
+        fn $name() -> anyhow::Result<()> {
+            use anyhow::Context;
+            serde_json::from_str::<$ty>($input)
+                .with_context(|| format!("{}\ncould not be parsed as {}", $input, std::any::type_name::<$ty>()))
+                .map(|_| ())
+        }
+    };
+}
+
+#[derive(
+    derive_more::FromStr,
+    derive_more::Display,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    derive_more::AsRef,
+    derive_more::From,
+    derive_more::Into,
+    serde::Serialize,
+    serde::Deserialize,
+    derive_more::AsMut,
+)]
+pub struct HumanUrl(url::Url);
+
+impl std::fmt::Debug for HumanUrl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Url({self})")
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
@@ -129,7 +165,7 @@ impl State {
 pub struct HttpState {
     #[serde(default)]
     pub headers: Vec<()>,
-    pub url: url::Url,
+    pub url: HumanUrl,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -137,14 +173,14 @@ pub struct HttpState {
 #[serde(deny_unknown_fields)]
 pub struct ManualState {
     pub prompt: String,
-    pub url: url::Url,
+    pub url: HumanUrl,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct WabbajackCDNDownloaderState {
-    pub url: url::Url,
+    pub url: HumanUrl,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -158,7 +194,7 @@ pub struct GoogleDriveState {
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct MediaFireState {
-    pub url: url::Url,
+    pub url: HumanUrl,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -171,14 +207,25 @@ pub struct GameFileSourceState {
     pub game: GameName,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, derive_more::AsRef, derive_more::Display, PartialEq, Eq, PartialOrd, Ord, Hash, derive_more::Constructor)]
+#[derive(Debug, Serialize, Deserialize, Clone, derive_more::Display, PartialEq, Eq, PartialOrd, Ord, Hash, derive_more::Constructor)]
 pub struct GameName(String);
 
+#[derive(Debug, Serialize, Deserialize, Clone, derive_more::Display, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum SpecialGameName {
+    ModdingTools,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, derive_more::Display, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(untagged)]
+pub enum NexusGameName {
+    Special(SpecialGameName),
+    GameName(GameName),
+}
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct NexusState {
-    pub game_name: GameName,
+    pub game_name: NexusGameName,
     #[serde(rename = "FileID")]
     pub file_id: usize,
     #[serde(rename = "ModID")]
@@ -580,7 +627,8 @@ pub mod parsing_helpers {
             }
         }
 
-        // #[cfg(ignore)]
+        #[cfg(ignore)]
+        // #[ignore]
         #[test_log::test]
         fn test_wasteland_reborn() -> anyhow::Result<()> {
             use super::*;

@@ -1,8 +1,9 @@
 use {
     super::helpers::FutureAnyhowExt,
+    crate::modlist_json::HumanUrl,
     anyhow::{Context, Result},
     futures::TryFutureExt,
-    std::future::ready,
+    std::{future::ready, str::FromStr},
     tap::prelude::*,
 };
 
@@ -10,15 +11,16 @@ pub struct GoogleDriveDownloader {}
 
 pub mod response_parsing {
     use {
+        crate::modlist_json::HumanUrl,
         anyhow::{Context, Result},
         regex::Regex,
         scraper::{Html, Selector},
-        std::collections::HashMap,
+        std::{collections::HashMap, str::FromStr},
         url::{form_urlencoded, Url},
     };
 
     /// BASED ON https://github.com/wkentaro/gdown/blob/main/gdown/download.py
-    pub fn get_url_from_gdrive_confirmation(contents: &str) -> Result<url::Url> {
+    pub fn get_url_from_gdrive_confirmation(contents: &str) -> Result<HumanUrl> {
         let mut url = String::new();
 
         let download_url_re = Regex::new(r#"href="(\/uc\?export=download[^"]+)"#).unwrap();
@@ -66,15 +68,15 @@ pub mod response_parsing {
             }
         }
 
-        Url::parse(&url).context("could not retrieve the google drive file link from google prompt")
+        HumanUrl::from_str(&url).context("could not retrieve the google drive file link from google prompt")
     }
 }
 
 impl GoogleDriveDownloader {
     /// wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1WmGuPCblM-L22O38qs939FRRs9ehnLsU' -O your_file_name
-    pub async fn download(id: String, expected_size: u64) -> Result<url::Url> {
+    pub async fn download(id: String, expected_size: u64) -> Result<HumanUrl> {
         let original_url = format!("https://docs.google.com/uc?export=download&id={id}&export=download&confirm=t")
-            .pipe_deref(url::Url::parse)
+            .pipe_deref(HumanUrl::from_str)
             .context("invalid url")?;
 
         let response = {

@@ -1,5 +1,6 @@
 use {
     super::helpers::FutureAnyhowExt,
+    crate::modlist_json::HumanUrl,
     anyhow::{Context, Result},
     futures::TryFutureExt,
     std::future::ready,
@@ -11,13 +12,14 @@ pub struct MediaFireDownloader {}
 
 pub mod response_parsing {
     use {
+        crate::modlist_json::HumanUrl,
         anyhow::{Context, Result},
         scraper::{Html, Selector},
-        url::Url,
+        std::str::FromStr,
     };
 
     /// BASED ON https://github.com/wkentaro/gdown/blob/main/gdown/download.py
-    pub fn get_url_from_mediafire_confirmation(contents: &str) -> Result<url::Url> {
+    pub fn get_url_from_mediafire_confirmation(contents: &str) -> Result<HumanUrl> {
         Selector::parse("input.popsok[aria-label='Download file']")
             .map_err(|e| anyhow::anyhow!("{e:?}"))
             .context("parsing selector")
@@ -29,7 +31,7 @@ pub mod response_parsing {
                             .next()
                             .context("selector matched nothing")
                             .and_then(|input| input.attr("href").context("no href"))
-                            .and_then(|href| Url::parse(href).with_context(|| format!("bad url: {href}")))
+                            .and_then(|href| HumanUrl::from_str(href).with_context(|| format!("bad url: {href}")))
                             .context("trying the selector method")
                             .with_context(|| format!("trying because: {cause:?}"))
                     })
@@ -44,7 +46,7 @@ pub mod response_parsing {
                                     .with_context(|| format!("invalid subslice: {start}.."))
                             })
                             .map(|slice| slice.chars().take_while(|c| c != &'\'').collect::<String>())
-                            .and_then(|url| Url::parse(&url).with_context(|| format!("bad url: {url}")))
+                            .and_then(|url| HumanUrl::from_str(&url).with_context(|| format!("bad url: {url}")))
                             .context("trying the substring method")
                             .with_context(|| format!("trying becasue: {cause:?}"))
                     })
@@ -72,7 +74,7 @@ pub mod response_parsing {
 
 impl MediaFireDownloader {
     #[instrument]
-    pub async fn download(url: url::Url) -> Result<url::Url> {
+    pub async fn download(url: HumanUrl) -> Result<HumanUrl> {
         reqwest::Client::builder()
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
             .build()
@@ -88,7 +90,7 @@ impl MediaFireDownloader {
             .and_then(|res| res.text().map_context("extracting text"))
             .and_then(|text| {
                 tokio::task::spawn_blocking(move || {
-                    response_parsing::get_url_from_mediafire_confirmation(&text).tap_ok(|url| tracing::info!(%url, "parsed mediafire url"))
+                    response_parsing::get_url_from_mediafire_confirmation(&text).tap_ok(|url| tracing::debug!(%url, "parsed mediafire url"))
                 })
                 .map_context("thread crashed")
                 .and_then(ready)

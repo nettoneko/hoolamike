@@ -15,13 +15,13 @@ use {
             WithArchiveDescriptor,
         },
         error::{MultiErrorCollectExt, TotalResult},
-        modlist_json::{Archive, GoogleDriveState, HttpState, ManualState, MediaFireState, NexusState, State},
+        modlist_json::{Archive, GoogleDriveState, HttpState, HumanUrl, ManualState, MediaFireState, NexusGameName, NexusState, State},
         progress_bars_v2::IndicatifWrapIoExt,
     },
     anyhow::Result,
     futures::{FutureExt, StreamExt, TryStreamExt},
     std::{path::PathBuf, sync::Arc},
-    tracing::{instrument, warn, Instrument},
+    tracing::{debug, instrument, Instrument},
 };
 
 #[derive(Clone)]
@@ -79,7 +79,7 @@ async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Resu
     Ok(to)
 }
 #[instrument]
-pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
+pub async fn stream_merge_file(from: Vec<HumanUrl>, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
     let target_file = tokio::fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -115,7 +115,7 @@ pub async fn stream_merge_file(from: Vec<url::Url>, to: PathBuf, expected_size: 
 }
 
 #[instrument]
-pub async fn stream_file(from: url::Url, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
+pub async fn stream_file(from: HumanUrl, to: PathBuf, expected_size: u64) -> Result<PathBuf> {
     let target_file = tokio::fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -169,7 +169,12 @@ impl Synchronizers {
                     .and_then(|nexus| {
                         nexus.download(nexus::DownloadFileRequest {
                             // TODO: validate this
-                            game_domain_name: game_name,
+                            game_domain_name: match game_name {
+                                NexusGameName::GameName(game_name) => game_name.to_string(),
+                                NexusGameName::Special(special) => match special {
+                                    crate::modlist_json::SpecialGameName::ModdingTools => "site".into(),
+                                },
+                            },
                             mod_id,
                             file_id,
                         })
@@ -235,8 +240,8 @@ impl Synchronizers {
 
     #[instrument(skip_all, fields(archives=%archives.len()))]
     pub async fn sync_downloads(self, archives: Vec<Archive>) -> TotalResult<WithArchiveDescriptor<PathBuf>> {
-        let base_concurrency = 5;
-        tracing::Span::current().pipe_ref(|pb| {
+        let base_concurrency = 7;
+        let sync_downloads = tracing::Span::current().tap(|pb| {
             pb.pb_set_length(archives.iter().map(|a| a.descriptor.size).sum());
             pb.pb_set_style(&io_progress_style());
         });
@@ -247,27 +252,27 @@ impl Synchronizers {
                     .cache
                     .clone()
                     .verify(descriptor.clone())
-                    .instrument(tracing::Span::current())
+                    .instrument(sync_downloads.clone())
                     .pipe(tokio::task::spawn)
                     .map_context("task crashed")
                     .and_then(ready)
                     .await
                 {
                     Ok(verified) => Ok(Either::Left(verified.tap(|verified| {
-                        tracing::Span::current().pb_inc(verified.descriptor.size);
+                        sync_downloads.pb_inc(verified.descriptor.size);
                         tracing::debug!(?verified, "succesfully verified a file");
                     }))),
                     Err(message) => self
                         .clone()
                         .prepare_sync_task(Archive {
-                            descriptor: descriptor.tap(|descriptor| warn!(?descriptor, ?message, "could not verify a file, it will be downloaded")),
+                            descriptor: descriptor.tap(|descriptor| debug!(?descriptor, ?message, "could not verify a file, it will be downloaded")),
                             state,
                         })
                         .await
                         .map(Either::Right),
                 }
             })
-            .buffer_unordered(base_concurrency)
+            .buffer_unordered(num_cpus::get())
             .collect::<Vec<_>>()
             .await
             .pipe(futures::stream::iter)
@@ -288,15 +293,18 @@ impl Synchronizers {
                             stream_merge_file(from.clone(), to.clone(), descriptor.size)
                                 .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
                                 .map(move |res| res.with_context(|| format!("when downloading [{from:?} -> {to:?}]")))
+                                .instrument(sync_downloads.clone())
                                 .boxed()
                         }
                         SyncTask::Download(WithArchiveDescriptor { inner: (from, to), descriptor }) => stream_file(from.clone(), to.clone(), descriptor.size)
                             .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
                             .map(move |res| res.with_context(|| format!("when downloading [{from} -> {to:?}]")))
+                            .instrument(sync_downloads.clone())
                             .boxed(),
                         SyncTask::Copy(WithArchiveDescriptor { inner: (from, to), descriptor }) => copy_local_file(from.clone(), to.clone(), descriptor.size)
                             .map_ok(|inner| WithArchiveDescriptor { inner, descriptor })
                             .map(move |res| res.with_context(|| format!("when when copying [{from:?} -> {to:?}]")))
+                            .instrument(sync_downloads.clone())
                             .boxed(),
                     },
                 }
@@ -304,9 +312,12 @@ impl Synchronizers {
                     let name = name.clone();
                     move |message| tracing::debug!(?name, ?message)
                 })
-                .inspect_ok(move |res| {
-                    tracing::Span::current().pb_inc(res.descriptor.size);
-                    tracing::debug!(name, "[OK]");
+                .inspect_ok({
+                    cloned![sync_downloads];
+                    move |res| {
+                        sync_downloads.pb_inc(res.descriptor.size);
+                        tracing::debug!(name, "[OK]");
+                    }
                 })
                 .pipe(tokio::task::spawn)
                 .map_context("task crashed")

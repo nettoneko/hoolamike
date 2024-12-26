@@ -32,23 +32,35 @@ impl CreateBSAHandler {
         tokio::task::yield_now().await;
         let Self { output_directory } = self;
         let size = create_bsa_directive.size();
-        tokio::task::spawn_blocking(move || match create_bsa_directive {
-            CreateBSADirective::Ba2(ba2) => fallout_4::create_archive(
-                output_directory.join(BSA_CREATION_DIR.with(|p| p.to_owned())),
-                ba2,
-                |archive, options, output_path| {
-                    output_directory
-                        .join(output_path.into_path())
-                        .open_file_write()
-                        .context("opening file for writing")
-                        .and_then(|(output_path, output)| {
-                            archive
-                                .write(&mut tracing::Span::current().wrap_write(size, output), &options)
-                                .with_context(|| format!("writing bsa file to {output_path:?}"))
-                        })
-                },
-            ),
-            CreateBSADirective::Bsa(bsa) => todo!(),
+        let span = tracing::Span::current();
+        tokio::task::spawn_blocking(move || {
+            span.in_scope(|| {
+                let bsa_creation_dir = output_directory.join(BSA_CREATION_DIR.with(|p| p.to_owned()));
+                match create_bsa_directive {
+                    CreateBSADirective::Ba2(ba2) => self::fallout_4::create_archive(bsa_creation_dir, ba2, |archive, options, output_path| {
+                        output_directory
+                            .join(output_path.into_path())
+                            .open_file_write()
+                            .context("opening file for writing")
+                            .and_then(|(output_path, output)| {
+                                archive
+                                    .write(&mut tracing::Span::current().wrap_write(size, output), &options)
+                                    .with_context(|| format!("writing bsa file to {output_path:?}"))
+                            })
+                    }),
+                    CreateBSADirective::Bsa(bsa) => self::tes_4::create_archive(bsa_creation_dir, bsa, |archive, options, output_path| {
+                        output_directory
+                            .join(output_path.into_path())
+                            .open_file_write()
+                            .context("opening file for writing")
+                            .and_then(|(output_path, output)| {
+                                archive
+                                    .write(&mut tracing::Span::current().wrap_write(size, output), &options)
+                                    .with_context(|| format!("writing bsa file to {output_path:?}"))
+                            })
+                    }),
+                }
+            })
         })
         .instrument(tracing::Span::current())
         .await

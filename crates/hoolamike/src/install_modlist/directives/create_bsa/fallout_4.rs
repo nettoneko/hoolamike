@@ -3,7 +3,7 @@ use {
     crate::{
         modlist_json::{
             directive::create_bsa_directive::{
-                ba2::{BA2DX10Entry, BA2FileEntry, FileState},
+                ba2::{BA2DX10Entry, BA2FileEntry, DirectiveStateData, FileState},
                 Ba2,
             },
             type_guard::WithTypeGuard,
@@ -12,7 +12,7 @@ use {
     },
     anyhow::{Context, Result},
     ba2::{
-        fo4::{Archive, ArchiveKey, ArchiveOptions, File, FileHeader, FileReadOptions, Format},
+        fo4::{Archive, ArchiveKey, ArchiveOptions, File, FileHeader, FileReadOptions, Format, Version as ArchiveVersion},
         Borrowed,
         CompressionResult,
         ReaderWithOptions,
@@ -109,15 +109,33 @@ pub(super) fn create_key<'a>(extension: &str, name_hash: u32, dir_hash: u32) -> 
 pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) -> Result<()>>(
     temp_bsa_dir: PathBuf,
     Ba2 {
-        hash,
-        size,
+        hash: _,
+        size: _,
         to,
         temp_id,
         file_states,
-        state: WithTypeGuard { inner: state, .. },
+        state:
+            WithTypeGuard {
+                inner:
+                    DirectiveStateData {
+                        has_name_table,
+                        header_magic: _,
+                        kind: _,
+                        version,
+                    },
+                ..
+            },
     }: Ba2,
     handle_archive: F,
 ) -> Result<()> {
+    let version: ArchiveVersion = match version {
+        1 => ArchiveVersion::v1,
+        2 => ArchiveVersion::v2,
+        3 => ArchiveVersion::v3,
+        7 => ArchiveVersion::v7,
+        8 => ArchiveVersion::v8,
+        other => anyhow::bail!("unsuppored archive version: {other}"),
+    };
     let temp_id_dir = temp_bsa_dir.join(temp_id);
     let reading_bsa_entries = info_span!("creating_bsa_entries", count=%file_states.len())
         .entered()
@@ -187,7 +205,7 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
                                             acc.insert(key.clone(), file);
                                         })
                                     })
-                                    .pipe(|archive| (archive, options.build()))
+                                    .pipe(|archive| (archive, options.version(version).strings(has_name_table).build()))
                                     .pipe(|(archive, options)| handle_archive(&archive, options, to))
                             })
                     })

@@ -37,7 +37,7 @@ macro_rules! serde_type_guard {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WithTypeGuard<T, Guard> {
-    #[serde(rename = "type")]
+    #[serde(rename = "$type")]
     pub(crate) guard: Guard,
     #[serde(flatten)]
     pub inner: T,

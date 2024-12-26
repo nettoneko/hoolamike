@@ -1,6 +1,6 @@
 use {
     super::helpers::{FutureAnyhowExt, ReqwestPrettyJsonResponse},
-    crate::modlist_json::GameName,
+    crate::modlist_json::HumanUrl,
     anyhow::{Context, Result},
     chrono::{DateTime, Utc},
     futures::TryFutureExt,
@@ -24,7 +24,7 @@ const BASE_URL: &str = "https://api.nexusmods.com";
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct DownloadFileRequest {
-    pub game_domain_name: GameName,
+    pub game_domain_name: String,
     pub mod_id: usize,
     pub file_id: usize,
 }
@@ -84,7 +84,7 @@ impl ThrottlingHeaders {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NexusDownloadLink {
     #[serde(rename = "URI")]
-    pub uri: url::Url,
+    pub uri: HumanUrl,
     pub name: String,
     pub short_name: String,
 }
@@ -127,13 +127,13 @@ impl NexusDownloader {
             .map_context("sending request")
             .inspect_ok(|response| {
                 ThrottlingHeaders::from_response(response)
-                    .tap_ok(|response| tracing::info!("{response:?}"))
+                    .tap_ok(|response| tracing::debug!("{response:?}"))
                     .pipe(|_| ())
             })
             .and_then(|response| response.json_response_ok(|_| Ok(())))
             .await
     }
-    pub async fn download(self: Arc<Self>, request: DownloadFileRequest) -> Result<url::Url> {
+    pub async fn download(self: Arc<Self>, request: DownloadFileRequest) -> Result<HumanUrl> {
         self.clone()
             .generate_download_link(&request)
             .and_then(|download_link| {

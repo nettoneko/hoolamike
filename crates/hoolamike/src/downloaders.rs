@@ -1,4 +1,7 @@
-use {crate::modlist_json::ArchiveDescriptor, std::path::PathBuf};
+use {
+    crate::modlist_json::{ArchiveDescriptor, HumanUrl},
+    std::path::PathBuf,
+};
 
 pub mod gamefile_source_downloader;
 pub mod google_drive;
@@ -20,8 +23,8 @@ pub struct WithArchiveDescriptor<T> {
     pub descriptor: ArchiveDescriptor,
 }
 
-pub type MergeDownloadTask = WithArchiveDescriptor<(Vec<url::Url>, PathBuf)>;
-pub type DownloadTask = WithArchiveDescriptor<(url::Url, PathBuf)>;
+pub type MergeDownloadTask = WithArchiveDescriptor<(Vec<HumanUrl>, PathBuf)>;
+pub type DownloadTask = WithArchiveDescriptor<(HumanUrl, PathBuf)>;
 pub type CopyFileTask = WithArchiveDescriptor<(PathBuf, PathBuf)>;
 
 #[derive(Debug, Clone, derive_more::From)]

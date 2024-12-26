@@ -11,7 +11,7 @@ pub struct InlineFileHandler {
 }
 
 impl InlineFileHandler {
-    #[tracing::instrument]
+    #[tracing::instrument(skip(self))]
     pub async fn handle(
         self,
         InlineFileDirective {
