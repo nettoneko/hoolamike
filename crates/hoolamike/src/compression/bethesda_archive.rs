@@ -18,6 +18,9 @@ use {
     },
 };
 
+#[cfg(test)]
+mod integration_tests;
+
 type Fallout4Archive<'a> = (ba2::fo4::Archive<'a>, ba2::fo4::ArchiveOptions);
 
 fn bethesda_path_to_path(bethesda_path: &[u8]) -> Result<PathBuf> {
@@ -46,9 +49,6 @@ impl Fallout4Archive<'_> {
             .context("listing paths for bethesda archive")
     }
 }
-
-#[cfg(test)]
-mod integration_tests;
 
 impl super::ProcessArchive for Fallout4Archive<'_> {
     fn list_paths(&mut self) -> Result<Vec<PathBuf>> {

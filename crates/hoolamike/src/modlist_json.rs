@@ -365,7 +365,7 @@ pub struct ImageState {
 pub enum DirectiveState {
     #[serde(rename = "BA2State, Compression.BSA")]
     #[serde(rename_all = "PascalCase")]
-    CompressionBsa {
+    CompressionBa2 {
         /// has_name_table: bool
         /// Description: Indicates if the file contains a name table.
         /// Usage: Important for processing certain file formats.
@@ -379,6 +379,20 @@ pub enum DirectiveState {
         /// Description: Numeric code representing the directive's kind.
         /// Usage: May influence processing logic.
         kind: u64,
+        /// version: u64
+        /// Description: Version number of the directive or file format.
+        /// Usage: Ensure compatibility with processing routines.
+        version: u64,
+    },
+    #[serde(rename = "BSAState, Compression.BSA")]
+    #[serde(rename_all = "PascalCase")]
+    CompressionBsa {
+        archive_flags: u32,
+        file_flags: u32,
+        /// header_magic: String
+        /// Description: Magic number or signature in the file header.
+        /// Usage: Verify file format before processing.
+        magic: String,
         /// version: u64
         /// Description: Version number of the directive or file format.
         /// Usage: Ensure compatibility with processing routines.
@@ -483,6 +497,19 @@ pub struct BA2DX10Entry {
 #[serde(deny_unknown_fields)]
 #[enum_kind(FileStateKind, derive(Serialize, Deserialize, PartialOrd, Ord, derive_more::Display,))]
 pub enum FileState {
+    #[serde(rename = "BSAFileState, Compression.BSA")]
+    #[serde(rename_all = "PascalCase")]
+    BSAFile {
+        flip_compression: bool,
+        /// index: usize
+        /// Description: Index of the file in a collection.
+        /// Usage: Reference files in order.
+        index: usize,
+        /// path: PathBuf
+        /// Description: File system path to the file.
+        /// Usage: Access the file during installation.
+        path: MaybeWindowsPath,
+    },
     #[serde(rename_all = "PascalCase")]
     BA2File {
         /// align: u64
@@ -701,7 +728,7 @@ pub mod parsing_helpers {
         fn test_wasteland_reborn() -> anyhow::Result<()> {
             use super::*;
 
-            include_str!("../../../../wasteland-reborn/test/modlist").pipe(validate_modlist_file)
+            include_str!("../../../playground/dupa/modlist").pipe(validate_modlist_file)
         }
     }
 }
