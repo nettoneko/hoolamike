@@ -69,7 +69,7 @@ pub async fn install_modlist(
                         .modlist
                         .directives
                         .iter()
-                        .map(|directive| directive.directive_size()),
+                        .map(|directive| directive.size()),
                 )
                 .sum::<u64>()
                 .pipe(|total_size| {

@@ -1,15 +1,27 @@
 use {
-    super::{try_optimize_memory_mapping, PathReadWrite},
-    crate::modlist_json::BA2DX10Entry,
+    super::{count_progress_style, try_optimize_memory_mapping, PathReadWrite},
+    crate::{
+        modlist_json::{
+            directive::create_bsa_directive::{
+                ba2::{BA2DX10Entry, BA2FileEntry, FileState},
+                Ba2,
+            },
+            type_guard::WithTypeGuard,
+        },
+        utils::MaybeWindowsPath,
+    },
     anyhow::{Context, Result},
     ba2::{
-        fo4::{ArchiveKey, File, FileReadOptions},
+        fo4::{Archive, ArchiveKey, ArchiveOptions, File, FileHeader, FileReadOptions, Format},
         Borrowed,
         CompressionResult,
         ReaderWithOptions,
     },
+    rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     std::path::PathBuf,
     tap::prelude::*,
+    tracing::info_span,
+    tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
 pub(super) struct LazyArchiveFile {
@@ -92,4 +104,94 @@ pub(super) fn create_key<'a>(extension: &str, name_hash: u32, dir_hash: u32) -> 
         })
         .map(|key_hash| key_hash.conv::<ba2::fo4::FileHash>().conv::<ArchiveKey>())
         .context("creating key")
+}
+
+pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) -> Result<()>>(
+    temp_bsa_dir: PathBuf,
+    Ba2 {
+        hash,
+        size,
+        to,
+        temp_id,
+        file_states,
+        state: WithTypeGuard { inner: state, .. },
+    }: Ba2,
+    handle_archive: F,
+) -> Result<()> {
+    let temp_id_dir = temp_bsa_dir.join(temp_id);
+    let reading_bsa_entries = info_span!("creating_bsa_entries", count=%file_states.len())
+        .entered()
+        .tap(|pb| {
+            pb.pb_set_style(&count_progress_style());
+            pb.pb_set_length(file_states.len() as _);
+        });
+    file_states
+        .into_par_iter()
+        .map(move |file_state| match file_state {
+            FileState::BA2File(BA2FileEntry {
+                dir_hash,
+                extension,
+                name_hash,
+                path,
+                ..
+            }) => temp_id_dir
+                .join(path.into_path())
+                .pipe(|path| path.open_file_read())
+                .and_then(|(_path, file)| LazyArchiveFile::new(&file, false))
+                .and_then(|file| create_key(&extension, name_hash, dir_hash).map(|key| (key, file))),
+            FileState::BA2DX10Entry(ba2_dx10_entry) => {
+                LazyArchiveFile::new_dx_entry(temp_id_dir.join(ba2_dx10_entry.path.clone().into_path()), ba2_dx10_entry.clone()).and_then(|file| {
+                    ba2_dx10_entry.pipe(
+                        |BA2DX10Entry {
+                             dir_hash,
+                             extension,
+                             name_hash,
+                             ..
+                         }| { create_key(&extension, name_hash, dir_hash).map(|key| (key, file)) },
+                    )
+                })
+            }
+        })
+        .inspect(|_| reading_bsa_entries.pb_inc(1))
+        .collect::<Result<Vec<_>>>()
+        .and_then(|entries| {
+            let building_archive = info_span!("building_archive").entered().tap(|pb| {
+                pb.pb_set_style(&count_progress_style());
+                pb.pb_set_length(entries.len() as _);
+            });
+            entries.pipe_ref(|entries| {
+                entries
+                    .par_iter()
+                    .map(|(key, file)| {
+                        file.as_archive_file().map(|file| {
+                            building_archive.pb_inc(1);
+                            (key, file)
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()
+                    .and_then(|entries| {
+                        entries
+                            .first()
+                            .map(|(_, file)| match file.header {
+                                FileHeader::GNRL => Format::GNRL,
+                                FileHeader::DX10(_) => Format::DX10,
+                                FileHeader::GNMF(_) => Format::GNMF,
+                            })
+                            .unwrap_or_default()
+                            .pipe(|format| ArchiveOptions::builder().format(format))
+                            .pipe(|options| {
+                                entries
+                                    .into_iter()
+                                    .fold(Archive::new(), |acc, (key, file)| {
+                                        acc.tap_mut(|acc| {
+                                            acc.insert(key.clone(), file);
+                                        })
+                                    })
+                                    .pipe(|archive| (archive, options.build()))
+                                    .pipe(|(archive, options)| handle_archive(&archive, options, to))
+                            })
+                    })
+                    .context("creating BA2 (fallout4/starfield) archive")
+            })
+        })
 }

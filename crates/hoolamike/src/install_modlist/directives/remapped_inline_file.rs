@@ -24,7 +24,7 @@ pub mod wabbajack_consts {
         pub(crate)  static SETTINGS_INI: &'static Path = Path::new("settings.ini");
         pub(crate)  static MO2_MOD_FOLDER_NAME: &'static Path = Path::new("mods");
         pub(crate)  static MO2_PROFILES_FOLDER_NAME: &'static Path = Path::new("profiles");
-        pub(crate)  static BSACREATION_DIR: &'static Path = Path::new("TEMP_BSA_FILES");
+        pub(crate)  static BSA_CREATION_DIR: &'static Path = Path::new("TEMP_BSA_FILES");
         pub(crate)  static KNOWN_MODIFIED_FILES: [&'static Path; 2] = [Path::new("modlist.txt"), Path::new("SkyrimPrefs.ini")];
     }
 

@@ -4,8 +4,8 @@ use {
         install_modlist::{download_cache::validate_hash, io_progress_style},
         modlist_json::{
             directive::{
+                create_bsa_directive::{CreateBSADirective, CreateBSADirectiveKind},
                 ArchiveHashPath,
-                CreateBSADirective,
                 FromArchiveDirective,
                 InlineFileDirective,
                 PatchedFromArchiveDirective,
@@ -416,7 +416,7 @@ impl DirectivesHandler {
 
         fn directive_size(d: &Directive) -> u64 {
             match d {
-                Directive::CreateBSA(directive) => directive.size,
+                Directive::CreateBSA(directive) => directive.size(),
                 Directive::FromArchive(directive) => directive.size,
                 Directive::InlineFile(directive) => directive.size,
                 Directive::PatchedFromArchive(directive) => directive.size,
@@ -437,14 +437,17 @@ impl DirectivesHandler {
             move |directive: Directive| {
                 let _kind = DirectiveKind::from(&directive);
                 match &directive {
-                    Directive::CreateBSA(CreateBSADirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
-                    Directive::FromArchive(FromArchiveDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
-                    Directive::InlineFile(InlineFileDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
-                    Directive::PatchedFromArchive(PatchedFromArchiveDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
-                    Directive::RemappedInlineFile(RemappedInlineFileDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
-                    Directive::TransformedTexture(TransformedTextureDirective { hash, size, to, .. }) => (hash.clone(), size, to.clone()),
+                    Directive::CreateBSA(create_bsa) => match create_bsa {
+                        CreateBSADirective::Bsa(CreateBSADirectiveKind { hash, size, to, .. }) => (hash.clone(), *size, to.clone()),
+                        CreateBSADirective::Ba2(CreateBSADirectiveKind { hash, size, to, .. }) => (hash.clone(), *size, to.clone()),
+                    },
+                    Directive::FromArchive(FromArchiveDirective { hash, size, to, .. }) => (hash.clone(), *size, to.clone()),
+                    Directive::InlineFile(InlineFileDirective { hash, size, to, .. }) => (hash.clone(), *size, to.clone()),
+                    Directive::PatchedFromArchive(PatchedFromArchiveDirective { hash, size, to, .. }) => (hash.clone(), *size, to.clone()),
+                    Directive::RemappedInlineFile(RemappedInlineFileDirective { hash, size, to, .. }) => (hash.clone(), *size, to.clone()),
+                    Directive::TransformedTexture(TransformedTextureDirective { hash, size, to, .. }) => (hash.clone(), *size, to.clone()),
                 }
-                .pipe(|(hash, size, to)| (hash, *size, output_directory.join(to.into_path())))
+                .pipe(|(hash, size, to)| (hash, size, output_directory.join(to.into_path())))
                 .pipe(move |(hash, size, to)| {
                     validate_hash_with_overrides(to.clone(), hash, size)
                         .map(move |res| match res {
