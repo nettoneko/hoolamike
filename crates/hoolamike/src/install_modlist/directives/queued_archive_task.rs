@@ -3,9 +3,12 @@ use {
     crate::compression::{ArchiveHandle, ProcessArchive, SeekWithTempFileExt},
     futures::{FutureExt, TryFutureExt},
     nonempty::NonEmpty,
-    std::{future::ready, path::PathBuf, sync::Arc},
+    std::{convert::identity, future::ready, path::PathBuf, sync::Arc},
     tap::prelude::*,
-    tokio::sync::{watch::error::RecvError, AcquireError, Semaphore},
+    tokio::{
+        sync::{watch::error::RecvError, AcquireError, Semaphore},
+        task::JoinHandle,
+    },
     tracing::{debug, debug_span, instrument, Instrument},
 };
 
@@ -22,10 +25,10 @@ pub enum Error {
 }
 
 impl Error {
-    fn extracting_from_archive(error: anyhow::Error) -> Self {
+    pub fn extracting_from_archive(error: anyhow::Error) -> Self {
         error.pipe(Arc::new).pipe(Self::ExtractingFromArchive)
     }
-    fn thread_crashed(error: tokio::task::JoinError) -> Self {
+    pub fn thread_crashed(error: tokio::task::JoinError) -> Self {
         error.pipe(Arc::new).pipe(Self::ThreadCrashed)
     }
 }
@@ -39,6 +42,8 @@ pub enum SourceKind {
     JustPath(PathBuf),
     CachedPath(Extracted),
 }
+
+pub mod cached_future;
 
 #[derive(Clone)]
 pub enum CacheState {
@@ -58,6 +63,11 @@ impl QueuedArchiveService {
             permits: Arc::new(Semaphore::new(concurrency)),
         })
     }
+
+    pub fn get_archive_spawn(self: Arc<Self>, archive: NonEmpty<PathBuf>) -> JoinHandle<Result<Arc<SourceKind>>> {
+        tokio::task::spawn(self.get_archive(archive))
+    }
+
     #[instrument(skip(self))]
     pub async fn get_archive(self: Arc<Self>, archive: NonEmpty<PathBuf>) -> Result<Arc<SourceKind>> {
         match self.clone().tasks.entry(archive.clone()) {
@@ -80,16 +90,19 @@ impl QueuedArchiveService {
                     l.pop().map(|i| (l, i))
                 }
 
+                let notify = tokio::sync::Notify::new().pipe(Arc::new);
+                vacant_entry.insert(notify.clone().pipe(CacheState::InProgress));
                 match popped(archive.clone()) {
                     Some((parent, archive_path)) => {
-                        let notify = tokio::sync::Notify::new().pipe(Arc::new);
-                        vacant_entry.insert(notify.clone().pipe(CacheState::InProgress));
-
                         self.clone()
                             .get_archive(parent)
                             .instrument(debug_span!("entry was not found, so scheduling creation of parent"))
                             .pipe(Box::pin)
-                            .and_then(|parent| prepare_archive(self.permits.clone(), parent, archive_path).instrument(debug_span!("preparing archive")))
+                            .and_then(|parent| {
+                                prepare_archive(self.permits.clone(), parent, archive_path)
+                                    .instrument(tracing::Span::current())
+                                    .instrument(debug_span!("preparing archive"))
+                            })
                             .map(|result| {
                                 let result = result.map(SourceKind::CachedPath).map(Arc::new);
                                 match self
@@ -106,51 +119,62 @@ impl QueuedArchiveService {
                                 result
                             })
                             .await
-                            .tap(|_finished| {
-                                debug!("notifying of ready current archive task");
-                                notify.notify_waiters();
-                            })
                     }
                     None => Ok(Arc::new(SourceKind::JustPath(archive.head))),
                 }
+                .tap(|_finished| {
+                    debug!("notifying of ready current archive task");
+                    notify.notify_waiters();
+                })
             }
         }
     }
 }
 
+#[instrument]
 async fn prepare_archive(permits: Arc<Semaphore>, source: Arc<SourceKind>, archive_path: PathBuf) -> Result<Extracted> {
     let run = tracing::Span::current();
-    tokio::task::spawn(async move {
-        permits
-            .acquire_owned()
-            .map_err(Arc::new)
-            .map_err(self::Error::AcquiringPermit)
-            .map_ok(|permit| (source, permit))
-            .and_then(|(source, permit)| {
-                tokio::task::spawn_blocking(move || {
-                    run.in_scope(|| {
-                        ArchiveHandle::guess(source.as_ref().as_ref())
-                            .map_err(self::Error::extracting_from_archive)
-                            .and_then(|mut archive| {
-                                archive
-                                    .get_handle(&archive_path)
+    tokio::task::spawn({
+        cloned![run];
+        async move {
+            permits
+                .acquire_owned()
+                .instrument(debug_span!("acquiring file permit"))
+                .map_err(Arc::new)
+                .map_err(self::Error::AcquiringPermit)
+                .map_ok(|permit| (source, permit))
+                .and_then({
+                    cloned![run];
+                    move |(source, permit)| {
+                        tokio::task::spawn_blocking(move || {
+                            run.in_scope(|| {
+                                ArchiveHandle::guess(source.as_ref().as_ref())
                                     .map_err(self::Error::extracting_from_archive)
-                                    .and_then(|mut handle| {
-                                        handle
-                                            .size()
-                                            .and_then(|size| handle.seek_with_temp_file_blocking(size, permit))
+                                    .and_then(|mut archive| {
+                                        archive
+                                            .get_handle(&archive_path)
                                             .map_err(self::Error::extracting_from_archive)
+                                            .and_then(|mut handle| {
+                                                handle
+                                                    .size()
+                                                    .and_then(|size| handle.seek_with_temp_file_blocking(size, permit))
+                                                    .map_err(self::Error::extracting_from_archive)
+                                            })
                                     })
                             })
-                    })
+                        })
+                        .map_err(self::Error::thread_crashed)
+                        .and_then(ready)
+                    }
                 })
-                .map_err(self::Error::thread_crashed)
-                .and_then(ready)
-            })
-            .await
+                .instrument(run)
+                .instrument(debug_span!("waiting for thread to finish"))
+                .await
+        }
     })
     .map_err(self::Error::thread_crashed)
     .and_then(ready)
+    .instrument(run)
     .await
 }
 

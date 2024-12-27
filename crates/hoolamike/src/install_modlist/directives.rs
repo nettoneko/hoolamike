@@ -17,7 +17,7 @@ use {
         utils::{MaybeWindowsPath, PathReadWrite},
     },
     anyhow::{Context, Result},
-    futures::{FutureExt, Stream, StreamExt, TryStreamExt},
+    futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt},
     itertools::Itertools,
     nonempty::NonEmpty,
     remapped_inline_file::RemappingContext,
@@ -198,7 +198,7 @@ fn handle_nested_archive_directives(
     concurrency: usize,
 ) -> impl Stream<Item = Result<u64>> {
     let handle_directives = tracing::Span::current();
-    let preheat = queued_archive_task::QueuedArchiveService::new(concurrency);
+    let preheat = queued_archive_task::QueuedArchiveService::new(concurrency * 100);
 
     directives
         .into_iter()
@@ -229,20 +229,27 @@ fn handle_nested_archive_directives(
                     .map(move |path| (path, directive))
             }
         })
-        .pipe(futures::stream::iter)
-        .map_ok({
-            cloned![handle_directives];
-            move |(archive, directive)| {
-                let dbg = format!("preheating archive [{archive:?}] for directive [{directive:?}]");
-                preheat
-                    .clone()
-                    .get_archive(archive)
-                    .instrument(handle_directives.clone())
-                    .map(|archive| archive.map(|archive| (archive, directive)))
-                    .map(|e| e.context(dbg))
+        .map({
+            cloned![preheat, handle_directives];
+            move |res| {
+                cloned![preheat, handle_directives];
+                res.map(move |(archive, directive)| {
+                    let dbg = format!("preheating archive [{archive:?}] for directive [{directive:?}]");
+                    preheat
+                        .clone()
+                        .get_archive_spawn(archive)
+                        .map_err(queued_archive_task::Error::thread_crashed)
+                        .and_then(ready)
+                        .instrument(handle_directives.clone())
+                        .map(|archive| archive.map(|archive| (archive, directive)))
+                        .map(|e| e.context(dbg))
+                })
             }
         })
-        .try_buffer_unordered(concurrency)
+        .collect::<Result<Vec<_>>>()
+        .pipe(ready)
+        .into_stream()
+        .try_flat_map(|e| futures::stream::iter(e).flat_map(|e| e.into_stream()))
         .map_ok(move |(preheated, directive)| match directive {
             ArchivePathDirective::TransformedTexture(transformed_texture) => manager
                 .transformed_texture
