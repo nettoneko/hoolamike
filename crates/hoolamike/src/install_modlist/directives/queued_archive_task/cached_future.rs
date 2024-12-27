@@ -1,13 +1,8 @@
 use {
-    dashmap::Entry,
-    nonempty::NonEmpty,
     std::{future::Future, sync::Arc},
     tap::prelude::*,
-    tokio::{
-        sync::{AcquireError, Semaphore},
-        task::JoinHandle,
-    },
-    tracing::{debug_span, error, instrument, trace, trace_span, warn, Instrument},
+    tokio::task::JoinHandle,
+    tracing::{debug_span, error, instrument, trace, warn, Instrument},
 };
 
 pub enum CacheState<T> {
@@ -49,12 +44,12 @@ where
     pub async fn get<F, Fut>(self: Arc<Self>, key: K, with: F) -> Arc<V>
     where
         Fut: Future<Output = V> + Send,
-        F: Fn(K) -> Fut + Clone + Send + Sync + 'static,
+        F: FnOnce(K) -> Fut + Send + 'static,
     {
-        match self.clone().tasks.entry(key.clone()) {
-            Entry::Occupied(occupied_entry) => {
+        match self.clone().tasks.get(&key).map(|r| r.clone()) {
+            Some(occupied_entry) => {
                 trace!("entry already exists");
-                match occupied_entry.into_ref().clone() {
+                match occupied_entry {
                     CacheState::Ready(already_exists) => {
                         trace!("value already cached ");
                         already_exists
@@ -67,17 +62,18 @@ where
                             .await;
                         trace!("notified of progress, checking again");
                         self.clone()
-                            .get(key.clone(), with.clone())
+                            .get(key.clone(), with)
                             .instrument(debug_span!("getting another archive because got notified"))
                             .pipe(Box::pin)
                             .await
                     }
                 }
             }
-            Entry::Vacant(vacant_entry) => {
+            None => {
                 trace!("entry does not exist, setting up notifier before starting work");
-                vacant_entry
+                self.tasks
                     .insert(
+                        key.clone(),
                         tokio::sync::Notify::new()
                             .pipe(Arc::new)
                             .clone()
@@ -85,7 +81,7 @@ where
                     )
                     .pipe(drop);
                 trace!("starting work");
-                let res = (with.clone())(key.clone()).await.pipe(Arc::new);
+                let res = (with)(key.clone()).await.pipe(Arc::new);
                 trace!("work finished");
                 match self
                     .clone()

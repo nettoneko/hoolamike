@@ -3,7 +3,13 @@ use {
     crate::compression::{ArchiveHandle, ProcessArchive, SeekWithTempFileExt},
     futures::{FutureExt, TryFutureExt},
     nonempty::NonEmpty,
-    std::{convert::identity, future::ready, path::PathBuf, sync::Arc},
+    std::{
+        convert::identity,
+        future::{ready, Future},
+        path::PathBuf,
+        pin::Pin,
+        sync::Arc,
+    },
     tap::prelude::*,
     tokio::{
         sync::{watch::error::RecvError, AcquireError, Semaphore},
@@ -46,20 +52,19 @@ pub enum SourceKind {
 pub mod cached_future;
 
 #[derive(Clone)]
-pub enum CacheState {
-    InProgress(Arc<tokio::sync::Notify>),
-    Ready(Result<Arc<SourceKind>>),
+pub struct QueuedArchiveService {
+    pub tasks: Arc<cached_future::CachedFutureQueue<NonEmpty<PathBuf>, Result<Arc<SourceKind>>>>,
+    pub permits: Arc<Semaphore>,
 }
 
-pub struct QueuedArchiveService {
-    pub tasks: dashmap::DashMap<NonEmpty<PathBuf>, CacheState>,
-    pub permits: Arc<Semaphore>,
+fn assert_send<T: Send>(t: T) -> T {
+    t
 }
 
 impl QueuedArchiveService {
     pub fn new(concurrency: usize) -> Arc<Self> {
         Arc::new(Self {
-            tasks: Default::default(),
+            tasks: cached_future::CachedFutureQueue::new(),
             permits: Arc::new(Semaphore::new(concurrency)),
         })
     }
@@ -67,67 +72,44 @@ impl QueuedArchiveService {
     pub fn get_archive_spawn(self: Arc<Self>, archive: NonEmpty<PathBuf>) -> JoinHandle<Result<Arc<SourceKind>>> {
         tokio::task::spawn(self.get_archive(archive))
     }
-
-    #[instrument(skip(self))]
-    pub async fn get_archive(self: Arc<Self>, archive: NonEmpty<PathBuf>) -> Result<Arc<SourceKind>> {
-        match self.clone().tasks.entry(archive.clone()) {
-            dashmap::Entry::Occupied(occupied_entry) => match occupied_entry.into_ref().clone() {
-                CacheState::Ready(already_exists) => already_exists,
-                CacheState::InProgress(waiting) => {
-                    waiting
-                        .notified()
-                        .instrument(debug_span!("operation in progress, awaiting it's completion"))
-                        .await;
-                    self.clone()
-                        .get_archive(archive.clone())
-                        .instrument(debug_span!("getting another archive because got notified"))
-                        .pipe(Box::pin)
-                        .await
-                }
-            },
-            dashmap::Entry::Vacant(vacant_entry) => {
-                fn popped<T>(mut l: NonEmpty<T>) -> Option<(NonEmpty<T>, T)> {
-                    l.pop().map(|i| (l, i))
-                }
-
-                let notify = tokio::sync::Notify::new().pipe(Arc::new);
-                vacant_entry.insert(notify.clone().pipe(CacheState::InProgress));
-                match popped(archive.clone()) {
-                    Some((parent, archive_path)) => {
-                        self.clone()
-                            .get_archive(parent)
-                            .instrument(debug_span!("entry was not found, so scheduling creation of parent"))
-                            .pipe(Box::pin)
-                            .and_then(|parent| {
-                                prepare_archive(self.permits.clone(), parent, archive_path)
-                                    .instrument(tracing::Span::current())
-                                    .instrument(debug_span!("preparing archive"))
-                            })
-                            .map(|result| {
-                                let result = result.map(SourceKind::CachedPath).map(Arc::new);
-                                match self
-                                    .tasks
-                                    .insert(archive, result.clone().pipe(CacheState::Ready))
-                                {
-                                    Some(CacheState::InProgress(notify)) => {
-                                        debug!("notifying of ready parent archive task");
-                                        notify.notify_waiters()
-                                    }
-                                    Some(CacheState::Ready(already_exists)) => tracing::error!(?already_exists, "the work was duplicated?"),
-                                    None => unreachable!("nobody is waiting for the task?"),
-                                };
-                                result
-                            })
-                            .await
-                    }
-                    None => Ok(Arc::new(SourceKind::JustPath(archive.head))),
-                }
-                .tap(|_finished| {
-                    debug!("notifying of ready current archive task");
-                    notify.notify_waiters();
-                })
-            }
+    async fn init_archive(self: Arc<Self>, archive_path: NonEmpty<PathBuf>) -> Result<SourceKind> {
+        fn popped<T>(mut l: NonEmpty<T>) -> Option<(NonEmpty<T>, T)> {
+            l.pop().map(|i| (l, i))
         }
+        match popped(archive_path.clone()) {
+            Some((parent, archive_path)) => {
+                self.clone()
+                    .pipe(assert_send)
+                    .get_archive(parent)
+                    .instrument(debug_span!("entry was not found, so scheduling creation of parent"))
+                    .and_then(|parent| prepare_archive(self.permits.clone(), parent, archive_path))
+                    .map_ok(SourceKind::CachedPath)
+                    .await
+            }
+            None => Ok(SourceKind::JustPath(archive_path.head)),
+        }
+    }
+    #[instrument(skip(self))]
+    pub async fn get_archive(self: Arc<Self>, archive_path: NonEmpty<PathBuf>) -> Result<Arc<SourceKind>> {
+        let queue = self.clone();
+        tokio::task::spawn(async move {
+            cloned![queue];
+            self.tasks
+                .clone()
+                .get(archive_path, {
+                    cloned![queue];
+                    move |archive_path| {
+                        cloned![queue];
+                        queue.init_archive(archive_path).map_ok(Arc::new)
+                    }
+                })
+                .map(|r| r.pipe_as_ref(|r| r.clone()))
+                .await
+        })
+        .pipe(|fut| assert_send(fut))
+        .await
+        .map_err(self::Error::thread_crashed)
+        .and_then(identity)
     }
 }
 
