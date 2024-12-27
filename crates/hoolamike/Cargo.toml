@@ -61,6 +61,7 @@ tabled.workspace = true
 tap.workspace = true
 tempfile.workspace = true
 test-log.workspace = true
+thiserror = "2.0.9"
 tokio.workspace = true
 tracing.workspace = true
 tracing-indicatif = "0.3.8"

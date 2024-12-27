@@ -91,18 +91,18 @@ impl<T: AsRef<std::path::Path>> T {
 }
 
 #[derive(derive_more::Display, Debug, Clone)]
-pub(crate) struct ArcError(Arc<anyhow::Error>);
+pub struct ArcError(Arc<anyhow::Error>);
 
-pub(crate) type ArcResult<T> = std::result::Result<T, ArcError>;
+pub type ArcResult<T> = std::result::Result<T, ArcError>;
 
-#[extension_traits::extension(pub(crate) trait AnyhowArcResultExt)]
+#[extension_traits::extension(pub trait AnyhowArcResultExt)]
 impl<T> anyhow::Result<T> {
     fn arced(self) -> ArcResult<T> {
         self.map_err(Arc::new).map_err(ArcError)
     }
 }
 
-#[extension_traits::extension(pub(crate) trait ArcResultExt)]
+#[extension_traits::extension(pub trait ArcResultExt)]
 impl<T> ArcResult<T> {
     fn into_inner_err(self) -> anyhow::Result<T> {
         self.map_err(|e| Arc::try_unwrap(e.0.clone()).unwrap_or_else(|_| anyhow::anyhow!("{e:#?}")))

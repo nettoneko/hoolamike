@@ -17,8 +17,6 @@ use {
 #[derive(Clone, derivative::Derivative)]
 #[derivative(Debug)]
 pub struct FromArchiveHandler {
-    #[derivative(Debug = "ignore")]
-    pub nested_archive_service: Arc<NestedArchivesService>,
     pub output_directory: PathBuf,
 }
 
@@ -48,6 +46,7 @@ impl FromArchiveHandler {
     #[tracing::instrument(skip(self), level = "INFO")]
     pub async fn handle(
         self,
+        source_file: Arc<queued_archive_task::SourceKind>,
         FromArchiveDirective {
             hash,
             size,
@@ -57,14 +56,6 @@ impl FromArchiveHandler {
     ) -> Result<u64> {
         tokio::task::yield_now().await;
         let output_path = self.output_directory.join(to.into_path());
-
-        let source_file = self
-            .nested_archive_service
-            .clone()
-            .get(archive_hash_path.clone())
-            .instrument(info_span!("obtaining_nested_archive", ?archive_hash_path))
-            .await
-            .context("could not get a handle to archive")?;
 
         tokio::task::spawn_blocking(move || -> Result<_> {
             let perform_copy = move |from: &mut dyn Read, to: &mut dyn Write, target_path: PathBuf| {

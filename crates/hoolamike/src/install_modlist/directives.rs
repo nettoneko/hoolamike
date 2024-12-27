@@ -14,17 +14,16 @@ use {
             },
             DirectiveKind,
         },
-        utils::{AnyhowArcResultExt, ArcResult, ArcResultExt, PathReadWrite},
+        utils::{MaybeWindowsPath, PathReadWrite},
     },
     anyhow::{Context, Result},
-    futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt},
+    futures::{FutureExt, Stream, StreamExt, TryStreamExt},
     itertools::Itertools,
-    nested_archive_manager::{max_open_files, NestedArchivesService},
+    nonempty::NonEmpty,
     remapped_inline_file::RemappingContext,
     std::{
         collections::BTreeMap,
         future::ready,
-        ops::Div,
         path::{Path, PathBuf},
         sync::Arc,
     },
@@ -74,7 +73,7 @@ pub struct DirectivesHandler {
     pub patched_from_archive: patched_from_archive::PatchedFromArchiveHandler,
     pub remapped_inline_file: remapped_inline_file::RemappedInlineFileHandler,
     pub transformed_texture: transformed_texture::TransformedTextureHandler,
-    pub nested_archive_manager: Arc<NestedArchivesService>,
+    pub download_summary: DownloadSummary,
 }
 
 #[derive(Debug, Clone)]
@@ -167,7 +166,7 @@ pub async fn validate_hash_with_overrides(path: PathBuf, hash: String, size: u64
     }
 }
 
-#[derive(derive_more::From, Clone)]
+#[derive(derive_more::From, Clone, Debug)]
 enum ArchivePathDirective {
     FromArchive(FromArchiveDirective),
     PatchedFromArchive(PatchedFromArchiveDirective),
@@ -175,13 +174,13 @@ enum ArchivePathDirective {
 }
 
 impl ArchivePathDirective {
-    fn directive_size(&self) -> u64 {
-        match self {
-            ArchivePathDirective::FromArchive(d) => d.size,
-            ArchivePathDirective::PatchedFromArchive(d) => d.size,
-            ArchivePathDirective::TransformedTexture(d) => d.size,
-        }
-    }
+    // fn directive_size(&self) -> u64 {
+    //     match self {
+    //         ArchivePathDirective::FromArchive(d) => d.size,
+    //         ArchivePathDirective::PatchedFromArchive(d) => d.size,
+    //         ArchivePathDirective::TransformedTexture(d) => d.size,
+    //     }
+    // }
     fn archive_path(&self) -> &ArchiveHashPath {
         match self {
             ArchivePathDirective::FromArchive(f) => &f.archive_hash_path,
@@ -190,168 +189,247 @@ impl ArchivePathDirective {
         }
     }
 }
+pub mod queued_archive_task;
 
-/// it's dirty as hell but saves disk space
 fn handle_nested_archive_directives(
     manager: Arc<DirectivesHandler>,
-    nested_archive_manager: Arc<NestedArchivesService>,
+    summary: DownloadSummary,
     directives: Vec<ArchivePathDirective>,
     concurrency: usize,
-) -> impl Stream<Item = ArcResult<u64>> {
-    pub const CHUNK_SIZE_BYTES: u64 = 64 * 1024 * 1024;
-    let handle_directives: &'static _ = tracing::Span::current().pipe(Box::new).pipe(Box::leak);
+) -> impl Stream<Item = Result<u64>> {
+    let handle_directives = tracing::Span::current();
+    let preheat = queued_archive_task::QueuedArchiveService::new(concurrency);
+
     directives
         .into_iter()
-        .sorted_unstable_by_key(|a| a.archive_path().clone())
-        .chunk_by(|a| a.archive_path().clone().parent().map(|(path, _)| path))
-        .into_iter()
-        .map(|(parent_archive, chunk)| (parent_archive, chunk.into_iter().collect_vec()))
-        .collect_vec()
-        .into_iter()
-        .fold(vec![vec![]], |acc: Vec<Vec<(_, Vec<ArchivePathDirective>)>>, next| {
-            acc.tap_mut(|acc| {
-                if acc
-                    .last()
-                    .unwrap()
-                    .iter()
-                    .map(|(_, d)| d.iter().map(|d| d.directive_size()).sum::<u64>())
-                    .sum::<u64>()
-                    > CHUNK_SIZE_BYTES
-                {
-                    acc.push(vec![]);
-                }
-                acc.last_mut().unwrap().push(next);
-            })
-        })
-        .into_iter()
-        .collect_vec()
-        .pipe(futures::stream::iter)
-        .pipe(Box::pin)
-        .flat_map_unordered(concurrency.div(4).max(1), {
-            cloned![nested_archive_manager];
-            cloned![manager];
-            move |chunk| {
-                let preheat = {
-                    cloned![nested_archive_manager];
-                    cloned![handle_directives];
-                    move |parent_archive: ArchiveHashPath| {
-                        cloned![nested_archive_manager];
-                        {
-                            cloned![parent_archive];
-                            cloned![handle_directives];
-                            async move {
-                                nested_archive_manager
-                                    .clone()
-                                    .preheat(parent_archive.clone())
-                                    .boxed()
-                                    .instrument(handle_directives.clone())
-                                    .await
-                            }
-                            .boxed()
-                        }
-                        .instrument(info_span!("preheating_archive", ?parent_archive))
-                    }
-                };
-                let cleanup = {
-                    cloned![nested_archive_manager];
-                    move |parent_archive: ArchiveHashPath| {
-                        cloned![nested_archive_manager];
-                        {
-                            cloned![parent_archive];
-
-                            async move {
-                                nested_archive_manager
-                                    .clone()
-                                    .cleanup(parent_archive.clone())
-                                    .instrument(handle_directives.clone())
-                                    .await
-                            }
-                        }
-                        .instrument(info_span!("cleaning_up", ?parent_archive))
-                    }
-                };
-
-                let parent_chunk = chunk
-                    .iter()
-                    .filter_map(|(parent, _)| parent.clone())
-                    .collect_vec();
-                let preheat_all = {
-                    cloned![parent_chunk];
-                    cloned![preheat];
-                    move || async move {
-                        parent_chunk
-                            .pipe(futures::stream::iter)
-                            .map(preheat.clone())
-                            .buffer_unordered(concurrency.div(4).max(1))
-                            .try_collect::<()>()
-                            .await
-                            .context("preheating chunk")
-                            .arced()
-                    }
-                };
-                let cleanup_all = {
-                    cloned![parent_chunk];
-                    cloned![cleanup];
-                    move || async move {
-                        parent_chunk
-                            .pipe(futures::stream::iter)
-                            .map(cleanup.clone())
-                            .buffer_unordered(concurrency.div(4).max(1))
-                            .collect::<()>()
-                            .map(anyhow::Ok)
-                            .await
-                            .context("preheating chunk")
-                            .arced()
-                    }
-                };
-                preheat_all()
-                    .boxed()
-                    .into_stream()
-                    .try_flat_map({
-                        cloned![manager, chunk];
-                        move |_| {
-                            chunk
-                                .pipe(futures::stream::iter)
-                                .flat_map(|(_, chunk)| futures::stream::iter(chunk))
-                                .map(move |directive| match directive {
-                                    ArchivePathDirective::TransformedTexture(transformed_texture) => manager
-                                        .transformed_texture
-                                        .clone()
-                                        .handle(transformed_texture.clone())
-                                        .instrument(handle_directives.clone())
-                                        .map(move |res| {
-                                            res.with_context(|| format!("handling directive: {transformed_texture:#?}"))
-                                                .arced()
-                                        })
-                                        .boxed(),
-                                    ArchivePathDirective::FromArchive(from_archive) => manager
-                                        .from_archive
-                                        .clone()
-                                        .handle(from_archive.clone())
-                                        .instrument(handle_directives.clone())
-                                        .map(move |res| {
-                                            res.with_context(|| format!("handling directive: {from_archive:#?}"))
-                                                .arced()
-                                        })
-                                        .boxed(),
-                                    ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => manager
-                                        .patched_from_archive
-                                        .clone()
-                                        .handle(patched_from_archive_directive.clone())
-                                        .instrument(handle_directives.clone())
-                                        .map(move |res| {
-                                            res.with_context(|| format!("handling directive: {patched_from_archive_directive:#?}"))
-                                                .arced()
-                                        })
-                                        .boxed(),
+        .map({
+            cloned![summary];
+            move |directive| {
+                directive
+                    .archive_path()
+                    .clone()
+                    .pipe(|archive_path| {
+                        archive_path.source_hash.pipe_ref(|source_hash| {
+                            summary
+                                .get(source_hash)
+                                .with_context(|| format!("no archive for hash [{source_hash}]"))
+                                .map(|file| NonEmpty::new(file.inner.clone()))
+                                .map(|path| {
+                                    path.tap_mut(|path| {
+                                        path.extend(
+                                            archive_path
+                                                .path
+                                                .into_iter()
+                                                .map(MaybeWindowsPath::into_path),
+                                        )
+                                    })
                                 })
-                                .buffered(concurrency.div(2).max(1))
-                        }
+                        })
                     })
-                    .chain(cleanup_all().boxed().map_ok(|_| 0).into_stream())
+                    .map(move |path| (path, directive))
             }
         })
+        .pipe(futures::stream::iter)
+        .map_ok({
+            cloned![handle_directives];
+            move |(archive, directive)| {
+                let dbg = format!("preheating archive [{archive:?}] for directive [{directive:?}]");
+                preheat
+                    .clone()
+                    .get_archive(archive)
+                    .instrument(handle_directives.clone())
+                    .map(|archive| archive.map(|archive| (archive, directive)))
+                    .map(|e| e.context(dbg))
+            }
+        })
+        .try_buffer_unordered(concurrency)
+        .map_ok(move |(preheated, directive)| match directive {
+            ArchivePathDirective::TransformedTexture(transformed_texture) => manager
+                .transformed_texture
+                .clone()
+                .handle(preheated, transformed_texture.clone())
+                .instrument(handle_directives.clone())
+                .map(move |res| res.with_context(|| format!("handling directive: {transformed_texture:#?}")))
+                .boxed(),
+            ArchivePathDirective::FromArchive(from_archive) => manager
+                .from_archive
+                .clone()
+                .handle(preheated, from_archive.clone())
+                .instrument(handle_directives.clone())
+                .map(move |res| res.with_context(|| format!("handling directive: {from_archive:#?}")))
+                .boxed(),
+            ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => manager
+                .patched_from_archive
+                .clone()
+                .handle(preheated, patched_from_archive_directive.clone())
+                .instrument(handle_directives.clone())
+                .map(move |res| res.with_context(|| format!("handling directive: {patched_from_archive_directive:#?}")))
+                .boxed(),
+        })
+        .try_buffer_unordered(concurrency)
 }
+
+// /// it's dirty as hell but saves disk space
+// fn handle_nested_archive_directives(
+//     manager: Arc<DirectivesHandler>,
+//     nested_archive_manager: Arc<NestedArchivesService>,
+//     directives: Vec<ArchivePathDirective>,
+//     concurrency: usize,
+// ) -> impl Stream<Item = ArcResult<u64>> {
+//     pub const CHUNK_SIZE_BYTES: u64 = 64 * 1024 * 1024;
+//     let handle_directives: &'static _ = tracing::Span::current().pipe(Box::new).pipe(Box::leak);
+//     directives
+//         .into_iter()
+//         .sorted_unstable_by_key(|a| a.archive_path().clone())
+//         .chunk_by(|a| a.archive_path().clone().parent().map(|(path, _)| path))
+//         .into_iter()
+//         .map(|(parent_archive, chunk)| (parent_archive, chunk.into_iter().collect_vec()))
+//         .collect_vec()
+//         .into_iter()
+//         .fold(vec![vec![]], |acc: Vec<Vec<(_, Vec<ArchivePathDirective>)>>, next| {
+//             acc.tap_mut(|acc| {
+//                 if acc
+//                     .last()
+//                     .unwrap()
+//                     .iter()
+//                     .map(|(_, d)| d.iter().map(|d| d.directive_size()).sum::<u64>())
+//                     .sum::<u64>()
+//                     > CHUNK_SIZE_BYTES
+//                 {
+//                     acc.push(vec![]);
+//                 }
+//                 acc.last_mut().unwrap().push(next);
+//             })
+//         })
+//         .into_iter()
+//         .collect_vec()
+//         .pipe(futures::stream::iter)
+//         .pipe(Box::pin)
+//         .flat_map_unordered(concurrency.div(4).max(1), {
+//             cloned![nested_archive_manager];
+//             cloned![manager];
+//             move |chunk| {
+//                 let preheat = {
+//                     cloned![nested_archive_manager];
+//                     cloned![handle_directives];
+//                     move |parent_archive: ArchiveHashPath| {
+//                         cloned![nested_archive_manager];
+//                         {
+//                             cloned![parent_archive];
+//                             cloned![handle_directives];
+//                             async move {
+//                                 nested_archive_manager
+//                                     .clone()
+//                                     .preheat(parent_archive.clone())
+//                                     .boxed()
+//                                     .instrument(handle_directives.clone())
+//                                     .await
+//                             }
+//                             .boxed()
+//                         }
+//                         .instrument(info_span!("preheating_archive", ?parent_archive))
+//                     }
+//                 };
+//                 let cleanup = {
+//                     cloned![nested_archive_manager];
+//                     move |parent_archive: ArchiveHashPath| {
+//                         cloned![nested_archive_manager];
+//                         {
+//                             cloned![parent_archive];
+
+//                             async move {
+//                                 nested_archive_manager
+//                                     .clone()
+//                                     .cleanup(parent_archive.clone())
+//                                     .instrument(handle_directives.clone())
+//                                     .await
+//                             }
+//                         }
+//                         .instrument(info_span!("cleaning_up", ?parent_archive))
+//                     }
+//                 };
+
+//                 let parent_chunk = chunk
+//                     .iter()
+//                     .filter_map(|(parent, _)| parent.clone())
+//                     .collect_vec();
+//                 let preheat_all = {
+//                     cloned![parent_chunk];
+//                     cloned![preheat];
+//                     move || async move {
+//                         parent_chunk
+//                             .pipe(futures::stream::iter)
+//                             .map(preheat.clone())
+//                             .buffer_unordered(concurrency.div(4).max(1))
+//                             .try_collect::<()>()
+//                             .await
+//                             .context("preheating chunk")
+//                             .arced()
+//                     }
+//                 };
+//                 let cleanup_all = {
+//                     cloned![parent_chunk];
+//                     cloned![cleanup];
+//                     move || async move {
+//                         parent_chunk
+//                             .pipe(futures::stream::iter)
+//                             .map(cleanup.clone())
+//                             .buffer_unordered(concurrency.div(4).max(1))
+//                             .collect::<()>()
+//                             .map(anyhow::Ok)
+//                             .await
+//                             .context("preheating chunk")
+//                             .arced()
+//                     }
+//                 };
+//                 preheat_all()
+//                     .boxed()
+//                     .into_stream()
+//                     .try_flat_map({
+//                         cloned![manager, chunk];
+//                         move |_| {
+//                             chunk
+//                                 .pipe(futures::stream::iter)
+//                                 .flat_map(|(_, chunk)| futures::stream::iter(chunk))
+//                                 .map(move |directive| match directive {
+//                                     ArchivePathDirective::TransformedTexture(transformed_texture) => manager
+//                                         .transformed_texture
+//                                         .clone()
+//                                         .handle(transformed_texture.clone())
+//                                         .instrument(handle_directives.clone())
+//                                         .map(move |res| {
+//                                             res.with_context(|| format!("handling directive: {transformed_texture:#?}"))
+//                                                 .arced()
+//                                         })
+//                                         .boxed(),
+//                                     ArchivePathDirective::FromArchive(from_archive) => manager
+//                                         .from_archive
+//                                         .clone()
+//                                         .handle(from_archive.clone())
+//                                         .instrument(handle_directives.clone())
+//                                         .map(move |res| {
+//                                             res.with_context(|| format!("handling directive: {from_archive:#?}"))
+//                                                 .arced()
+//                                         })
+//                                         .boxed(),
+//                                     ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => manager
+//                                         .patched_from_archive
+//                                         .clone()
+//                                         .handle(patched_from_archive_directive.clone())
+//                                         .instrument(handle_directives.clone())
+//                                         .map(move |res| {
+//                                             res.with_context(|| format!("handling directive: {patched_from_archive_directive:#?}"))
+//                                                 .arced()
+//                                         })
+//                                         .boxed(),
+//                                 })
+//                                 .buffered(concurrency.div(2).max(1))
+//                         }
+//                     })
+//                     .chain(cleanup_all().boxed().map_ok(|_| 0).into_stream())
+//             }
+//         })
+// }
 
 impl DirectivesHandler {
     #[allow(clippy::new_without_default)]
@@ -368,7 +446,6 @@ impl DirectivesHandler {
             .collect::<BTreeMap<_, _>>()
             .pipe(Arc::new);
 
-        let nested_archive_service = NestedArchivesService::new(download_summary.clone(), max_open_files()).pipe(Arc::new);
         Self {
             config,
             create_bsa: create_bsa::CreateBSAHandler {
@@ -376,7 +453,6 @@ impl DirectivesHandler {
             },
             from_archive: from_archive::FromArchiveHandler {
                 output_directory: output_directory.clone(),
-                nested_archive_service: nested_archive_service.clone(),
             },
             inline_file: inline_file::InlineFileHandler {
                 wabbajack_file: wabbajack_file.clone(),
@@ -385,7 +461,6 @@ impl DirectivesHandler {
             patched_from_archive: patched_from_archive::PatchedFromArchiveHandler {
                 output_directory: output_directory.clone(),
                 wabbajack_file: wabbajack_file.clone(),
-                nested_archive_service: nested_archive_service.clone(),
             },
             remapped_inline_file: remapped_inline_file::RemappedInlineFileHandler {
                 remapping_context: Arc::new(RemappingContext {
@@ -397,9 +472,8 @@ impl DirectivesHandler {
             },
             transformed_texture: transformed_texture::TransformedTextureHandler {
                 output_directory: output_directory.clone(),
-                nested_archive_service: nested_archive_service.clone(),
             },
-            nested_archive_manager: nested_archive_service,
+            download_summary,
         }
     }
 
@@ -424,9 +498,8 @@ impl DirectivesHandler {
                 Directive::TransformedTexture(directive) => directive.size,
             }
         }
-
+        let download_summary = self.download_summary.clone();
         let manager = self.clone();
-        let nested_archive_manager = self.nested_archive_manager.clone();
         enum DirectiveStatus {
             Completed(u64),
             NeedsRebuild { reason: anyhow::Error, directive: Directive },
@@ -549,11 +622,9 @@ impl DirectivesHandler {
                                 )
                                 .collect_vec()
                                 .pipe(|directives| {
-                                    handle_directives.in_scope(|| {
-                                        handle_nested_archive_directives(manager.clone(), nested_archive_manager.clone(), directives, concurrency())
-                                    })
-                                })
-                                .map(|r| r.into_inner_err()),
+                                    handle_directives
+                                        .in_scope(|| handle_nested_archive_directives(manager.clone(), download_summary.clone(), directives, concurrency()))
+                                }),
                         )
                         .chain(remapped_inline_file.pipe(futures::stream::iter).then({
                             cloned![manager];
