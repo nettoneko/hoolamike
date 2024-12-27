@@ -26,7 +26,6 @@ impl<T> Clone for CacheState<T> {
 
 pub struct CachedFutureQueue<K, V> {
     pub tasks: dashmap::DashMap<K, CacheState<V>>,
-    pub permits: Arc<Semaphore>,
 }
 
 impl<K, V> CachedFutureQueue<K, V>
@@ -34,11 +33,8 @@ where
     K: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static,
     V: Send + Sync + 'static,
 {
-    pub fn new(concurrency: usize) -> Arc<Self> {
-        Arc::new(Self {
-            tasks: Default::default(),
-            permits: Arc::new(Semaphore::new(concurrency)),
-        })
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self { tasks: Default::default() })
     }
 
     pub fn get_spawn<F, Fut>(self: Arc<Self>, key: K, with: F) -> JoinHandle<Arc<V>>
@@ -80,12 +76,14 @@ where
             }
             Entry::Vacant(vacant_entry) => {
                 trace!("entry does not exist, setting up notifier before starting work");
-                vacant_entry.insert(
-                    tokio::sync::Notify::new()
-                        .pipe(Arc::new)
-                        .clone()
-                        .pipe(CacheState::InProgress),
-                );
+                vacant_entry
+                    .insert(
+                        tokio::sync::Notify::new()
+                            .pipe(Arc::new)
+                            .clone()
+                            .pipe(CacheState::InProgress),
+                    )
+                    .pipe(drop);
                 trace!("starting work");
                 let res = (with.clone())(key.clone()).await.pipe(Arc::new);
                 trace!("work finished");
@@ -122,7 +120,7 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn test_simple() -> anyhow::Result<()> {
-        let queue = CachedFutureQueue::new(32);
+        let queue = CachedFutureQueue::new();
         let slow_times_two = |num| async move {
             info!("sleeping for 100ms");
             sleep(Duration::from_millis(100)).await;
