@@ -1,7 +1,6 @@
 use {
-    super::nested_archive_manager::WithPermit,
     crate::compression::{ArchiveHandle, ProcessArchive, SeekWithTempFileExt},
-    futures::{FutureExt, TryFutureExt},
+    futures::TryFutureExt,
     nonempty::NonEmpty,
     std::{convert::identity, future::ready, path::PathBuf, sync::Arc},
     tap::prelude::*,
@@ -20,6 +19,12 @@ pub enum Error {
     ExtractingFromArchive(#[source] Arc<anyhow::Error>),
     #[error("thread crashed")]
     ThreadCrashed(#[source] Arc<tokio::task::JoinError>),
+    #[error("Cached future task failed")]
+    CachedFutureFailed(
+        #[source]
+        #[from]
+        tokio_cached_future::ArcJoinError,
+    ),
     #[error("could not acquire permit")]
     AcquiringPermit(#[source] Arc<AcquireError>),
 }
@@ -43,22 +48,16 @@ pub enum SourceKind {
     CachedPath(Extracted),
 }
 
-pub mod cached_future;
-
 #[derive(Clone)]
 pub struct QueuedArchiveService {
-    pub tasks: Arc<cached_future::CachedFutureQueue<NonEmpty<PathBuf>, Result<Arc<SourceKind>>>>,
+    pub tasks: Arc<tokio_cached_future::CachedFutureQueue<NonEmpty<PathBuf>, Result<Arc<SourceKind>>>>,
     pub permits: Arc<Semaphore>,
-}
-
-fn assert_send<T: Send>(t: T) -> T {
-    t
 }
 
 impl QueuedArchiveService {
     pub fn new(concurrency: usize) -> Arc<Self> {
         Arc::new(Self {
-            tasks: cached_future::CachedFutureQueue::new(),
+            tasks: tokio_cached_future::CachedFutureQueue::new(),
             permits: Arc::new(Semaphore::new(concurrency)),
         })
     }
@@ -66,6 +65,7 @@ impl QueuedArchiveService {
     pub fn get_archive_spawn(self: Arc<Self>, archive: NonEmpty<PathBuf>) -> JoinHandle<Result<Arc<SourceKind>>> {
         tokio::task::spawn(self.get_archive(archive))
     }
+
     #[async_recursion::async_recursion]
     async fn init_archive(self: Arc<Self>, archive_path: NonEmpty<PathBuf>) -> Result<SourceKind> {
         fn popped<T>(mut l: NonEmpty<T>) -> Option<(NonEmpty<T>, T)> {
@@ -103,7 +103,8 @@ impl QueuedArchiveService {
                     }
                 })
                 .pipe(Box::pin)
-                .map(|r| r.pipe_as_ref(|r| r.clone()))
+                .map_err(self::Error::from)
+                .and_then(|r| r.pipe_as_ref(|r| r.clone()).pipe(ready))
                 .await
         })
         .pipe(Box::pin)
