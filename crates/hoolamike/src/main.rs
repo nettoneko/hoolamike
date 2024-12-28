@@ -27,6 +27,9 @@ struct Cli {
     hoolamike_config: PathBuf,
     #[command(subcommand)]
     command: Commands,
+    /// generates a flamegraph, useful for performance testing (SLOW!)
+    #[arg(long)]
+    generate_flamegraph: bool,
 }
 
 #[derive(clap::Args, Default)]
@@ -88,92 +91,67 @@ pub mod modlist_data;
 pub mod modlist_json;
 pub mod octadiff_reader;
 pub mod progress_bars_v2;
-pub mod wabbajack_file {
-    use {
-        crate::{
-            compression::ProcessArchive,
-            install_modlist::directives::{WabbajackFileHandle, WabbajackFileHandleExt},
-            progress_bars_v2::IndicatifWrapIoExt,
-        },
-        anyhow::{Context, Result},
-        std::path::{Path, PathBuf},
-    };
-
-    #[derive(Debug)]
-    pub struct WabbajackFile {
-        pub wabbajack_file_path: PathBuf,
-        pub wabbajack_entries: Vec<PathBuf>,
-        pub modlist: super::modlist_json::Modlist,
-    }
-
-    const MODLIST_JSON_FILENAME: &str = "modlist";
-
-    impl WabbajackFile {
-        #[tracing::instrument]
-        pub fn load_wabbajack_file(at_path: PathBuf) -> Result<(WabbajackFileHandle, Self)> {
-            crate::compression::wrapped_7zip::WRAPPED_7ZIP
-                .with(|w| w.open_file(&at_path))
-                .context("reading archive")
-                .and_then(|mut archive| {
-                    archive.list_paths().and_then(|entries| {
-                        archive
-                            .get_handle(Path::new(MODLIST_JSON_FILENAME))
-                            .context("looking up file by name")
-                            .and_then(|handle| {
-                                serde_json::from_reader::<_, crate::modlist_json::Modlist>(&mut tracing::Span::current().wrap_read(0, handle))
-                                    .context("reading archive contents")
-                            })
-                            .with_context(|| format!("reading [{MODLIST_JSON_FILENAME}]"))
-                            .map(|modlist| Self {
-                                wabbajack_file_path: at_path,
-                                wabbajack_entries: entries,
-                                modlist,
-                            })
-                            .map(|data| (WabbajackFileHandle::from_archive(archive), data))
-                    })
-                })
-        }
-    }
-}
+pub mod wabbajack_file;
 
 #[allow(unused_imports)]
-fn setup_logging() {
+fn setup_logging(generate_flamegraph: bool) -> Option<impl Drop> {
     use {
         tracing_indicatif::IndicatifLayer,
         tracing_subscriber::{fmt, layer::SubscriberExt, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter},
     };
-    let indicatif_layer = console::Term::stdout()
-        .size_checked()
-        .map(|(_width, height)| height)
-        .unwrap_or(16)
-        .div(2)
-        .pipe(|half_height| {
-            IndicatifLayer::new()
-                .with_max_progress_bars(
-                    half_height as _,
-                    Some(indicatif::ProgressStyle::with_template("...and {pending_progress_bars} more not shown above.").expect("bad footer template")),
-                )
-                .with_tick_settings(tracing_indicatif::TickSettings {
-                    term_draw_hz: 4,
-                    default_tick_interval: Some(std::time::Duration::from_millis(250)),
-                    footer_tick_interval: None,
-                    ..Default::default()
-                })
-        });
-    // let indicatif_layer = ;
-    let subscriber = tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::from_str("info").unwrap()))
-        .with(tracing_subscriber::fmt::layer().with_writer(indicatif_layer.get_stderr_writer()))
-        .with(indicatif_layer);
-    tracing::subscriber::set_global_default(subscriber)
-        .context("Unable to set a global subscriber")
-        .expect("logging failed");
+    match generate_flamegraph {
+        true => {
+            let fmt_layer = fmt::Layer::default();
+
+            let (flame_layer, guard) = tracing_flame::FlameLayer::with_file("./tracing.folded").unwrap();
+
+            let subscriber = tracing_subscriber::Registry::default()
+                .with(fmt_layer)
+                .with(flame_layer);
+
+            tracing::subscriber::set_global_default(subscriber).expect("Could not set global default");
+            Some(guard)
+        }
+        false => {
+            let indicatif_layer = console::Term::stdout()
+                .size_checked()
+                .map(|(_width, height)| height)
+                .unwrap_or(16)
+                .div(2)
+                .pipe(|half_height| {
+                    IndicatifLayer::new()
+                        .with_max_progress_bars(
+                            half_height as _,
+                            Some(indicatif::ProgressStyle::with_template("...and {pending_progress_bars} more not shown above.").expect("bad footer template")),
+                        )
+                        .with_tick_settings(tracing_indicatif::TickSettings {
+                            term_draw_hz: 4,
+                            default_tick_interval: Some(std::time::Duration::from_millis(250)),
+                            footer_tick_interval: None,
+                            ..Default::default()
+                        })
+                });
+            // let indicatif_layer = ;
+            let subscriber = tracing_subscriber::registry()
+                .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::from_str("info").unwrap()))
+                .with(tracing_subscriber::fmt::layer().with_writer(indicatif_layer.get_stderr_writer()))
+                .with(indicatif_layer);
+            tracing::subscriber::set_global_default(subscriber)
+                .context("Unable to set a global subscriber")
+                .expect("logging failed");
+            None
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    setup_logging();
-    let Cli { command, hoolamike_config } = Cli::parse();
+    let Cli {
+        command,
+        hoolamike_config,
+        generate_flamegraph,
+    } = Cli::parse();
+    let _guard = setup_logging(generate_flamegraph);
 
     match command {
         Commands::ValidateModlist { path } => tokio::fs::read_to_string(&path)

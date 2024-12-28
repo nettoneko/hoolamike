@@ -26,7 +26,7 @@ use {
     std::{
         collections::BTreeMap,
         future::ready,
-        ops::{Div, Mul},
+        ops::Mul,
         path::{Path, PathBuf},
         sync::Arc,
     },
@@ -51,6 +51,7 @@ pub mod inline_file;
 pub mod patched_from_archive;
 pub mod remapped_inline_file;
 pub mod transformed_texture;
+
 use crate::modlist_json::Directive;
 
 pub type WabbajackFileHandle = Arc<crate::compression::wrapped_7zip::ArchiveHandle>;
@@ -205,52 +206,77 @@ fn handle_nested_archive_directives(
             });
         })
         .tap(|directives| {
-            // preheat
-            directives
-                .iter()
-                .map(|directive| {
-                    directive.archive_path().clone().pipe(|path| {
-                        manager
-                            .download_summary
-                            .resolve_archive_path(path.clone())
-                            .map(|path| (path, directive.directive_size()))
-                    })
-                })
-                .collect::<Result<Vec<_>>>()
-                .context("not all directives can be handled")
-                .map(|paths| {
-                    paths
-                        .into_iter()
-                        .filter_map(|(archive_path, size)| {
-                            archive_path
-                                .len()
-                                .gt(&2)
-                                .then(|| archive_path.tap_mut(|p| p.truncate(2)))
-                                .map(|subpath| (subpath, size))
+            let preheat_subpaths_of_len = |len: usize| {
+                // preheat
+                directives
+                    .iter()
+                    .map(|directive| {
+                        directive.archive_path().clone().pipe(|path| {
+                            manager
+                                .download_summary
+                                .resolve_archive_path(path.clone())
+                                .map(|path| (path, directive.directive_size()))
                         })
-                        .collect_vec()
-                        .pipe(|truncated| {
-                            let total_size = truncated.iter().map(|(_, size)| size).sum::<u64>();
-                            let _span = info_span!("preheating")
-                                .tap_mut(|pb| {
-                                    pb.pb_set_message(&format!("preheating {} archives", truncated.len()));
-                                    pb.pb_set_length(total_size);
+                    })
+                    .filter_map(|res| {
+                        res.tap_err(|reason| {
+                            tracing::error!(?reason, "the the program will continue, but it will likely not finish");
+                        })
+                        .ok()
+                    })
+                    .collect_vec()
+                    .pipe(|paths| {
+                        cloned![archive_extraction_queue];
+                        async move {
+                            tokio::task::yield_now().await;
+                            paths
+                                .into_iter()
+                                .filter_map(|(archive_path, size)| {
+                                    archive_path
+                                        .len()
+                                        .gt(&len)
+                                        .then(|| archive_path.tap_mut(|p| p.truncate(len)))
+                                        .map(|subpath| (subpath, size))
                                 })
-                                .entered();
-                            tracing::info!("preheating [{}] archives with nesting of 2 to keep the loop busy", truncated.len());
-                            truncated.into_iter().for_each(|(truncated, _)| {
-                                archive_extraction_queue
-                                    .clone()
-                                    .get_archive_spawn(truncated)
-                                    .pipe(|_| ());
-                            })
-                        });
-                })
-                .pipe(|res| {
-                    if let Err(reason) = res {
-                        tracing::error!(?reason, "the the program will continue, but it will likely not finish");
-                    }
-                })
+                                .unique()
+                                .collect_vec()
+                                .pipe(|truncated| {
+                                    let total_size = truncated.iter().map(|(_, size)| size).sum::<u64>();
+                                    let _span = info_span!("preheating")
+                                        .tap_mut(|pb| {
+                                            pb.pb_set_message(&format!("preheating {} archives", truncated.len()));
+                                            pb.pb_set_length(total_size);
+                                        })
+                                        .entered();
+                                    tracing::info!("preheating [{}] archives with nesting of [{len}] to keep the loop busy", truncated.len());
+                                    truncated
+                                        .into_iter()
+                                        .map(|(truncated, _)| {
+                                            archive_extraction_queue
+                                                .clone()
+                                                .get_archive_spawn(truncated)
+                                        })
+                                        .collect_vec()
+                                        .pipe(|tasks| {
+                                            futures::stream::iter(tasks)
+                                                .buffered(2137)
+                                                .for_each(|_| ready(()))
+                                        })
+                                })
+                                .await
+                        }
+                    })
+            };
+            (2..5)
+                .map(preheat_subpaths_of_len)
+                .collect_vec()
+                .pipe(|tasks| {
+                    tokio::task::spawn(async move {
+                        for task in tasks {
+                            task.await;
+                        }
+                    })
+                });
         })
         .pipe(futures::stream::iter)
         .map(move |directive| match directive {

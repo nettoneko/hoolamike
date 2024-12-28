@@ -66,6 +66,7 @@ thiserror = "2.0.9"
 tokio.workspace = true
 tokio-cached-future.workspace = true
 tracing.workspace = true
+tracing-flame = "0.2.0"
 tracing-indicatif = "0.3.8"
 tracing-subscriber.workspace = true
 transpare.workspace = true

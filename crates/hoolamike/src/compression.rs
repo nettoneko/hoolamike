@@ -14,7 +14,7 @@ use {
     },
     tap::prelude::*,
     tokio::sync::OwnedSemaphorePermit,
-    tracing::Instrument,
+    tracing::{info_span, Instrument},
 };
 
 pub mod bethesda_archive;
@@ -134,12 +134,12 @@ where
     Self: Sized + Sync + Send + 'static,
 {
     fn seek_with_temp_file_blocking_unbounded(mut self, expected_size: u64, _computation_permit: OwnedSemaphorePermit) -> Result<tempfile::TempPath> {
-        let span = tracing::info_span!("seek_with_temp_file_blocking",);
+        let _span = tracing::info_span!("seek_with_temp_file_blocking_unbounded").entered();
         tempfile::NamedTempFile::new()
             .context("creating a tempfile")
             .and_then(|mut temp_file| {
                 {
-                    let writer = &mut span.clone().wrap_write(expected_size, &mut temp_file);
+                    let writer = &mut info_span!("writing_file").wrap_write(expected_size, &mut temp_file);
                     std::io::copy(&mut self, writer)
                 }
                 .context("creating a seekable temp file")
@@ -158,12 +158,14 @@ where
             })
     }
     fn seek_with_temp_file_blocking(mut self, expected_size: u64, permit: tokio::sync::OwnedSemaphorePermit) -> Result<WithPermit<tempfile::TempPath>> {
-        let span = tracing::info_span!("seek_with_temp_file_blocking",);
+        let _span = tracing::info_span!("seek_with_temp_file_blocking").entered();
         tempfile::NamedTempFile::new()
             .context("creating a tempfile")
             .and_then(|mut temp_file| {
                 {
-                    let writer = &mut span.clone().wrap_write(expected_size, &mut temp_file);
+                    let writer = &mut info_span!("writing_file")
+                        .clone()
+                        .wrap_write(expected_size, &mut temp_file);
                     std::io::copy(&mut self, writer)
                 }
                 .context("creating a seekable temp file")
