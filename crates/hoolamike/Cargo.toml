@@ -9,6 +9,7 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-recursion = "1.1.1"
 ba2 = { git = "https://github.com/Ryan-rsm-McKenzie/bsa-rs", rev = "b716bcbbf51ec8f7d5e5261128fabfbe3357ddb3" }
 # ba2 = { path = "/home/niedzwiedz/Games/modding/bsa-rs" }
 base64.workspace = true

@@ -13,6 +13,7 @@ use {
         sync::Arc,
     },
     tap::prelude::*,
+    tokio::sync::OwnedSemaphorePermit,
     tracing::Instrument,
 };
 
@@ -132,12 +133,32 @@ impl<T: std::io::Read + Sync + 'static> T
 where
     Self: Sized + Sync + Send + 'static,
 {
+    fn seek_with_temp_file_blocking_unbounded(mut self, expected_size: u64, _computation_permit: OwnedSemaphorePermit) -> Result<tempfile::TempPath> {
+        let span = tracing::info_span!("seek_with_temp_file_blocking",);
+        tempfile::NamedTempFile::new()
+            .context("creating a tempfile")
+            .and_then(|mut temp_file| {
+                {
+                    let writer = &mut span.clone().wrap_write(expected_size, &mut temp_file);
+                    std::io::copy(&mut self, writer)
+                }
+                .context("creating a seekable temp file")
+                .and_then(|wrote_size| {
+                    wrote_size
+                        .eq(&expected_size)
+                        .then_some(wrote_size)
+                        .with_context(|| format!("error when writing temp file: expected [{expected_size}], found [{wrote_size}]"))
+                })
+                .map(|_| temp_file)
+                .and_then(|mut file| {
+                    file.flush()
+                        .context("flushing file")
+                        .map(|_| file.into_temp_path())
+                })
+            })
+    }
     fn seek_with_temp_file_blocking(mut self, expected_size: u64, permit: tokio::sync::OwnedSemaphorePermit) -> Result<WithPermit<tempfile::TempPath>> {
-        let span = tracing::info_span!(
-            "seek_with_temp_file",
-            acquired_file_permits=%(max_open_files() - OPEN_FILE_PERMITS.available_permits()),
-            max_open_files=%max_open_files(),
-        );
+        let span = tracing::info_span!("seek_with_temp_file_blocking",);
         tempfile::NamedTempFile::new()
             .context("creating a tempfile")
             .and_then(|mut temp_file| {

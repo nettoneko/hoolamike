@@ -1,8 +1,8 @@
 use {
-    std::{future::Future, sync::Arc},
+    std::{collections::HashMap, future::Future, sync::Arc},
     tap::prelude::*,
-    tokio::task::JoinHandle,
-    tracing::{debug_span, error, instrument, trace, warn, Instrument},
+    tokio::{sync::Mutex, task::JoinHandle},
+    tracing::{error, instrument, trace, trace_span, warn, Instrument},
 };
 
 pub enum CacheState<T> {
@@ -20,7 +20,7 @@ impl<T> Clone for CacheState<T> {
 }
 
 pub struct CachedFutureQueue<K, V> {
-    pub tasks: dashmap::DashMap<K, CacheState<V>>,
+    pub tasks: Mutex<HashMap<K, CacheState<V>>>,
 }
 
 impl<K, V> CachedFutureQueue<K, V>
@@ -40,13 +40,15 @@ where
         tokio::task::spawn(self.get(key, with))
     }
 
-    #[instrument(skip(self, with))]
+    #[instrument(skip(self, with), level = "TRACE")]
     pub async fn get<F, Fut>(self: Arc<Self>, key: K, with: F) -> Arc<V>
     where
-        Fut: Future<Output = V> + Send,
+        Fut: Future<Output = V>,
         F: FnOnce(K) -> Fut + Send + 'static,
     {
-        match self.clone().tasks.get(&key).map(|r| r.clone()) {
+        let mut lock = self.tasks.lock().await;
+        let current = lock.get(&key).cloned();
+        match current {
             Some(occupied_entry) => {
                 trace!("entry already exists");
                 match occupied_entry {
@@ -56,14 +58,15 @@ where
                     }
                     CacheState::InProgress(waiting) => {
                         trace!("task in progress, waiting for notification about progress");
+                        drop(lock);
                         waiting
                             .notified()
-                            .instrument(debug_span!("operation in progress, awaiting it's completion"))
+                            .instrument(trace_span!("operation in progress, awaiting it's completion"))
                             .await;
                         trace!("notified of progress, checking again");
                         self.clone()
                             .get(key.clone(), with)
-                            .instrument(debug_span!("getting another archive because got notified"))
+                            .instrument(trace_span!("getting another archive because got notified"))
                             .pipe(Box::pin)
                             .await
                     }
@@ -71,23 +74,25 @@ where
             }
             None => {
                 trace!("entry does not exist, setting up notifier before starting work");
-                self.tasks
-                    .insert(
-                        key.clone(),
-                        tokio::sync::Notify::new()
-                            .pipe(Arc::new)
-                            .clone()
-                            .pipe(CacheState::InProgress),
-                    )
-                    .pipe(drop);
+                lock.insert(
+                    key.clone(),
+                    tokio::sync::Notify::new()
+                        .pipe(Arc::new)
+                        .clone()
+                        .pipe(CacheState::InProgress),
+                )
+                .pipe(drop);
+                drop(lock);
                 trace!("starting work");
                 let res = (with)(key.clone()).await.pipe(Arc::new);
                 trace!("work finished");
-                match self
+                let current = self
                     .clone()
                     .tasks
-                    .insert(key.clone(), res.clone().pipe(CacheState::Ready))
-                {
+                    .lock()
+                    .await
+                    .insert(key.clone(), res.clone().pipe(CacheState::Ready));
+                match current {
                     Some(CacheState::InProgress(notify)) => {
                         trace!("notifying waiters");
                         notify.notify_one();

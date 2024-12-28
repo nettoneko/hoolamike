@@ -3,19 +3,13 @@ use {
     crate::compression::{ArchiveHandle, ProcessArchive, SeekWithTempFileExt},
     futures::{FutureExt, TryFutureExt},
     nonempty::NonEmpty,
-    std::{
-        convert::identity,
-        future::{ready, Future},
-        path::PathBuf,
-        pin::Pin,
-        sync::Arc,
-    },
+    std::{convert::identity, future::ready, path::PathBuf, sync::Arc},
     tap::prelude::*,
     tokio::{
         sync::{watch::error::RecvError, AcquireError, Semaphore},
         task::JoinHandle,
     },
-    tracing::{debug, debug_span, instrument, Instrument},
+    tracing::{debug_span, instrument, Instrument},
 };
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -41,7 +35,7 @@ impl Error {
 
 pub(crate) type Result<T> = std::result::Result<T, Error>;
 
-pub type Extracted = WithPermit<tempfile::TempPath>;
+pub type Extracted = tempfile::TempPath;
 
 #[derive(Debug)]
 pub enum SourceKind {
@@ -72,6 +66,7 @@ impl QueuedArchiveService {
     pub fn get_archive_spawn(self: Arc<Self>, archive: NonEmpty<PathBuf>) -> JoinHandle<Result<Arc<SourceKind>>> {
         tokio::task::spawn(self.get_archive(archive))
     }
+    #[async_recursion::async_recursion]
     async fn init_archive(self: Arc<Self>, archive_path: NonEmpty<PathBuf>) -> Result<SourceKind> {
         fn popped<T>(mut l: NonEmpty<T>) -> Option<(NonEmpty<T>, T)> {
             l.pop().map(|i| (l, i))
@@ -79,17 +74,21 @@ impl QueuedArchiveService {
         match popped(archive_path.clone()) {
             Some((parent, archive_path)) => {
                 self.clone()
-                    .pipe(assert_send)
                     .get_archive(parent)
+                    .pipe(Box::pin)
                     .instrument(debug_span!("entry was not found, so scheduling creation of parent"))
-                    .and_then(|parent| prepare_archive(self.permits.clone(), parent, archive_path))
+                    .and_then(|parent| {
+                        prepare_archive(self.permits.clone(), parent, archive_path)
+                            .instrument(tracing::Span::current())
+                            .pipe(Box::pin)
+                    })
                     .map_ok(SourceKind::CachedPath)
                     .await
             }
             None => Ok(SourceKind::JustPath(archive_path.head)),
         }
     }
-    #[instrument(skip(self))]
+    #[instrument(skip(self), level = "TRACE")]
     pub async fn get_archive(self: Arc<Self>, archive_path: NonEmpty<PathBuf>) -> Result<Arc<SourceKind>> {
         let queue = self.clone();
         tokio::task::spawn(async move {
@@ -103,23 +102,25 @@ impl QueuedArchiveService {
                         queue.init_archive(archive_path).map_ok(Arc::new)
                     }
                 })
+                .pipe(Box::pin)
                 .map(|r| r.pipe_as_ref(|r| r.clone()))
                 .await
         })
-        .pipe(|fut| assert_send(fut))
+        .pipe(Box::pin)
+        .instrument(tracing::Span::current())
         .await
         .map_err(self::Error::thread_crashed)
         .and_then(identity)
     }
 }
 
-#[instrument]
-async fn prepare_archive(permits: Arc<Semaphore>, source: Arc<SourceKind>, archive_path: PathBuf) -> Result<Extracted> {
+#[instrument(skip(computation_permits), level = "TRACE")]
+async fn prepare_archive(computation_permits: Arc<Semaphore>, source: Arc<SourceKind>, archive_path: PathBuf) -> Result<Extracted> {
     let run = tracing::Span::current();
     tokio::task::spawn({
         cloned![run];
         async move {
-            permits
+            computation_permits
                 .acquire_owned()
                 .instrument(debug_span!("acquiring file permit"))
                 .map_err(Arc::new)
@@ -139,7 +140,7 @@ async fn prepare_archive(permits: Arc<Semaphore>, source: Arc<SourceKind>, archi
                                             .and_then(|mut handle| {
                                                 handle
                                                     .size()
-                                                    .and_then(|size| handle.seek_with_temp_file_blocking(size, permit))
+                                                    .and_then(|size| handle.seek_with_temp_file_blocking_unbounded(size, permit))
                                                     .map_err(self::Error::extracting_from_archive)
                                             })
                                     })
@@ -164,7 +165,7 @@ impl AsRef<std::path::Path> for SourceKind {
     fn as_ref(&self) -> &std::path::Path {
         match self {
             SourceKind::JustPath(path_buf) => path_buf,
-            SourceKind::CachedPath(cached) => &cached.inner,
+            SourceKind::CachedPath(cached) => cached,
         }
     }
 }

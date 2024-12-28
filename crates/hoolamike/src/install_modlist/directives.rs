@@ -24,6 +24,7 @@ use {
     std::{
         collections::BTreeMap,
         future::ready,
+        ops::Div,
         path::{Path, PathBuf},
         sync::Arc,
     },
@@ -198,7 +199,7 @@ fn handle_nested_archive_directives(
     concurrency: usize,
 ) -> impl Stream<Item = Result<u64>> {
     let handle_directives = tracing::Span::current();
-    let preheat = queued_archive_task::QueuedArchiveService::new(concurrency * 100);
+    let preheat = queued_archive_task::QueuedArchiveService::new(concurrency.div(2));
 
     directives
         .into_iter()
