@@ -1,6 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/bsa-cli", "crates/hoolamike", "crates/wrapped-7zip"]
+members = [
+  "crates/bsa-cli",
+  "crates/hoolamike",
+  "crates/tokio-cached-future",
+  "crates/wrapped-7zip",
+]
 default-members = ["crates/hoolamike"]
 
 [workspace.package]
@@ -16,6 +21,7 @@ edition = "2021"
 [workspace.dependencies]
 # internal
 wrapped-7zip.path = "crates/wrapped-7zip"
+tokio-cached-future.path = "crates/tokio-cached-future"
 
 # external
 anyhow = "1.0.93"

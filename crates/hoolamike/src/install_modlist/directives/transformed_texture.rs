@@ -1,11 +1,13 @@
 use {
     super::*,
     crate::{
+        downloaders::helpers::FutureAnyhowExt,
         install_modlist::download_cache::to_u64_from_base_64,
         modlist_json::{directive::TransformedTextureDirective, ImageState},
         progress_bars_v2::IndicatifWrapIoExt,
         read_wrappers::ReadExt,
     },
+    queued_archive_task::QueuedArchiveService,
     std::{
         convert::identity,
         io::{Read, Seek, Write},
@@ -16,6 +18,10 @@ use {
 #[derivative(Debug)]
 pub struct TransformedTextureHandler {
     pub output_directory: PathBuf,
+    #[derivative(Debug = "ignore")]
+    pub archive_extraction_queue: Arc<QueuedArchiveService>,
+    #[derivative(Debug = "ignore")]
+    pub download_summary: DownloadSummary,
 }
 
 #[extension_traits::extension(pub trait IoResultValidateSizeExt)]
@@ -68,7 +74,6 @@ impl TransformedTextureHandler {
     #[instrument(skip(self))]
     pub async fn handle(
         self,
-        source_file: Arc<queued_archive_task::SourceKind>,
         TransformedTextureDirective {
             hash,
             size,
@@ -84,10 +89,21 @@ impl TransformedTextureHandler {
             archive_hash_path,
         }: TransformedTextureDirective,
     ) -> Result<u64> {
+        let handle = tracing::Span::current();
         tokio::task::yield_now().await;
         let format = supported_image_format(format).context("checking for format support")?;
         let output_path = self.output_directory.join(to.into_path());
-        let handle = tracing::Span::current();
+        let source_file = self
+            .download_summary
+            .resolve_archive_path(archive_hash_path.clone())
+            .pipe(ready)
+            .and_then(|path| {
+                self.archive_extraction_queue
+                    .get_archive(path)
+                    .map_context("awaiting for archive from queue")
+            })
+            .await
+            .with_context(|| format!("reading archive for [{archive_hash_path:?}]"))?;
 
         tokio::task::spawn_blocking(move || -> Result<_> {
             handle.in_scope(|| {
@@ -118,7 +134,8 @@ impl TransformedTextureHandler {
                         create_file_all(&output_path).and_then(|mut output_file| {
                             perform_copy(&mut final_source, &mut output_file, output_path.clone())
                                 .or_else(|reason| {
-                                    let _span = tracing::error_span!("could not resize texture, copying the original", ?reason).entered();
+                                    let _span =
+                                        tracing::error_span!("could not resize texture, copying the original", reason = %format!("{reason:#?}")).entered();
                                     tracing::error!("could not resize the file, but it should still work");
                                     final_source
                                         .rewind()

@@ -169,6 +169,7 @@ fn setup_logging() {
         .context("Unable to set a global subscriber")
         .expect("logging failed");
 }
+
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_logging();

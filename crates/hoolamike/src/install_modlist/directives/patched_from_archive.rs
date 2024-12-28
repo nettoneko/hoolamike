@@ -2,11 +2,13 @@ use {
     super::*,
     crate::{
         compression::forward_only_seek::ForwardOnlySeek,
+        downloaders::helpers::FutureAnyhowExt,
         install_modlist::download_cache::to_u64_from_base_64,
         modlist_json::directive::PatchedFromArchiveDirective,
         progress_bars_v2::IndicatifWrapIoExt,
         read_wrappers::ReadExt,
     },
+    queued_archive_task::QueuedArchiveService,
     std::{
         convert::identity,
         io::{Read, Seek, Write},
@@ -20,13 +22,15 @@ pub struct PatchedFromArchiveHandler {
     #[derivative(Debug = "ignore")]
     pub wabbajack_file: WabbajackFileHandle,
     pub output_directory: PathBuf,
+    #[derivative(Debug = "ignore")]
+    pub archive_extraction_queue: Arc<QueuedArchiveService>,
+    pub download_summary: DownloadSummary,
 }
 
 impl PatchedFromArchiveHandler {
     #[tracing::instrument(skip(self), level = "INFO")]
     pub async fn handle(
         self,
-        source_file: Arc<queued_archive_task::SourceKind>,
         PatchedFromArchiveDirective {
             hash,
             size,
@@ -37,6 +41,18 @@ impl PatchedFromArchiveHandler {
         }: PatchedFromArchiveDirective,
     ) -> Result<u64> {
         tokio::task::yield_now().await;
+        let source_file = self
+            .download_summary
+            .resolve_archive_path(archive_hash_path.clone())
+            .pipe(ready)
+            .and_then(|path| {
+                self.archive_extraction_queue
+                    .get_archive(path)
+                    .map_context("awaiting for archive from queue")
+            })
+            .await
+            .with_context(|| format!("reading archive for [{archive_hash_path:?}]"))?;
+
         let output_path = self.output_directory.join(to.into_path());
 
         tokio::task::spawn_blocking(move || -> Result<_> {

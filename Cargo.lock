@@ -1466,6 +1466,7 @@ dependencies = [
  "test-log",
  "thiserror 2.0.9",
  "tokio",
+ "tokio-cached-future",
  "tracing",
  "tracing-indicatif",
  "tracing-subscriber",
@@ -3459,6 +3460,18 @@ dependencies = [
  "tokio-macros",
  "tracing",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "tokio-cached-future"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "tap",
+ "test-log",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

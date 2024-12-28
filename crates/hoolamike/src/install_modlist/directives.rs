@@ -20,11 +20,13 @@ use {
     futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt},
     itertools::Itertools,
     nonempty::NonEmpty,
+    num::ToPrimitive,
+    queued_archive_task::QueuedArchiveService,
     remapped_inline_file::RemappingContext,
     std::{
         collections::BTreeMap,
         future::ready,
-        ops::Div,
+        ops::{Div, Mul},
         path::{Path, PathBuf},
         sync::Arc,
     },
@@ -41,20 +43,14 @@ pub(crate) fn create_file_all(path: &Path) -> Result<std::fs::File> {
         .map(|(_, f)| f)
 }
 
-pub mod create_bsa;
-
 pub type DownloadSummary = Arc<BTreeMap<String, WithArchiveDescriptor<PathBuf>>>;
 
+pub mod create_bsa;
 pub mod from_archive;
-
 pub mod inline_file;
-
 pub mod patched_from_archive;
-
 pub mod remapped_inline_file;
-
 pub mod transformed_texture;
-
 use crate::modlist_json::Directive;
 
 pub type WabbajackFileHandle = Arc<crate::compression::wrapped_7zip::ArchiveHandle>;
@@ -75,6 +71,7 @@ pub struct DirectivesHandler {
     pub remapped_inline_file: remapped_inline_file::RemappedInlineFileHandler,
     pub transformed_texture: transformed_texture::TransformedTextureHandler,
     pub download_summary: DownloadSummary,
+    pub archive_extraction_queue: Arc<QueuedArchiveService>,
 }
 
 #[derive(Debug, Clone)]
@@ -86,8 +83,6 @@ pub struct DirectivesHandlerConfig {
 }
 
 pub mod nested_archive_manager;
-
-pub mod planned_archive_hash_path_execution;
 
 fn concurrency() -> usize {
     #[cfg(not(debug_assertions))]
@@ -175,13 +170,13 @@ enum ArchivePathDirective {
 }
 
 impl ArchivePathDirective {
-    // fn directive_size(&self) -> u64 {
-    //     match self {
-    //         ArchivePathDirective::FromArchive(d) => d.size,
-    //         ArchivePathDirective::PatchedFromArchive(d) => d.size,
-    //         ArchivePathDirective::TransformedTexture(d) => d.size,
-    //     }
-    // }
+    fn directive_size(&self) -> u64 {
+        match self {
+            ArchivePathDirective::FromArchive(d) => d.size,
+            ArchivePathDirective::PatchedFromArchive(d) => d.size,
+            ArchivePathDirective::TransformedTexture(d) => d.size,
+        }
+    }
     fn archive_path(&self) -> &ArchiveHashPath {
         match self {
             ArchivePathDirective::FromArchive(f) => &f.archive_hash_path,
@@ -190,91 +185,98 @@ impl ArchivePathDirective {
         }
     }
 }
+
 pub mod queued_archive_task;
 
 fn handle_nested_archive_directives(
     manager: Arc<DirectivesHandler>,
-    summary: DownloadSummary,
+    archive_extraction_queue: Arc<QueuedArchiveService>,
     directives: Vec<ArchivePathDirective>,
     concurrency: usize,
 ) -> impl Stream<Item = Result<u64>> {
     let handle_directives = tracing::Span::current();
-    let preheat = queued_archive_task::QueuedArchiveService::new(concurrency.div(2));
 
     directives
-        .into_iter()
-        .map({
-            cloned![summary];
-            move |directive| {
-                directive
-                    .archive_path()
-                    .clone()
-                    .pipe(|archive_path| {
-                        archive_path.source_hash.pipe_ref(|source_hash| {
-                            summary
-                                .get(source_hash)
-                                .with_context(|| format!("no archive for hash [{source_hash}]"))
-                                .map(|file| NonEmpty::new(file.inner.clone()))
-                                .map(|path| {
-                                    path.tap_mut(|path| {
-                                        path.extend(
-                                            archive_path
-                                                .path
-                                                .into_iter()
-                                                .map(MaybeWindowsPath::into_path),
-                                        )
-                                    })
-                                })
-                        })
+        .tap_mut(|directives| {
+            // sorting
+            directives.sort_by_cached_key(|archive| {
+                // this is so that progress is easier on the eye
+                archive.archive_path().clone()
+            });
+        })
+        .tap(|directives| {
+            // preheat
+            directives
+                .iter()
+                .map(|directive| {
+                    directive.archive_path().clone().pipe(|path| {
+                        manager
+                            .download_summary
+                            .resolve_archive_path(path.clone())
+                            .map(|path| (path, directive.directive_size()))
                     })
-                    .map(move |path| (path, directive))
-            }
-        })
-        .map({
-            cloned![preheat, handle_directives];
-            move |res| {
-                cloned![preheat, handle_directives];
-                res.map(move |(archive, directive)| {
-                    let dbg = format!("preheating archive [{archive:?}] for directive [{directive:?}]");
-                    preheat
-                        .clone()
-                        .get_archive_spawn(archive)
-                        .map_err(queued_archive_task::Error::thread_crashed)
-                        .and_then(ready)
-                        .instrument(handle_directives.clone())
-                        .map(|archive| archive.map(|archive| (archive, directive)))
-                        .map(|e| e.context(dbg))
                 })
-            }
+                .collect::<Result<Vec<_>>>()
+                .context("not all directives can be handled")
+                .map(|paths| {
+                    paths
+                        .into_iter()
+                        .filter_map(|(archive_path, size)| {
+                            archive_path
+                                .len()
+                                .gt(&2)
+                                .then(|| archive_path.tap_mut(|p| p.truncate(2)))
+                                .map(|subpath| (subpath, size))
+                        })
+                        .collect_vec()
+                        .pipe(|truncated| {
+                            let total_size = truncated.iter().map(|(_, size)| size).sum::<u64>();
+                            let _span = info_span!("preheating")
+                                .tap_mut(|pb| {
+                                    pb.pb_set_message(&format!("preheating {} archives", truncated.len()));
+                                    pb.pb_set_length(total_size);
+                                })
+                                .entered();
+                            tracing::info!("preheating [{}] archives with nesting of 2 to keep the loop busy", truncated.len());
+                            truncated.into_iter().for_each(|(truncated, _)| {
+                                archive_extraction_queue
+                                    .clone()
+                                    .get_archive_spawn(truncated)
+                                    .pipe(|_| ());
+                            })
+                        });
+                })
+                .pipe(|res| {
+                    if let Err(reason) = res {
+                        tracing::error!(?reason, "the the program will continue, but it will likely not finish");
+                    }
+                })
         })
-        .collect::<Result<Vec<_>>>()
-        .pipe(ready)
-        .into_stream()
-        .try_flat_map(|e| futures::stream::iter(e).flat_map(|e| e.into_stream()))
-        .map_ok(move |(preheated, directive)| match directive {
+        .pipe(futures::stream::iter)
+        .map(move |directive| match directive {
             ArchivePathDirective::TransformedTexture(transformed_texture) => manager
                 .transformed_texture
                 .clone()
-                .handle(preheated, transformed_texture.clone())
+                .handle(transformed_texture.clone())
                 .instrument(handle_directives.clone())
                 .map(move |res| res.with_context(|| format!("handling directive: {transformed_texture:#?}")))
                 .boxed(),
             ArchivePathDirective::FromArchive(from_archive) => manager
                 .from_archive
                 .clone()
-                .handle(preheated, from_archive.clone())
+                .handle(from_archive.clone())
                 .instrument(handle_directives.clone())
                 .map(move |res| res.with_context(|| format!("handling directive: {from_archive:#?}")))
                 .boxed(),
             ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => manager
                 .patched_from_archive
                 .clone()
-                .handle(preheated, patched_from_archive_directive.clone())
+                .handle(patched_from_archive_directive.clone())
                 .instrument(handle_directives.clone())
                 .map(move |res| res.with_context(|| format!("handling directive: {patched_from_archive_directive:#?}")))
                 .boxed(),
         })
-        .try_buffer_unordered(concurrency)
+        .buffer_unordered(concurrency)
 }
 
 // /// it's dirty as hell but saves disk space
@@ -439,6 +441,15 @@ fn handle_nested_archive_directives(
 //         })
 // }
 
+#[extension_traits::extension(pub (crate) trait ResolvePathExt)]
+impl DownloadSummary {
+    fn resolve_archive_path(&self, ArchiveHashPath { source_hash, path }: ArchiveHashPath) -> Result<NonEmpty<PathBuf>> {
+        self.get(&source_hash)
+            .with_context(|| format!("no [{source_hash}] in downloads"))
+            .map(|parent| NonEmpty::new(parent.inner.clone()).tap_mut(|resolved| resolved.extend(path.into_iter().map(MaybeWindowsPath::into_path))))
+    }
+}
+
 impl DirectivesHandler {
     #[allow(clippy::new_without_default)]
     pub fn new(config: DirectivesHandlerConfig, sync_summary: Vec<WithArchiveDescriptor<PathBuf>>) -> Self {
@@ -453,6 +464,11 @@ impl DirectivesHandler {
             .map(|s| (s.descriptor.hash.clone(), s))
             .collect::<BTreeMap<_, _>>()
             .pipe(Arc::new);
+        let archive_extraction_queue = queued_archive_task::QueuedArchiveService::new(
+            concurrency()
+                .pipe(|c| c.to_f32().unwrap().mul(0.8).to_usize().unwrap())
+                .max(1),
+        );
 
         Self {
             config,
@@ -461,6 +477,8 @@ impl DirectivesHandler {
             },
             from_archive: from_archive::FromArchiveHandler {
                 output_directory: output_directory.clone(),
+                download_summary: download_summary.clone(),
+                archive_extraction_queue: archive_extraction_queue.clone(),
             },
             inline_file: inline_file::InlineFileHandler {
                 wabbajack_file: wabbajack_file.clone(),
@@ -469,6 +487,8 @@ impl DirectivesHandler {
             patched_from_archive: patched_from_archive::PatchedFromArchiveHandler {
                 output_directory: output_directory.clone(),
                 wabbajack_file: wabbajack_file.clone(),
+                download_summary: download_summary.clone(),
+                archive_extraction_queue: archive_extraction_queue.clone(),
             },
             remapped_inline_file: remapped_inline_file::RemappedInlineFileHandler {
                 remapping_context: Arc::new(RemappingContext {
@@ -480,8 +500,11 @@ impl DirectivesHandler {
             },
             transformed_texture: transformed_texture::TransformedTextureHandler {
                 output_directory: output_directory.clone(),
+                download_summary: download_summary.clone(),
+                archive_extraction_queue: archive_extraction_queue.clone(),
             },
             download_summary,
+            archive_extraction_queue,
         }
     }
 
@@ -506,8 +529,8 @@ impl DirectivesHandler {
                 Directive::TransformedTexture(directive) => directive.size,
             }
         }
-        let download_summary = self.download_summary.clone();
         let manager = self.clone();
+
         enum DirectiveStatus {
             Completed(u64),
             NeedsRebuild { reason: anyhow::Error, directive: Directive },
@@ -561,7 +584,7 @@ impl DirectivesHandler {
                                 .for_each(|directive| match directive {
                                     DirectiveStatus::Completed(size) => completed.push(size),
                                     DirectiveStatus::NeedsRebuild { reason, directive } => {
-                                        tracing::debug!("recomputing directive:\n{reason:?}");
+                                        tracing::trace!("recomputing directive:\n{reason:?}");
                                         match directive {
                                             Directive::CreateBSA(create_bsadirective) => create_bsa.push(create_bsadirective),
                                             Directive::FromArchive(from_archive_directive) => from_archive.push(from_archive_directive),
@@ -630,8 +653,9 @@ impl DirectivesHandler {
                                 )
                                 .collect_vec()
                                 .pipe(|directives| {
-                                    handle_directives
-                                        .in_scope(|| handle_nested_archive_directives(manager.clone(), download_summary.clone(), directives, concurrency()))
+                                    handle_directives.in_scope(|| {
+                                        handle_nested_archive_directives(manager.clone(), self.archive_extraction_queue.clone(), directives, concurrency())
+                                    })
                                 }),
                         )
                         .chain(remapped_inline_file.pipe(futures::stream::iter).then({

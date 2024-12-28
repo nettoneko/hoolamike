@@ -22,6 +22,8 @@ impl ArchiveHashPath {
 pub fn max_open_files() -> usize {
     concurrency() * 40
 }
+
+#[allow(dead_code)]
 pub(crate) static OPEN_FILE_PERMITS: Lazy<Arc<Semaphore>> = Lazy::new(|| Arc::new(Semaphore::new(max_open_files())));
 
 #[derive(Debug)]
@@ -49,6 +51,7 @@ where
             .and_then(move |permit| new().map_ok(|inner| Self { permit, inner }))
             .await
     }
+
     #[instrument(skip_all, level = "DEBUG")]
     pub async fn new_blocking<F>(semaphore: &Arc<Semaphore>, new: F) -> Result<Self>
     where

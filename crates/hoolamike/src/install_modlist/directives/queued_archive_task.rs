@@ -8,7 +8,7 @@ use {
         sync::{watch::error::RecvError, AcquireError, Semaphore},
         task::JoinHandle,
     },
-    tracing::{debug_span, instrument, Instrument},
+    tracing::{debug_span, instrument, trace_span, Instrument},
 };
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -63,10 +63,14 @@ impl QueuedArchiveService {
     }
 
     pub fn get_archive_spawn(self: Arc<Self>, archive: NonEmpty<PathBuf>) -> JoinHandle<Result<Arc<SourceKind>>> {
-        tokio::task::spawn(self.get_archive(archive))
+        tokio::task::spawn(
+            self.get_archive(archive)
+                .instrument(debug_span!("getting_archive_from_queue")),
+        )
     }
 
     #[async_recursion::async_recursion]
+    #[tracing::instrument(skip_all, level = "TRACE")]
     async fn init_archive(self: Arc<Self>, archive_path: NonEmpty<PathBuf>) -> Result<SourceKind> {
         fn popped<T>(mut l: NonEmpty<T>) -> Option<(NonEmpty<T>, T)> {
             l.pop().map(|i| (l, i))
@@ -88,27 +92,30 @@ impl QueuedArchiveService {
             None => Ok(SourceKind::JustPath(archive_path.head)),
         }
     }
+
     #[instrument(skip(self), level = "TRACE")]
     pub async fn get_archive(self: Arc<Self>, archive_path: NonEmpty<PathBuf>) -> Result<Arc<SourceKind>> {
         let queue = self.clone();
-        tokio::task::spawn(async move {
-            cloned![queue];
-            self.tasks
-                .clone()
-                .get(archive_path, {
-                    cloned![queue];
-                    move |archive_path| {
+        tokio::task::spawn(
+            async move {
+                cloned![queue];
+                self.tasks
+                    .clone()
+                    .get(archive_path, {
                         cloned![queue];
-                        queue.init_archive(archive_path).map_ok(Arc::new)
-                    }
-                })
-                .pipe(Box::pin)
-                .map_err(self::Error::from)
-                .and_then(|r| r.pipe_as_ref(|r| r.clone()).pipe(ready))
-                .await
-        })
+                        move |archive_path| {
+                            cloned![queue];
+                            queue.init_archive(archive_path).map_ok(Arc::new)
+                        }
+                    })
+                    .pipe(Box::pin)
+                    .map_err(self::Error::from)
+                    .and_then(|r| r.pipe_as_ref(|r| r.clone()).pipe(ready))
+                    .await
+            }
+            .instrument(tracing::Span::current()),
+        )
         .pipe(Box::pin)
-        .instrument(tracing::Span::current())
         .await
         .map_err(self::Error::thread_crashed)
         .and_then(identity)
@@ -128,10 +135,10 @@ async fn prepare_archive(computation_permits: Arc<Semaphore>, source: Arc<Source
                 .map_err(self::Error::AcquiringPermit)
                 .map_ok(|permit| (source, permit))
                 .and_then({
-                    cloned![run];
                     move |(source, permit)| {
+                        let span = trace_span!("performing_work");
                         tokio::task::spawn_blocking(move || {
-                            run.in_scope(|| {
+                            span.in_scope(|| {
                                 ArchiveHandle::guess(source.as_ref().as_ref())
                                     .map_err(self::Error::extracting_from_archive)
                                     .and_then(|mut archive| {
@@ -151,14 +158,14 @@ async fn prepare_archive(computation_permits: Arc<Semaphore>, source: Arc<Source
                         .and_then(ready)
                     }
                 })
-                .instrument(run)
                 .instrument(debug_span!("waiting for thread to finish"))
                 .await
         }
+        .instrument(run)
     })
     .map_err(self::Error::thread_crashed)
     .and_then(ready)
-    .instrument(run)
+    .instrument(tracing::Span::current())
     .await
 }
 
