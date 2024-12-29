@@ -27,44 +27,36 @@ impl ArchiveHandle {
     #[tracing::instrument(skip(self))]
     pub fn get_handle(&mut self, for_path: &Path) -> Result<CompressToolsFile> {
         self.0.rewind().context("rewinding file")?;
-        // let lookup = for_path.display().to_string();
-        // list_archive_files(&mut self.0)
-        //     .context("listing archive")
-        //     .map(|files| files.into_iter().collect::<HashSet<_>>())
-        //     .and_then(|files| {
-        //         files
-        //             .contains(&lookup)
-        //             .then_some(&lookup)
-        //             .with_context(|| format!("no [{lookup}] in {files:?}"))
-        //             .tap_ok(|lookup| trace!("[{lookup}] found in [{files:?}]"))
-        //     })
-        //     .and_then(|lookup| {
-        //         self.0.rewind().context("rewinding file")?;
-
-        //     })
-        Ok(()).and_then(|_| {
-            tempfile::SpooledTempFile::new(16 * 1024 * 1024).pipe(|mut temp_file| {
-                {
-                    let mut writer = BufWriter::new(&mut temp_file);
-                    trace_span!("uncompress_archive_file").in_scope(|| {
-                        uncompress_archive_file(
-                            &mut tracing::Span::current().wrap_read(0, &mut self.0),
-                            &mut writer,
-                            &for_path.to_string_lossy(),
-                        )
+        let lookup = for_path.display().to_string();
+        list_archive_files(&mut self.0)
+            .context("listing archive")
+            .map(|files| files.into_iter().collect::<std::collections::HashSet<_>>())
+            .and_then(|files| {
+                files
+                    .contains(&lookup)
+                    .then_some(&lookup)
+                    .with_context(|| format!("no [{lookup}] in {files:?}"))
+                    .tap_ok(|lookup| trace!("[{lookup}] found in [{files:?}]"))
+            })
+            .and_then(|lookup| {
+                self.0.rewind().context("rewinding file")?;
+                tempfile::SpooledTempFile::new(16 * 1024 * 1024).pipe(|mut temp_file| {
+                    {
+                        let mut writer = BufWriter::new(&mut temp_file);
+                        trace_span!("uncompress_archive_file")
+                            .in_scope(|| uncompress_archive_file(&mut tracing::Span::current().wrap_read(0, &mut self.0), &mut writer, lookup))
+                    }
+                    .context("extracting archive")
+                    .tap_ok(|bytes| trace!(%bytes, "extracted from CompressTools archive"))
+                    .and_then(|_| {
+                        temp_file
+                            .flush()
+                            .and_then(|_| temp_file.rewind())
+                            .context("rewinding to beginning of file")
+                            .map(|_| temp_file)
                     })
-                }
-                .context("extracting archive")
-                .tap_ok(|bytes| trace!(%bytes, "extracted from CompressTools archive"))
-                .and_then(|_| {
-                    temp_file
-                        .flush()
-                        .and_then(|_| temp_file.rewind())
-                        .context("rewinding to beginning of file")
-                        .map(|_| temp_file)
                 })
             })
-        })
     }
 }
 

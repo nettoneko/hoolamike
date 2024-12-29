@@ -519,12 +519,22 @@ impl PreheatedArchiveHashPaths {
                                 let performing_task = trace_span!("performing_task");
                                 move |(archive, parent, archive_path)| {
                                     performing_task.in_scope(|| {
-                                        crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref()).and_then(|mut archive| {
-                                            archive
-                                                .get_handle(&archive_path)
-                                                .and_then(|handle| handle.seek_with_temp_file_blocking_raw(0))
-                                                .map(|extracted| (parent.clone(), extracted))
-                                        })
+                                        let _span = info_span!("extracting_archive", ?parent, ?archive, ?archive_path).entered();
+                                        crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref())
+                                            .and_then(|mut archive| {
+                                                archive
+                                                    .get_handle(&archive_path)
+                                                    .and_then(|handle| handle.seek_with_temp_file_blocking_raw(0))
+                                                    .map(|extracted| {
+                                                        (
+                                                            parent
+                                                                .clone()
+                                                                .tap_mut(|parent| parent.push(archive_path.clone())),
+                                                            extracted,
+                                                        )
+                                                    })
+                                            })
+                                            .with_context(|| format!("parent={parent:?}, archive={archive:?}, archive_path={archive_path:?}"))
                                     })
                                 }
                             })
