@@ -38,6 +38,7 @@ use {
         sync::Arc,
     },
     tap::prelude::*,
+    tempfile::TempPath,
     tracing::{info_span, instrument, trace_span, Instrument},
     tracing_indicatif::span_ext::IndicatifSpanExt,
 };
@@ -481,83 +482,115 @@ impl PreheatedArchiveHashPaths {
             .chunk_by(|(parent, _)| parent.len())
             .into_iter()
             .map(|(len, chunk)| (len, chunk.into_iter().collect_vec()))
-            .try_fold((BTreeMap::<_, Arc<SourceKind>>::new(), Vec::new()), |(acc, mut buffer), (current_len, next)| {
-                let _span = info_span!("preheating_archives_in_chunks", nesting_level=%current_len).entered();
+            .try_fold(
+                (BTreeMap::<_, Arc<SourceKind>>::new(), Vec::new()),
+                |(acc, mut buffer), (current_len, next_chunk_by_length)| {
+                    let _span = info_span!("preheating_archives_in_chunk_by_length", nesting_level=%current_len).entered();
 
-                next.into_iter()
-                    .map(|(parent, paths)| {
-                        (match parent.tail.as_slice() {
-                            &[] => parent
-                                .head
-                                .clone()
-                                .pipe(SourceKind::JustPath)
-                                .pipe(Arc::new)
-                                .pipe(Ok),
-                            _more => acc
-                                .get(&parent)
-                                .with_context(|| format!("parent not preheated: {parent:#?}"))
-                                .cloned(),
+                    next_chunk_by_length
+                        .into_iter()
+                        .map(|(parent, paths)| {
+                            (match parent.tail.as_slice() {
+                                &[] => parent
+                                    .head
+                                    .clone()
+                                    .pipe(SourceKind::JustPath)
+                                    .pipe(Arc::new)
+                                    .pipe(Ok),
+                                _more => acc
+                                    .get(&parent)
+                                    .with_context(|| format!("parent not preheated: {parent:#?}"))
+                                    .cloned(),
+                            })
+                            .map(|resolved_parent| (resolved_parent, parent, paths))
                         })
-                        .map(|resolved_parent| (resolved_parent, parent, paths))
-                    })
-                    .collect::<Result<Vec<_>>>()
-                    .map(|tasks| {
-                        tasks
-                            .into_iter()
-                            .flat_map(|(a, b, c)| c.into_iter().map(move |c| (a.clone(), b.clone(), c)))
-                            .collect_vec()
-                    })
-                    .and_then(|tasks| {
-                        let performing_tasks = info_span!("performing_tasks", count=%tasks.len())
-                            .tap_mut(|pb| {
-                                pb.pb_set_style(&count_progress_style());
-                                pb.pb_set_length(tasks.len() as _);
-                            })
-                            .entered();
-                        tasks
-                            .tap_mut(|tasks| {
-                                // to intersperse thousands of small files with some bigger ones
-                                tasks.shuffle(&mut rand::thread_rng());
-                            })
-                            .into_par_iter()
-                            .map({
-                                let performing_task = info_span!("performing_task");
-                                move |(archive, parent, archive_path)| {
-                                    performing_task.in_scope(|| {
-                                        trace_span!("extracting_archive", ?parent, ?archive, ?archive_path).in_scope(|| {
-                                            crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref())
-                                                .and_then(|mut archive| {
-                                                    archive
-                                                        .get_handle(&archive_path)
-                                                        .and_then(|handle| handle.seek_with_temp_file_blocking_raw(0))
-                                                        .map(|extracted| {
-                                                            (
-                                                                parent
-                                                                    .clone()
-                                                                    .tap_mut(|parent| parent.push(archive_path.clone())),
-                                                                extracted,
-                                                            )
-                                                        })
+                        .collect::<Result<Vec<_>>>()
+                        .map(|tasks| {
+                            tasks
+                                .into_iter()
+                                .flat_map(|(a, b, c)| {
+                                    c.into_iter()
+                                        .chunks(512)
+                                        .into_iter()
+                                        .map(move |c| (a.clone(), b.clone(), c.collect_vec()))
+                                        .collect_vec()
+                                })
+                                .collect_vec()
+                        })
+                        .and_then(|tasks| {
+                            let performing_tasks = info_span!("performing_tasks", count=%tasks.len())
+                                .tap_mut(|pb| {
+                                    pb.pb_set_style(&count_progress_style());
+                                    pb.pb_set_length(tasks.len() as _);
+                                })
+                                .entered();
+                            tasks
+                                .into_par_iter()
+                                .map({
+                                    let performing_task = info_span!("performing_task");
+                                    move |(archive, parent, archive_paths)| {
+                                        archive_paths
+                                            .iter()
+                                            .map(|p| p.as_path())
+                                            .collect_vec()
+                                            .pipe_ref(|archive_paths| {
+                                                performing_task.in_scope(|| {
+                                                    trace_span!("extracting_archive", ?parent, ?archive, ?archive_paths).in_scope(|| {
+                                                        crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref())
+                                                            .pipe(once)
+                                                            .try_flat_map(|mut archive| {
+                                                                archive
+                                                                    .get_many_handles(archive_paths)
+                                                                    .and_then(|handles| {
+                                                                        handles
+                                                                            .into_iter()
+                                                                            .map(|(path, mut file)| {
+                                                                                file.size()
+                                                                                    .context("checking size")
+                                                                                    .and_then(|size| file.seek_with_temp_file_blocking_raw(size))
+                                                                                    .map(|e| (path, e))
+                                                                            })
+                                                                            .collect::<Result<Vec<_>>>()
+                                                                    })
+                                                                    .pipe(once)
+                                                                    .try_flat_map(|multiple_files| {
+                                                                        multiple_files
+                                                                            .into_iter()
+                                                                            .map(|(archive_path, extracted)| {
+                                                                                (
+                                                                                    parent
+                                                                                        .clone()
+                                                                                        .tap_mut(|parent| parent.push(archive_path.clone())),
+                                                                                    extracted,
+                                                                                )
+                                                                            })
+                                                                            .map(Ok)
+                                                                    })
+                                                            })
+                                                            .collect::<Result<Vec<(NonEmpty<PathBuf>, (u64, TempPath))>>>()
+                                                    })
                                                 })
-                                                .with_context(|| format!("parent={parent:?}, archive={archive:?}, archive_path={archive_path:?}"))
-                                        })
-                                    })
-                                }
-                            })
-                            .inspect(|_| performing_tasks.pb_inc(1))
-                            .collect_into_vec(&mut buffer)
-                            .pipe(|_| {
-                                buffer.drain(..).try_fold(acc, |acc, next| {
-                                    next.map(|(k, (_, v))| {
-                                        acc.tap_mut(|acc| {
-                                            acc.insert(k, v.pipe(SourceKind::CachedPath).pipe(Arc::new));
+                                            })
+                                    }
+                                })
+                                .inspect(|_| performing_tasks.pb_inc(1))
+                                .collect_into_vec(&mut buffer)
+                                .pipe(|_| {
+                                    buffer.drain(..).try_fold(acc, |acc, next| {
+                                        next.map(|next| {
+                                            acc.tap_mut(|acc| {
+                                                acc.extend(
+                                                    next.into_iter()
+                                                        .map(|(k, (_, v))| (k, v.pipe(SourceKind::CachedPath).pipe(Arc::new))),
+                                                );
+                                            })
                                         })
                                     })
                                 })
-                            })
-                            .map(|acc| (acc, buffer))
-                    })
-            })
+                                .map(|acc| (acc, buffer))
+                        })
+                },
+            )
             .map(|(preheated, _)| preheated)
             .map(Arc::new)
             .map(Self)

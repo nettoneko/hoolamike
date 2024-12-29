@@ -74,6 +74,7 @@ impl ProcessArchive for ArchiveHandle {
             .and_then(|out| self.0.rewind().context("rewinding file").map(|_| out))
     }
 
+    #[instrument(skip(self))]
     fn get_many_handles(&mut self, paths: &[&Path]) -> Result<Vec<(PathBuf, super::ArchiveFileHandle)>> {
         self.list_paths().and_then(|listed| {
             listed
@@ -101,7 +102,7 @@ impl ProcessArchive for ArchiveHandle {
                                 .context("building archive iterator")
                                 .and_then(|mut iterator| {
                                     iterator
-                                        .try_fold(vec![], move |mut acc, entry| match entry {
+                                        .try_fold(vec![], |mut acc, entry| match entry {
                                             ArchiveContents::StartOfEntry(entry_path, stat) => entry_path.pipe(PathBuf::from).pipe(|entry_path| {
                                                 extracting_mutliple_files.pb_set_message(&entry_path.to_string_lossy());
                                                 extracting_mutliple_files.pb_inc_length(stat.st_size.to_u64().context("negative size")?);
@@ -126,7 +127,32 @@ impl ProcessArchive for ArchiveHandle {
                                                     }
                                                 })
                                                 .map(|_| acc),
-                                            ArchiveContents::EndOfEntry => Ok(acc),
+                                            ArchiveContents::EndOfEntry => acc
+                                                .last_mut()
+                                                .context("finished entry before reading anything")
+                                                .and_then(|(path, size, temp_file)| {
+                                                    temp_file
+                                                        .stream_len()
+                                                        .context("reading size")
+                                                        .and_then(|wrote_size| {
+                                                            ((*size) as u64)
+                                                                .eq(&wrote_size)
+                                                                .then_some(())
+                                                                .with_context(|| {
+                                                                    format!("error extracting {path:?}: expected [{size} bytes], got [{wrote_size} bytes]")
+                                                                })
+                                                                .map(|_| temp_file)
+                                                        })
+                                                        .and_then(|temp_file| {
+                                                            temp_file
+                                                                .flush()
+                                                                .and_then(|_| temp_file.rewind())
+                                                                .context("rewinding to beginning of file")
+                                                                .map(|_| temp_file)
+                                                        })
+                                                        .map(drop)
+                                                })
+                                                .map(|_| acc),
                                             ArchiveContents::Err(error) => Err(error).with_context(|| {
                                                 format!(
                                                     "when reading: {}",
@@ -143,6 +169,12 @@ impl ProcessArchive for ArchiveHandle {
                                         .into_iter()
                                         .map(|(path, _size, file)| (path, self::ArchiveFileHandle::CompressTools(file)))
                                         .collect_vec()
+                                })
+                                .and_then(move |finished| {
+                                    validated_paths
+                                        .is_empty()
+                                        .then_some(finished)
+                                        .with_context(|| format!("not all paths were extracted. missing paths: {validated_paths:#?}"))
                                 })
                         })
                 })
