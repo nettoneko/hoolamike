@@ -28,6 +28,15 @@ pub mod forward_only_seek;
 pub trait ProcessArchive: Sized {
     fn list_paths(&mut self) -> Result<Vec<PathBuf>>;
     fn get_handle(&mut self, path: &Path) -> Result<self::ArchiveFileHandle>;
+    fn get_many_handles(&mut self, paths: &[&Path]) -> Result<Vec<(PathBuf, self::ArchiveFileHandle)>> {
+        paths
+            .iter()
+            .map(|&path| {
+                self.get_handle(path)
+                    .map(|handle| (path.to_owned(), handle))
+            })
+            .collect()
+    }
 }
 
 impl ArchiveHandle<'_> {

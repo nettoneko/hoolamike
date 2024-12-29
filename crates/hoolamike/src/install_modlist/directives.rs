@@ -26,6 +26,7 @@ use {
     num::ToPrimitive,
     parking_lot::Mutex,
     queued_archive_task::{Extracted, QueuedArchiveService, SourceKind},
+    rand::seq::SliceRandom,
     rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
     remapped_inline_file::RemappingContext,
     std::{
@@ -514,27 +515,32 @@ impl PreheatedArchiveHashPaths {
                             })
                             .entered();
                         tasks
+                            .tap_mut(|tasks| {
+                                // to intersperse thousands of small files with some bigger ones
+                                tasks.shuffle(&mut rand::thread_rng());
+                            })
                             .into_par_iter()
                             .map({
-                                let performing_task = trace_span!("performing_task");
+                                let performing_task = info_span!("performing_task");
                                 move |(archive, parent, archive_path)| {
                                     performing_task.in_scope(|| {
-                                        let _span = info_span!("extracting_archive", ?parent, ?archive, ?archive_path).entered();
-                                        crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref())
-                                            .and_then(|mut archive| {
-                                                archive
-                                                    .get_handle(&archive_path)
-                                                    .and_then(|handle| handle.seek_with_temp_file_blocking_raw(0))
-                                                    .map(|extracted| {
-                                                        (
-                                                            parent
-                                                                .clone()
-                                                                .tap_mut(|parent| parent.push(archive_path.clone())),
-                                                            extracted,
-                                                        )
-                                                    })
-                                            })
-                                            .with_context(|| format!("parent={parent:?}, archive={archive:?}, archive_path={archive_path:?}"))
+                                        trace_span!("extracting_archive", ?parent, ?archive, ?archive_path).in_scope(|| {
+                                            crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref())
+                                                .and_then(|mut archive| {
+                                                    archive
+                                                        .get_handle(&archive_path)
+                                                        .and_then(|handle| handle.seek_with_temp_file_blocking_raw(0))
+                                                        .map(|extracted| {
+                                                            (
+                                                                parent
+                                                                    .clone()
+                                                                    .tap_mut(|parent| parent.push(archive_path.clone())),
+                                                                extracted,
+                                                            )
+                                                        })
+                                                })
+                                                .with_context(|| format!("parent={parent:?}, archive={archive:?}, archive_path={archive_path:?}"))
+                                        })
                                     })
                                 }
                             })
