@@ -37,7 +37,7 @@ use {
         sync::Arc,
     },
     tap::prelude::*,
-    tracing::{info_span, instrument, Instrument},
+    tracing::{info_span, instrument, trace_span, Instrument},
     tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
@@ -458,7 +458,7 @@ type PreheatedArchiveHashPathsInner = BTreeMap<NonEmpty<PathBuf>, Arc<SourceKind
 pub struct PreheatedArchiveHashPaths(Arc<PreheatedArchiveHashPathsInner>);
 
 impl PreheatedArchiveHashPaths {
-    #[tracing::instrument(skip(paths), fields(count=%paths.len()), level = "INFO")]
+    #[tracing::instrument(skip(paths), fields(count=%paths.len()), level = "trace")]
     pub fn preheat_archive_hash_paths(paths: Vec<NonEmpty<PathBuf>>) -> Result<Self> {
         fn ancestors(path: NonEmpty<PathBuf>) -> impl Iterator<Item = (NonEmpty<PathBuf>, PathBuf)> {
             fn popped<T>(mut l: NonEmpty<T>) -> Option<(NonEmpty<T>, T)> {
@@ -481,12 +481,7 @@ impl PreheatedArchiveHashPaths {
             .into_iter()
             .map(|(len, chunk)| (len, chunk.into_iter().collect_vec()))
             .try_fold((BTreeMap::<_, Arc<SourceKind>>::new(), Vec::new()), |(acc, mut buffer), (current_len, next)| {
-                let preheating_archives_with_nesting = info_span!("preheating_archives_with_nesting", nesting_level=%current_len)
-                    .tap_mut(|pb| {
-                        pb.pb_set_style(&count_progress_style());
-                        pb.pb_set_length(next.len() as _);
-                    })
-                    .entered();
+                let _span = info_span!("preheating_archives_in_chunks", nesting_level=%current_len).entered();
 
                 next.into_iter()
                     .map(|(parent, paths)| {
@@ -502,11 +497,15 @@ impl PreheatedArchiveHashPaths {
                                 .with_context(|| format!("parent not preheated: {parent:#?}"))
                                 .cloned(),
                         })
-                        .and_then(|resolved_parent| {
-                            crate::compression::ArchiveHandle::guess(resolved_parent.as_ref().as_ref()).map(|archive| (archive, parent, paths))
-                        })
+                        .map(|resolved_parent| (resolved_parent, parent, paths))
                     })
                     .collect::<Result<Vec<_>>>()
+                    .map(|tasks| {
+                        tasks
+                            .into_iter()
+                            .flat_map(|(a, b, c)| c.into_iter().map(move |c| (a.clone(), b.clone(), c)))
+                            .collect_vec()
+                    })
                     .and_then(|tasks| {
                         let performing_tasks = info_span!("performing_tasks", count=%tasks.len())
                             .tap_mut(|pb| {
@@ -516,40 +515,26 @@ impl PreheatedArchiveHashPaths {
                             .entered();
                         tasks
                             .into_par_iter()
-                            .map(|(mut archive, parent, paths)| {
-                                let preheating_archive = info_span!("preheating_archive", ?parent)
-                                    .tap_mut(|pb| {
-                                        pb.pb_set_style(&count_progress_style());
-                                        pb.pb_set_length(paths.len() as _);
+                            .map({
+                                let performing_task = trace_span!("performing_task");
+                                move |(archive, parent, archive_path)| {
+                                    performing_task.in_scope(|| {
+                                        crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref()).and_then(|mut archive| {
+                                            archive
+                                                .get_handle(&archive_path)
+                                                .and_then(|handle| handle.seek_with_temp_file_blocking_raw(0))
+                                                .map(|extracted| (parent.clone(), extracted))
+                                        })
                                     })
-                                    .entered();
-                                paths
-                                    .iter()
-                                    .map(|archive_path| {
-                                        let _span = info_span!("extracting_path", ?archive_path).entered();
-
-                                        archive
-                                            .get_handle(archive_path)
-                                            .and_then(|handle| handle.seek_with_temp_file_blocking_raw(0))
-                                            .map(|extracted| (parent.clone(), extracted))
-                                    })
-                                    .inspect(|r| {
-                                        if r.as_ref().is_ok() {
-                                            preheating_archive.pb_inc(1)
-                                        }
-                                    })
-                                    .collect_vec()
+                                }
                             })
                             .inspect(|_| performing_tasks.pb_inc(1))
                             .collect_into_vec(&mut buffer)
                             .pipe(|_| {
                                 buffer.drain(..).try_fold(acc, |acc, next| {
-                                    next.into_iter().try_fold(acc, |acc, next| {
-                                        next.map(|(k, (_, v))| {
-                                            preheating_archives_with_nesting.pb_inc(1);
-                                            acc.tap_mut(|acc| {
-                                                acc.insert(k, v.pipe(SourceKind::CachedPath).pipe(Arc::new));
-                                            })
+                                    next.map(|(k, (_, v))| {
+                                        acc.tap_mut(|acc| {
+                                            acc.insert(k, v.pipe(SourceKind::CachedPath).pipe(Arc::new));
                                         })
                                     })
                                 })

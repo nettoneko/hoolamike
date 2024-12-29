@@ -37,6 +37,7 @@ indexmap.workspace = true
 indicatif = { workspace = true, features = ["rayon"] }
 iter-read.workspace = true
 itertools.workspace = true
+lru = "0.12.5"
 memmap2 = "0.9.5"
 nonempty.workspace = true
 normalize-path = "0.2.1"

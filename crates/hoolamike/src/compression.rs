@@ -85,7 +85,7 @@ impl ArchiveFileHandle {
 // static_assertions::assert_impl_all!(compress_tools::CompressToolsFile: Send, Sync);
 static_assertions::assert_impl_all!(::wrapped_7zip::ArchiveFileHandle: Send, Sync);
 static_assertions::assert_impl_all!(self::bethesda_archive::BethesdaArchiveFile: Send, Sync);
-static_assertions::assert_impl_all!(ArchiveFileHandle: Send , Sync);
+static_assertions::assert_impl_all!(ArchiveFileHandle: Send, Sync);
 
 impl ArchiveHandle<'_> {
     #[tracing::instrument(level = "TRACE")]
@@ -160,11 +160,13 @@ where
                     std::io::copy(&mut self, writer)
                 }
                 .context("creating a seekable temp file")
-                .and_then(|wrote_size| {
+                .map(|wrote_size| {
                     wrote_size
                         .eq(&expected_size)
                         .then_some(wrote_size)
                         .with_context(|| format!("error when writing temp file: expected [{expected_size}], found [{wrote_size}]"))
+                        .tap_err(|bad_size| tracing::debug!(?bad_size))
+                        .pipe(|_| wrote_size)
                 })
                 .map(|wrote_size| (wrote_size, temp_file))
                 .and_then(|(wrote_size, mut file)| {
