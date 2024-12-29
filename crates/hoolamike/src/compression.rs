@@ -66,6 +66,7 @@ pub enum ArchiveFileHandle {
 }
 
 impl ArchiveFileHandle {
+    #[tracing::instrument(skip(self), level = "TRACE")]
     pub fn size(&mut self) -> Result<u64> {
         match self {
             ArchiveFileHandle::Wrapped7Zip((entry, _)) => Ok(entry.size),
@@ -87,6 +88,7 @@ static_assertions::assert_impl_all!(self::bethesda_archive::BethesdaArchiveFile:
 static_assertions::assert_impl_all!(ArchiveFileHandle: Send , Sync);
 
 impl ArchiveHandle<'_> {
+    #[tracing::instrument(level = "TRACE")]
     pub fn guess(path: &Path) -> anyhow::Result<Self> {
         std::panic::catch_unwind(|| {
             {
@@ -148,8 +150,8 @@ impl<T: std::io::Read + Sync + 'static> T
 where
     Self: Sized + Sync + Send + 'static,
 {
-    fn seek_with_temp_file_blocking_unbounded(mut self, expected_size: u64, _computation_permit: OwnedSemaphorePermit) -> Result<tempfile::TempPath> {
-        let _span = tracing::info_span!("seek_with_temp_file_blocking_unbounded").entered();
+    fn seek_with_temp_file_blocking_raw(mut self, expected_size: u64) -> Result<(u64, tempfile::TempPath)> {
+        let _span = tracing::info_span!("seek_with_temp_file_blocking_raw").entered();
         tempfile::NamedTempFile::new()
             .context("creating a tempfile")
             .and_then(|mut temp_file| {
@@ -164,13 +166,19 @@ where
                         .then_some(wrote_size)
                         .with_context(|| format!("error when writing temp file: expected [{expected_size}], found [{wrote_size}]"))
                 })
-                .map(|_| temp_file)
-                .and_then(|mut file| {
+                .map(|wrote_size| (wrote_size, temp_file))
+                .and_then(|(wrote_size, mut file)| {
                     file.flush()
                         .context("flushing file")
                         .map(|_| file.into_temp_path())
+                        .map(|path| (wrote_size, path))
                 })
             })
+    }
+
+    fn seek_with_temp_file_blocking_unbounded(self, expected_size: u64, _computation_permit: OwnedSemaphorePermit) -> Result<(u64, tempfile::TempPath)> {
+        let _span = tracing::info_span!("seek_with_temp_file_blocking_unbounded").entered();
+        self.seek_with_temp_file_blocking_raw(expected_size)
     }
     fn seek_with_temp_file_blocking(mut self, expected_size: u64, permit: tokio::sync::OwnedSemaphorePermit) -> Result<WithPermit<tempfile::TempPath>> {
         let _span = tracing::info_span!("seek_with_temp_file_blocking").entered();

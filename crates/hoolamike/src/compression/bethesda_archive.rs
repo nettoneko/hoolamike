@@ -211,6 +211,7 @@ impl ProcessArchive for BethesdaArchive<'_> {
 }
 
 impl BethesdaArchive<'_> {
+    #[tracing::instrument(level = "TRACE")]
     pub fn open(file: &Path) -> Result<Self> {
         file.open_file_read()
             .context("opening bethesda archive")

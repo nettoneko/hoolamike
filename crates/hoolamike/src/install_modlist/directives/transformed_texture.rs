@@ -92,7 +92,7 @@ impl TransformedTextureHandler {
         let output_path = self.output_directory.join(to.into_path());
         let source_file = self
             .download_summary
-            .resolve_archive_path(archive_hash_path.clone())
+            .resolve_archive_path(&archive_hash_path)
             .pipe(ready)
             .and_then(|path| {
                 self.archive_extraction_queue

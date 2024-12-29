@@ -43,7 +43,7 @@ impl PatchedFromArchiveHandler {
     ) -> Result<u64> {
         let source_file = self
             .download_summary
-            .resolve_archive_path(archive_hash_path.clone())
+            .resolve_archive_path(&archive_hash_path)
             .pipe(ready)
             .and_then(|path| {
                 self.archive_extraction_queue
@@ -83,7 +83,6 @@ impl PatchedFromArchiveHandler {
             let delta_file = wabbajack_file
                 .lock_arc()
                 .get_handle(Path::new(&patch_id.hyphenated().to_string()))
-                .map(|delta_file| delta_file)
                 .with_context(|| format!("patch {patch_id:?} does not exist"))?;
 
             source_file

@@ -1,13 +1,18 @@
 use {
+    dashmap::DashMap,
     futures::{future::Shared, FutureExt},
-    std::{collections::HashMap, future::Future, sync::Arc},
+    std::{
+        collections::HashMap,
+        future::{ready, Future},
+        sync::Arc,
+    },
     tap::prelude::*,
     tokio::{sync::Mutex, task::JoinHandle},
     tracing::{instrument, trace_span, Instrument},
 };
 
 pub struct CachedFutureQueue<K, V> {
-    tasks: Mutex<HashMap<K, Shared<ClonableJoinHandle<Arc<V>>>>>,
+    tasks: DashMap<K, Shared<ClonableJoinHandle<Arc<V>>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,7 +64,14 @@ where
     pub fn new() -> Arc<Self> {
         Arc::new(Self { tasks: Default::default() })
     }
-
+    pub fn preheat(&self, key: K, value: V) {
+        self.tasks.insert(
+            key,
+            tokio::task::spawn(ready(value.pipe(Arc::new)))
+                .pipe(ClonableJoinHandle)
+                .shared(),
+        );
+    }
     #[instrument(skip(self, with), level = "TRACE")]
     pub async fn get<F, Fut>(self: Arc<Self>, key: K, with: F) -> std::result::Result<Arc<V>, ArcJoinError>
     where
@@ -68,8 +80,6 @@ where
     {
         let future = self
             .tasks
-            .lock()
-            .await
             .entry(key.clone())
             .or_insert_with(move || {
                 tokio::task::spawn(

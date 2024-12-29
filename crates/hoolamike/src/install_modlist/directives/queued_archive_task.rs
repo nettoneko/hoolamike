@@ -3,9 +3,15 @@ use {
         compression::{ArchiveHandle, ProcessArchive, SeekWithTempFileExt},
         utils::spawn_rayon,
     },
+    anyhow::Context,
     futures::TryFutureExt,
     nonempty::NonEmpty,
-    std::{convert::identity, future::ready, path::PathBuf, sync::Arc},
+    std::{
+        convert::identity,
+        future::ready,
+        path::{Path, PathBuf},
+        sync::Arc,
+    },
     tap::prelude::*,
     tokio::{
         sync::{oneshot::error::RecvError, AcquireError, Semaphore},
@@ -67,6 +73,7 @@ impl QueuedArchiveService {
         })
     }
 
+    #[tracing::instrument(skip_all, level = "TRACE")]
     pub fn get_archive_spawn(self: Arc<Self>, archive: NonEmpty<PathBuf>) -> JoinHandle<Result<Arc<SourceKind>>> {
         tokio::task::spawn(
             self.get_archive(archive)
@@ -127,44 +134,36 @@ impl QueuedArchiveService {
     }
 }
 
-#[instrument(skip(computation_permits), level = "TRACE")]
-async fn prepare_archive(computation_permits: Arc<Semaphore>, source: Arc<SourceKind>, archive_path: PathBuf) -> Result<Extracted> {
-    let run = tracing::Span::current();
+#[instrument(level = "TRACE")]
+pub fn prepare_archive_blocking(source: &SourceKind, archive_path: &Path) -> anyhow::Result<(u64, Extracted)> {
+    ArchiveHandle::guess(source.as_ref())
+        .and_then(|mut archive| {
+            archive.get_handle(archive_path).and_then(|mut handle| {
+                handle
+                    .size()
+                    .and_then(|size| handle.seek_with_temp_file_blocking_raw(size))
+            })
+        })
+        .with_context(|| format!("preparing [{source:?}] -> {archive_path:?}"))
+}
+
+#[instrument(skip(_computation_permits), level = "TRACE")]
+async fn prepare_archive(_computation_permits: Arc<Semaphore>, source: Arc<SourceKind>, archive_path: PathBuf) -> Result<Extracted> {
     tokio::task::spawn({
-        cloned![run];
         async move {
-            computation_permits
-                .acquire_owned()
-                .instrument(debug_span!("acquiring file permit"))
-                .map_err(Arc::new)
-                .map_err(self::Error::AcquiringPermit)
-                .map_ok(|permit| (source, permit))
-                .and_then({
-                    move |(source, permit)| {
-                        let span = trace_span!("performing_work");
-                        spawn_rayon(move || {
-                            span.in_scope(|| {
-                                ArchiveHandle::guess(source.as_ref().as_ref()).and_then(|mut archive| {
-                                    archive.get_handle(&archive_path).and_then(|mut handle| {
-                                        handle
-                                            .size()
-                                            .and_then(|size| handle.seek_with_temp_file_blocking_unbounded(size, permit))
-                                    })
-                                })
-                            })
-                        })
-                        .map_err(self::Error::extracting_from_archive)
-                    }
-                })
+            let prepare_archive_on_thread = trace_span!("prepare_archive_on_thread");
+            spawn_rayon(move || prepare_archive_on_thread.in_scope(|| prepare_archive_blocking(&source, &archive_path)))
+                .map_err(self::Error::extracting_from_archive)
                 .instrument(debug_span!("waiting for thread to finish"))
                 .await
         }
-        .instrument(run)
+        .instrument(trace_span!("preparation_task"))
     })
     .map_err(self::Error::thread_crashed)
     .and_then(ready)
     .instrument(tracing::Span::current())
     .await
+    .map(|(_, extracted)| extracted)
 }
 
 impl AsRef<std::path::Path> for SourceKind {

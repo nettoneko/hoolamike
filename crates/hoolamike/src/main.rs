@@ -3,7 +3,7 @@
 #![feature(slice_take)]
 use {
     anyhow::{Context, Result},
-    clap::{Args, Parser, Subcommand},
+    clap::{Args, Parser, Subcommand, ValueEnum},
     itertools::Itertools,
     modlist_data::ModlistSummary,
     modlist_json::DirectiveKind,
@@ -28,8 +28,8 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
     /// generates a flamegraph, useful for performance testing (SLOW!)
-    #[arg(long)]
-    generate_flamegraph: bool,
+    #[arg(long, value_enum, default_value_t = Default::default())]
+    logging_mode: LoggingMode,
 }
 
 #[derive(clap::Args, Default)]
@@ -93,14 +93,22 @@ pub mod octadiff_reader;
 pub mod progress_bars_v2;
 pub mod wabbajack_file;
 
+#[derive(Debug, ValueEnum, Clone, Copy, Default, serde::Serialize)]
+pub enum LoggingMode {
+    #[default]
+    Cli,
+    Flamegraph,
+    TracingConsole,
+}
+
 #[allow(unused_imports)]
-fn setup_logging(generate_flamegraph: bool) -> Option<impl Drop> {
+fn setup_logging(logging_mode: LoggingMode) -> Option<impl Drop> {
     use {
         tracing_indicatif::IndicatifLayer,
         tracing_subscriber::{fmt, layer::SubscriberExt, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter},
     };
-    match generate_flamegraph {
-        true => {
+    match logging_mode {
+        LoggingMode::Flamegraph => {
             let fmt_layer = fmt::Layer::default();
 
             let (flame_layer, guard) = tracing_flame::FlameLayer::with_file("./tracing.folded").unwrap();
@@ -112,19 +120,17 @@ fn setup_logging(generate_flamegraph: bool) -> Option<impl Drop> {
             tracing::subscriber::set_global_default(subscriber).expect("Could not set global default");
             Some(guard)
         }
-        false => {
+        LoggingMode::Cli => {
             let indicatif_layer = console::Term::stdout()
                 .size_checked()
                 .map(|(_width, height)| height)
                 .unwrap_or(16)
                 .div(2)
                 .pipe(|_half_height| {
-                    IndicatifLayer::new().with_tick_settings(tracing_indicatif::TickSettings {
-                        term_draw_hz: 4,
-                        default_tick_interval: Some(std::time::Duration::from_millis(250)),
-                        footer_tick_interval: None,
-                        ..Default::default()
-                    })
+                    IndicatifLayer::new().with_max_progress_bars(
+                        14,
+                        Some(indicatif::ProgressStyle::with_template("...and {pending_progress_bars} more not shown above.").unwrap()),
+                    )
                 });
             // let indicatif_layer = ;
             let subscriber = tracing_subscriber::registry()
@@ -136,26 +142,44 @@ fn setup_logging(generate_flamegraph: bool) -> Option<impl Drop> {
                 .expect("logging failed");
             None
         }
+        LoggingMode::TracingConsole => {
+            use tracing_subscriber::prelude::*;
+
+            // spawn the console server in the background,
+            // returning a `Layer`:
+            let console_layer = console_subscriber::spawn();
+
+            // build a `Subscriber` by combining layers with a
+            // `tracing_subscriber::Registry`:
+            tracing_subscriber::registry()
+                // add the console layer to the subscriber
+                .with(console_layer)
+                // add other layers...
+                .with(tracing_subscriber::fmt::layer())
+                // .with(...)
+                .init();
+            None
+        }
     }
 }
 
 fn main() -> Result<()> {
     rayon::ThreadPoolBuilder::new()
-        .num_threads(num_cpus::get().div(2))
+        .num_threads(num_cpus::get().saturating_sub(2).max(1))
         .build_global()
         .unwrap();
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .worker_threads(num_cpus::get().div(2))
+        .worker_threads(num_cpus::get().min(2))
         .build()
         .unwrap()
         .block_on(async move {
             let Cli {
                 command,
                 hoolamike_config,
-                generate_flamegraph,
+                logging_mode,
             } = Cli::parse();
-            let _guard = setup_logging(generate_flamegraph);
+            let _guard = setup_logging(logging_mode);
 
             match command {
                 Commands::ValidateModlist { path } => tokio::fs::read_to_string(&path)

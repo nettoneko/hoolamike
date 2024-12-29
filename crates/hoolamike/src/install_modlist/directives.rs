@@ -1,6 +1,7 @@
 use {
     crate::{
-        downloaders::WithArchiveDescriptor,
+        compression::{ProcessArchive, SeekWithTempFileExt},
+        downloaders::{helpers::FutureAnyhowExt, WithArchiveDescriptor},
         install_modlist::{download_cache::validate_hash, io_progress_style},
         modlist_json::{
             directive::{
@@ -14,19 +15,23 @@ use {
             },
             DirectiveKind,
         },
+        progress_bars_v2::count_progress_style,
         utils::{MaybeWindowsPath, PathReadWrite},
     },
     anyhow::{Context, Result},
     futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt},
+    indexmap::IndexMap,
     itertools::Itertools,
     nonempty::NonEmpty,
     num::ToPrimitive,
     parking_lot::Mutex,
-    queued_archive_task::QueuedArchiveService,
+    queued_archive_task::{Extracted, QueuedArchiveService, SourceKind},
+    rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
     remapped_inline_file::RemappingContext,
     std::{
         collections::BTreeMap,
         future::ready,
+        iter::once,
         ops::Mul,
         path::{Path, PathBuf},
         sync::Arc,
@@ -190,118 +195,67 @@ impl ArchivePathDirective {
 
 pub mod queued_archive_task;
 
+#[instrument(skip_all)]
 fn handle_nested_archive_directives(
     manager: Arc<DirectivesHandler>,
-    archive_extraction_queue: Arc<QueuedArchiveService>,
+    download_summary: DownloadSummary,
+    queued_archive_service: Arc<QueuedArchiveService>,
     directives: Vec<ArchivePathDirective>,
     concurrency: usize,
 ) -> impl Stream<Item = Result<u64>> {
-    let handle_directives = tracing::Span::current();
-    let preheat = {
-        cloned![archive_extraction_queue];
-        move |paths: Vec<NonEmpty<PathBuf>>| {
-            cloned![archive_extraction_queue];
-            async move {
-                paths
-                    .into_iter()
-                    .collect_vec()
-                    .pipe(|paths| {
-                        tracing::info!("preheating [{}] archives", paths.len());
-                        paths
-                            .into_iter()
-                            .map(|path| archive_extraction_queue.clone().get_archive_spawn(path))
-                            .collect_vec()
-                            .pipe(|tasks| {
-                                futures::stream::iter(tasks)
-                                    .buffered(2137)
-                                    .for_each(|_| ready(()))
-                            })
+    let preheat_task = {
+        let preheat_directives = info_span!("preheat_directives");
+        directives
+            .iter()
+            .map(|d| d.archive_path())
+            .map(|path| download_summary.resolve_archive_path(path))
+            .collect::<Result<Vec<_>>>()
+            .pipe(ready)
+            .and_then(|paths| {
+                tokio::task::spawn_blocking(move || preheat_directives.in_scope(|| PreheatedArchiveHashPaths::preheat_archive_hash_paths(paths)))
+                    .map_context("thread crashed")
+                    .and_then(ready)
+            })
+            .map_ok({
+                cloned![queued_archive_service];
+                move |preheated| {
+                    preheated.0.iter().for_each(|(k, v)| {
+                        queued_archive_service
+                            .tasks
+                            .preheat(k.clone(), Ok(v.clone()))
                     })
-                    .await
-            }
-        }
+                }
+            })
     };
-
-    directives
-        .tap_mut(|directives| {
-            // sorting
-            directives.sort_by_cached_key(|archive| {
-                // this is so that progress is easier on the eye
-                archive.archive_path().clone()
-            });
-        })
-        .tap({
-            cloned![preheat, manager];
-            move |directives| {
-                cloned![preheat, manager];
-                let preheat_subpaths_of_len = move |directives: &[ArchivePathDirective], len: usize, slice: usize| {
-                    // preheat
-                    directives
-                        .iter()
-                        .map(|directive| {
-                            directive
-                                .archive_path()
-                                .clone()
-                                .pipe(|path| manager.download_summary.resolve_archive_path(path.clone()))
-                        })
-                        .filter_map(|res| {
-                            res.tap_err(|reason| {
-                                tracing::error!(?reason, "the the program will continue, but it will likely not finish");
-                            })
-                            .ok()
-                        })
-                        .filter_map(|path| {
-                            path.len()
-                                .eq(&len)
-                                .then(|| path.tap_mut(|path| path.truncate(slice)))
-                        })
-                        .collect_vec()
-                        .pipe(|paths| {
-                            cloned![preheat];
-                            preheat(paths)
-                        })
-                };
-                [(3, 2), (4, 2), (4, 3), (2, 2)]
-                    .into_iter()
-                    .map({
-                        cloned![preheat_subpaths_of_len];
-                        let directives = directives.clone();
-                        move |(len, slice)| preheat_subpaths_of_len(&directives, len, slice)
-                    })
-                    .pipe(|tasks| {
-                        tokio::task::spawn(async move {
-                            for task in tasks {
-                                task.await;
-                            }
-                        })
-                    });
-            }
-        })
-        .pipe(futures::stream::iter)
-        .map(move |directive| match directive {
-            ArchivePathDirective::TransformedTexture(transformed_texture) => manager
-                .transformed_texture
-                .clone()
-                .handle(transformed_texture.clone())
-                .instrument(handle_directives.clone())
-                .map(move |res| res.with_context(|| format!("handling directive: {transformed_texture:#?}")))
-                .boxed(),
-            ArchivePathDirective::FromArchive(from_archive) => manager
-                .from_archive
-                .clone()
-                .handle(from_archive.clone())
-                .instrument(handle_directives.clone())
-                .map(move |res| res.with_context(|| format!("handling directive: {from_archive:#?}")))
-                .boxed(),
-            ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => manager
-                .patched_from_archive
-                .clone()
-                .handle(patched_from_archive_directive.clone())
-                .instrument(handle_directives.clone())
-                .map(move |res| res.with_context(|| format!("handling directive: {patched_from_archive_directive:#?}")))
-                .boxed(),
-        })
-        .buffer_unordered(concurrency)
+    let handle_directives = info_span!("handle_directives");
+    preheat_task.into_stream().try_flat_map(move |_| {
+        directives
+            .pipe(futures::stream::iter)
+            .map(move |directive| match directive {
+                ArchivePathDirective::TransformedTexture(transformed_texture) => manager
+                    .transformed_texture
+                    .clone()
+                    .handle(transformed_texture.clone())
+                    .instrument(handle_directives.clone())
+                    .map(move |res| res.with_context(|| format!("handling directive: {transformed_texture:#?}")))
+                    .boxed(),
+                ArchivePathDirective::FromArchive(from_archive) => manager
+                    .from_archive
+                    .clone()
+                    .handle(from_archive.clone())
+                    .instrument(handle_directives.clone())
+                    .map(move |res| res.with_context(|| format!("handling directive: {from_archive:#?}")))
+                    .boxed(),
+                ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => manager
+                    .patched_from_archive
+                    .clone()
+                    .handle(patched_from_archive_directive.clone())
+                    .instrument(handle_directives.clone())
+                    .map(move |res| res.with_context(|| format!("handling directive: {patched_from_archive_directive:#?}")))
+                    .boxed(),
+            })
+            .buffer_unordered(concurrency)
+    })
 }
 
 // /// it's dirty as hell but saves disk space
@@ -468,10 +422,144 @@ fn handle_nested_archive_directives(
 
 #[extension_traits::extension(pub (crate) trait ResolvePathExt)]
 impl DownloadSummary {
-    fn resolve_archive_path(&self, ArchiveHashPath { source_hash, path }: ArchiveHashPath) -> Result<NonEmpty<PathBuf>> {
-        self.get(&source_hash)
+    fn resolve_archive_path(&self, ArchiveHashPath { source_hash, path }: &ArchiveHashPath) -> Result<NonEmpty<PathBuf>> {
+        self.get(source_hash)
             .with_context(|| format!("no [{source_hash}] in downloads"))
-            .map(|parent| NonEmpty::new(parent.inner.clone()).tap_mut(|resolved| resolved.extend(path.into_iter().map(MaybeWindowsPath::into_path))))
+            .map(|parent| NonEmpty::new(parent.inner.clone()).tap_mut(|resolved| resolved.extend(path.into_iter().cloned().map(MaybeWindowsPath::into_path))))
+    }
+}
+
+pub fn boxed_iter<'a, T: 'a>(iter: impl Iterator<Item = T> + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
+    Box::new(iter)
+}
+
+#[extension_traits::extension(pub trait IteratorTryFlatMapExt)]
+impl<'iter, T, E, I> I
+where
+    E: 'iter,
+    T: 'iter,
+    I: Iterator<Item = Result<T, E>> + 'iter,
+{
+    fn try_flat_map<U, NewIterator, F>(self, mut try_flat_map: F) -> impl Iterator<Item = Result<U, E>> + 'iter
+    where
+        U: 'iter,
+        NewIterator: Iterator<Item = Result<U, E>> + 'iter,
+        F: FnMut(T) -> NewIterator + 'iter,
+    {
+        self.flat_map(move |e| match e {
+            Ok(value) => value.pipe(&mut try_flat_map).pipe(boxed_iter),
+            Err(e) => e.pipe(Err).pipe(once).pipe(boxed_iter),
+        })
+    }
+}
+
+type PreheatedArchiveHashPathsInner = BTreeMap<NonEmpty<PathBuf>, Arc<SourceKind>>;
+
+pub struct PreheatedArchiveHashPaths(Arc<PreheatedArchiveHashPathsInner>);
+
+impl PreheatedArchiveHashPaths {
+    #[tracing::instrument(skip(paths), fields(count=%paths.len()), level = "INFO")]
+    pub fn preheat_archive_hash_paths(paths: Vec<NonEmpty<PathBuf>>) -> Result<Self> {
+        fn ancestors(path: NonEmpty<PathBuf>) -> impl Iterator<Item = (NonEmpty<PathBuf>, PathBuf)> {
+            fn popped<T>(mut l: NonEmpty<T>) -> Option<(NonEmpty<T>, T)> {
+                l.pop().map(|i| (l, i))
+            }
+            std::iter::successors(popped(path), |(parent, _path)| popped(parent.clone()))
+        }
+
+        paths
+            .into_iter()
+            .flat_map(ancestors)
+            .unique()
+            .sorted_by_cached_key(|(parent, _)| parent.clone())
+            .chunk_by(|(parent, _path)| parent.clone())
+            .into_iter()
+            .map(|(parent, paths)| (parent, paths.into_iter().map(|(_, path)| path).collect_vec()))
+            .collect::<IndexMap<_, _>>()
+            .into_iter()
+            .chunk_by(|(parent, _)| parent.len())
+            .into_iter()
+            .map(|(len, chunk)| (len, chunk.into_iter().collect_vec()))
+            .try_fold((BTreeMap::<_, Arc<SourceKind>>::new(), Vec::new()), |(acc, mut buffer), (current_len, next)| {
+                let preheating_archives_with_nesting = info_span!("preheating_archives_with_nesting", nesting_level=%current_len)
+                    .tap_mut(|pb| {
+                        pb.pb_set_style(&count_progress_style());
+                        pb.pb_set_length(next.len() as _);
+                    })
+                    .entered();
+
+                next.into_iter()
+                    .map(|(parent, paths)| {
+                        (match parent.tail.as_slice() {
+                            &[] => parent
+                                .head
+                                .clone()
+                                .pipe(SourceKind::JustPath)
+                                .pipe(Arc::new)
+                                .pipe(Ok),
+                            _more => acc
+                                .get(&parent)
+                                .with_context(|| format!("parent not preheated: {parent:#?}"))
+                                .cloned(),
+                        })
+                        .and_then(|resolved_parent| {
+                            crate::compression::ArchiveHandle::guess(resolved_parent.as_ref().as_ref()).map(|archive| (archive, parent, paths))
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()
+                    .and_then(|tasks| {
+                        let performing_tasks = info_span!("performing_tasks", count=%tasks.len())
+                            .tap_mut(|pb| {
+                                pb.pb_set_style(&count_progress_style());
+                                pb.pb_set_length(tasks.len() as _);
+                            })
+                            .entered();
+                        tasks
+                            .into_par_iter()
+                            .map(|(mut archive, parent, paths)| {
+                                let preheating_archive = info_span!("preheating_archive", ?parent)
+                                    .tap_mut(|pb| {
+                                        pb.pb_set_style(&count_progress_style());
+                                        pb.pb_set_length(paths.len() as _);
+                                    })
+                                    .entered();
+                                paths
+                                    .iter()
+                                    .map(|archive_path| {
+                                        let _span = info_span!("extracting_path", ?archive_path).entered();
+
+                                        archive
+                                            .get_handle(archive_path)
+                                            .and_then(|handle| handle.seek_with_temp_file_blocking_raw(0))
+                                            .map(|extracted| (parent.clone(), extracted))
+                                    })
+                                    .inspect(|r| {
+                                        if r.as_ref().is_ok() {
+                                            preheating_archive.pb_inc(1)
+                                        }
+                                    })
+                                    .collect_vec()
+                            })
+                            .inspect(|_| performing_tasks.pb_inc(1))
+                            .collect_into_vec(&mut buffer)
+                            .pipe(|_| {
+                                buffer.drain(..).try_fold(acc, |acc, next| {
+                                    next.into_iter().try_fold(acc, |acc, next| {
+                                        next.map(|(k, (_, v))| {
+                                            preheating_archives_with_nesting.pb_inc(1);
+                                            acc.tap_mut(|acc| {
+                                                acc.insert(k, v.pipe(SourceKind::CachedPath).pipe(Arc::new));
+                                            })
+                                        })
+                                    })
+                                })
+                            })
+                            .map(|acc| (acc, buffer))
+                    })
+            })
+            .map(|(preheated, _)| preheated)
+            .map(Arc::new)
+            .map(Self)
     }
 }
 
@@ -675,7 +763,13 @@ impl DirectivesHandler {
                                 .collect_vec()
                                 .pipe(|directives| {
                                     handle_directives.in_scope(|| {
-                                        handle_nested_archive_directives(manager.clone(), self.archive_extraction_queue.clone(), directives, concurrency() * 10)
+                                        handle_nested_archive_directives(
+                                            manager.clone(),
+                                            self.download_summary.clone(),
+                                            self.archive_extraction_queue.clone(),
+                                            directives,
+                                            concurrency() * 10,
+                                        )
                                     })
                                 }),
                         )

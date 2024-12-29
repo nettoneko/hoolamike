@@ -8,6 +8,7 @@ readme.workspace = true
 edition.workspace = true
 
 [dependencies]
+dashmap = { version = "6.1.0", features = ["inline"] }
 futures.workspace = true
 tap.workspace = true
 tokio.workspace = true
