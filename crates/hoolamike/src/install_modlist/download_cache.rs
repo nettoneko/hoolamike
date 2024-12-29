@@ -54,7 +54,8 @@ async fn calculate_hash(path: PathBuf) -> Result<u64> {
 
     let mut file = tokio::fs::File::open(&path)
         .map_with_context(|| format!("opening file [{}]", path.display()))
-        .await?;
+        .await?
+        .pipe(tokio::io::BufReader::new);
     let mut buffer = vec![0; crate::BUFFER_SIZE];
     let mut hasher = xxhash_rust::xxh64::Xxh64::new(0);
     loop {

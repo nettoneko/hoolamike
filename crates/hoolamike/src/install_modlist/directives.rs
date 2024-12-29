@@ -1,6 +1,6 @@
 use {
     crate::{
-        compression::{ProcessArchive, SeekWithTempFileExt},
+        compression::{ArchiveHandleKind, ProcessArchive, SeekWithTempFileExt},
         downloaders::{helpers::FutureAnyhowExt, WithArchiveDescriptor},
         install_modlist::{download_cache::validate_hash, io_progress_style},
         modlist_json::{
@@ -23,23 +23,20 @@ use {
     indexmap::IndexMap,
     itertools::Itertools,
     nonempty::NonEmpty,
-    num::ToPrimitive,
     parking_lot::Mutex,
-    queued_archive_task::{Extracted, QueuedArchiveService, SourceKind},
-    rand::seq::SliceRandom,
+    queued_archive_task::{QueuedArchiveService, SourceKind},
     rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
     remapped_inline_file::RemappingContext,
     std::{
         collections::BTreeMap,
         future::ready,
         iter::once,
-        ops::Mul,
         path::{Path, PathBuf},
         sync::Arc,
     },
     tap::prelude::*,
     tempfile::TempPath,
-    tracing::{info_span, instrument, trace_span, Instrument},
+    tracing::{info_span, instrument, Instrument},
     tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
@@ -179,6 +176,7 @@ enum ArchivePathDirective {
 }
 
 impl ArchivePathDirective {
+    #[allow(dead_code)]
     fn directive_size(&self) -> u64 {
         match self {
             ArchivePathDirective::FromArchive(d) => d.size,
@@ -427,7 +425,7 @@ impl DownloadSummary {
     fn resolve_archive_path(&self, ArchiveHashPath { source_hash, path }: &ArchiveHashPath) -> Result<NonEmpty<PathBuf>> {
         self.get(source_hash)
             .with_context(|| format!("no [{source_hash}] in downloads"))
-            .map(|parent| NonEmpty::new(parent.inner.clone()).tap_mut(|resolved| resolved.extend(path.into_iter().cloned().map(MaybeWindowsPath::into_path))))
+            .map(|parent| NonEmpty::new(parent.inner.clone()).tap_mut(|resolved| resolved.extend(path.iter().cloned().map(MaybeWindowsPath::into_path))))
     }
 }
 
@@ -535,10 +533,11 @@ impl PreheatedArchiveHashPaths {
                                             .collect_vec()
                                             .pipe_ref(|archive_paths| {
                                                 performing_task.in_scope(|| {
-                                                    trace_span!("extracting_archive", ?parent, ?archive, ?archive_paths).in_scope(|| {
+                                                    info_span!("extracting_archive", archive_paths=%archive_paths.len()).in_scope(|| {
                                                         crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref())
                                                             .pipe(once)
                                                             .try_flat_map(|mut archive| {
+                                                                let kind = ArchiveHandleKind::from(&archive);
                                                                 archive
                                                                     .get_many_handles(archive_paths)
                                                                     .and_then(|handles| {
@@ -551,7 +550,9 @@ impl PreheatedArchiveHashPaths {
                                                                                     .map(|e| (path, e))
                                                                             })
                                                                             .collect::<Result<Vec<_>>>()
+                                                                            .context("writing all files to temp files")
                                                                     })
+                                                                    .with_context(|| format!("when unpacking files from archive [{kind:?}]"))
                                                                     .pipe(once)
                                                                     .try_flat_map(|multiple_files| {
                                                                         multiple_files
@@ -568,6 +569,12 @@ impl PreheatedArchiveHashPaths {
                                                                     })
                                                             })
                                                             .collect::<Result<Vec<(NonEmpty<PathBuf>, (u64, TempPath))>>>()
+                                                            .with_context(|| {
+                                                                format!(
+                                                                    "extracting from archive [{archive:?}] (parent={parent:?}, \
+                                                                     archive_paths={archive_paths:#?})"
+                                                                )
+                                                            })
                                                     })
                                                 })
                                             })

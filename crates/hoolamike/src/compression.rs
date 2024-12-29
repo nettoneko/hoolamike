@@ -14,7 +14,7 @@ use {
     },
     tap::prelude::*,
     tokio::sync::OwnedSemaphorePermit,
-    tracing::{info_span, Instrument},
+    tracing::{info_span, instrument, Instrument},
 };
 
 pub mod bethesda_archive;
@@ -24,11 +24,12 @@ pub mod zip;
 
 pub mod forward_only_seek;
 
-#[enum_dispatch::enum_dispatch(ArchiveHandle)]
 pub trait ProcessArchive: Sized {
     fn list_paths(&mut self) -> Result<Vec<PathBuf>>;
     fn get_handle(&mut self, path: &Path) -> Result<self::ArchiveFileHandle>;
+    #[tracing::instrument(skip_all)]
     fn get_many_handles(&mut self, paths: &[&Path]) -> Result<Vec<(PathBuf, self::ArchiveFileHandle)>> {
+        let _span = tracing::info_span!("get_many_handles").entered();
         paths
             .iter()
             .map(|&path| {
@@ -36,6 +37,34 @@ pub trait ProcessArchive: Sized {
                     .map(|handle| (path.to_owned(), handle))
             })
             .collect()
+    }
+}
+
+impl ProcessArchive for ArchiveHandle<'_> {
+    #[instrument(skip(self), fields(kind=?ArchiveHandleKind::from(&*self)))]
+    fn list_paths(&mut self) -> Result<Vec<PathBuf>> {
+        match self {
+            ArchiveHandle::Wrapped7Zip(i) => i.list_paths(),
+            ArchiveHandle::Bethesda(i) => i.list_paths(),
+            ArchiveHandle::CompressTools(i) => i.list_paths(),
+        }
+    }
+
+    #[instrument(skip(self), fields(kind=?ArchiveHandleKind::from(&*self)))]
+    fn get_handle(&mut self, path: &Path) -> Result<self::ArchiveFileHandle> {
+        match self {
+            ArchiveHandle::Wrapped7Zip(i) => i.get_handle(path),
+            ArchiveHandle::Bethesda(i) => i.get_handle(path),
+            ArchiveHandle::CompressTools(i) => <_ as ProcessArchive>::get_handle(i, path),
+        }
+    }
+    #[instrument(skip(self, paths), fields(kind=?ArchiveHandleKind::from(&*self), paths=%paths.len()))]
+    fn get_many_handles(&mut self, paths: &[&Path]) -> Result<Vec<(PathBuf, self::ArchiveFileHandle)>> {
+        match self {
+            ArchiveHandle::Wrapped7Zip(i) => i.get_many_handles(paths),
+            ArchiveHandle::Bethesda(i) => i.get_many_handles(paths),
+            ArchiveHandle::CompressTools(i) => i.get_many_handles(paths),
+        }
     }
 }
 
@@ -143,8 +172,8 @@ impl std::io::Read for ArchiveFileHandle {
 #[enum_dispatch::enum_dispatch(ArchiveHandle)]
 pub trait ProcessArchiveFile {}
 
-#[enum_dispatch::enum_dispatch]
-#[derive(Debug)]
+#[derive(Debug, enum_kinds::EnumKind)]
+#[enum_kind(ArchiveHandleKind)]
 pub enum ArchiveHandle<'a> {
     // CompressTools(compress_tools::CompressToolsArchive),
     Wrapped7Zip(::wrapped_7zip::ArchiveHandle),

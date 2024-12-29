@@ -2,12 +2,11 @@ use {
     dashmap::DashMap,
     futures::{future::Shared, FutureExt},
     std::{
-        collections::HashMap,
         future::{ready, Future},
         sync::Arc,
     },
     tap::prelude::*,
-    tokio::{sync::Mutex, task::JoinHandle},
+    tokio::task::JoinHandle,
     tracing::{instrument, trace_span, Instrument},
 };
 

@@ -123,7 +123,7 @@ pub async fn stream_file(from: HumanUrl, to: PathBuf, expected_size: u64) -> Res
         .open(&to)
         .map_with_context(|| format!("opening [{}]", to.display()))
         .await?;
-    let mut writer = &mut tracing::Span::current().wrap_async_write(expected_size, target_file);
+    let mut writer = &mut tracing::Span::current().wrap_async_write(expected_size, tokio::io::BufWriter::new(target_file));
     let mut byte_stream = reqwest::get(from.to_string())
         .await
         .with_context(|| format!("making request to {from}"))?

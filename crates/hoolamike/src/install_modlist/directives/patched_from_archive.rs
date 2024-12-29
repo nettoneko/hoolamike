@@ -10,10 +10,7 @@ use {
         utils::spawn_rayon,
     },
     queued_archive_task::QueuedArchiveService,
-    std::{
-        convert::identity,
-        io::{Read, Seek, Write},
-    },
+    std::io::{Read, Seek, Write},
     tracing::Instrument,
 };
 

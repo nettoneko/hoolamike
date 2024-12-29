@@ -5,10 +5,7 @@ use {
         progress_bars_v2::IndicatifWrapIoExt,
         utils::{spawn_rayon, PathReadWrite},
     },
-    std::{
-        convert::identity,
-        io::{Read, Seek},
-    },
+    std::io::{Read, Seek},
     tracing::instrument,
 };
 

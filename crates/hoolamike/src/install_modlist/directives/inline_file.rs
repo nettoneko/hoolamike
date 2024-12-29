@@ -1,7 +1,7 @@
 use {
     super::*,
     crate::{modlist_json::directive::InlineFileDirective, progress_bars_v2::IndicatifWrapIoExt, utils::spawn_rayon},
-    std::{convert::identity, io::Write, path::Path},
+    std::{io::Write, path::Path},
 };
 
 #[derive(Clone, Debug)]

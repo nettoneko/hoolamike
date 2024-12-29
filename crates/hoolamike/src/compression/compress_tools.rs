@@ -92,7 +92,7 @@ impl ProcessArchive for ArchiveHandle {
                         .collect::<Result<HashSet<PathBuf>>>()
                         .context("some paths were not found")
                         .and_then(|mut validated_paths| {
-                            let extracting_mutliple_files = info_span!("extracting_mutliple_files", file_count=%validated_paths.len());
+                            let extracting_mutliple_files = info_span!("extracting_mutliple_files", file_count=%validated_paths.len()).entered();
                             compress_tools::ArchiveIteratorBuilder::new(&mut self.0)
                                 .filter({
                                     cloned![validated_paths];

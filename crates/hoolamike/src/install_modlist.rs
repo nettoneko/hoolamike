@@ -14,7 +14,7 @@ use {
     downloads::Synchronizers,
     futures::{FutureExt, TryFutureExt, TryStreamExt},
     itertools::Itertools,
-    std::{convert::identity, future::ready, sync::Arc},
+    std::{future::ready, sync::Arc},
     tap::prelude::*,
     tracing::instrument,
     tracing_indicatif::span_ext::IndicatifSpanExt,

@@ -6,7 +6,6 @@ use {
     list_output::{ListOutput, ListOutputEntry},
     parking_lot::Mutex,
     std::{
-        collections::BTreeMap,
         io::{BufReader, Read},
         iter::once,
         path::{Path, PathBuf},
