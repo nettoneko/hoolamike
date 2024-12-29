@@ -6,7 +6,10 @@ use {
         utils::PathReadWrite,
     },
     anyhow::{Context, Result},
-    std::path::{Path, PathBuf},
+    std::{
+        io::BufReader,
+        path::{Path, PathBuf},
+    },
 };
 
 #[derive(Debug)]
@@ -31,7 +34,7 @@ impl WabbajackFile {
                         .get_handle(Path::new(MODLIST_JSON_FILENAME))
                         .context("looking up file by name")
                         .and_then(|handle| {
-                            serde_json::from_reader::<_, crate::modlist_json::Modlist>(&mut tracing::Span::current().wrap_read(0, handle))
+                            serde_json::from_reader::<_, crate::modlist_json::Modlist>(&mut tracing::Span::current().wrap_read(0, BufReader::new(handle)))
                                 .context("reading archive contents")
                         })
                         .with_context(|| format!("reading [{MODLIST_JSON_FILENAME}]"))

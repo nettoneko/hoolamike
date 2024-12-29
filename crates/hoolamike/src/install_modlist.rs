@@ -5,6 +5,7 @@ use {
         error::TotalResult,
         modlist_json::{Archive, Modlist},
         progress_bars_v2::io_progress_style,
+        utils::spawn_rayon,
         wabbajack_file::WabbajackFile,
         DebugHelpers,
     },
@@ -52,10 +53,8 @@ pub async fn install_modlist(
             wabbajack_entries: _,
             modlist,
         },
-    ) = tokio::task::spawn_blocking(move || WabbajackFile::load_wabbajack_file(wabbajack_file_path))
+    ) = spawn_rayon(move || WabbajackFile::load_wabbajack_file(wabbajack_file_path))
         .await
-        .context("thread crashed")
-        .and_then(identity)
         .context("loading modlist file")
         .tap_ok(|(_, wabbajack)| {
             // PROGRESS

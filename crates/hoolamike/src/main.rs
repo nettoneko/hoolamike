@@ -238,7 +238,7 @@ async fn async_main() -> Result<()> {
     })
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> Result<()> {
     rayon::ThreadPoolBuilder::new()
         .num_threads(num_cpus::get().saturating_sub(2).max(1))
