@@ -120,8 +120,8 @@ impl std::error::Error for ArcError {
     }
 }
 
-#[tracing::instrument(skip(task), level = "TRACE")]
-pub(crate) async fn spawn_rayon<T, F>(task: F) -> anyhow::Result<T>
+#[tracing::instrument(skip(task_fn))]
+pub(crate) async fn spawn_rayon<T, F>(task_fn: F) -> anyhow::Result<T>
 where
     F: FnOnce() -> anyhow::Result<T> + Send + 'static,
     T: Send + Sync + 'static,
@@ -131,7 +131,7 @@ where
         let (tx, rx) = tokio::sync::oneshot::channel();
         rayon::spawn(move || {
             span.in_scope(|| {
-                if tx.send(task()).is_err() {
+                if tx.send(task_fn()).is_err() {
                     tracing::error!("could not communicate from thread")
                 }
             })

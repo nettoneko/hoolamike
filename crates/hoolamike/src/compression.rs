@@ -105,7 +105,7 @@ pub enum ArchiveFileHandle {
 }
 
 impl ArchiveFileHandle {
-    #[tracing::instrument(skip(self), level = "TRACE")]
+    #[tracing::instrument(skip(self))]
     pub fn size(&mut self) -> Result<u64> {
         match self {
             ArchiveFileHandle::Wrapped7Zip((entry, _)) => Ok(entry.size),
@@ -127,7 +127,7 @@ static_assertions::assert_impl_all!(self::bethesda_archive::BethesdaArchiveFile:
 static_assertions::assert_impl_all!(ArchiveFileHandle: Send, Sync);
 
 impl ArchiveHandle<'_> {
-    #[tracing::instrument(level = "TRACE")]
+    #[tracing::instrument(level = "INFO")]
     pub fn guess(path: &Path, extension: Option<&OsStr>) -> anyhow::Result<Self> {
         std::panic::catch_unwind(|| {
             {

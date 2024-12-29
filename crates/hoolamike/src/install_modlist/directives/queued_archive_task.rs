@@ -74,7 +74,7 @@ impl QueuedArchiveService {
         })
     }
 
-    #[tracing::instrument(skip_all, level = "TRACE")]
+    #[tracing::instrument(skip_all)]
     pub fn get_archive_spawn(self: Arc<Self>, archive: NonEmpty<PathBuf>) -> JoinHandle<Result<Arc<SourceKind>>> {
         tokio::task::spawn(
             self.get_archive(archive)
@@ -83,7 +83,7 @@ impl QueuedArchiveService {
     }
 
     #[async_recursion::async_recursion]
-    #[tracing::instrument(skip_all, level = "TRACE")]
+    #[tracing::instrument(skip_all)]
     async fn init_archive(self: Arc<Self>, archive_path: NonEmpty<PathBuf>) -> Result<SourceKind> {
         fn popped<T>(mut l: NonEmpty<T>) -> Option<(NonEmpty<T>, T)> {
             l.pop().map(|i| (l, i))
@@ -111,7 +111,7 @@ impl QueuedArchiveService {
         }
     }
 
-    #[instrument(skip(self), level = "TRACE")]
+    #[instrument(skip(self))]
     pub async fn get_archive(self: Arc<Self>, archive_path: NonEmpty<PathBuf>) -> Result<Arc<SourceKind>> {
         let queue = self.clone();
         tokio::task::spawn(
@@ -140,7 +140,7 @@ impl QueuedArchiveService {
     }
 }
 
-#[instrument(level = "TRACE")]
+#[instrument]
 pub fn prepare_archive_blocking(source: &SourceKind, archive_path: &Path, extension: Option<&OsStr>) -> anyhow::Result<(u64, Extracted)> {
     ArchiveHandle::guess(source.as_ref(), extension)
         .and_then(|mut archive| {
@@ -153,7 +153,7 @@ pub fn prepare_archive_blocking(source: &SourceKind, archive_path: &Path, extens
         .with_context(|| format!("preparing [{source:?}] -> {archive_path:?}"))
 }
 
-#[instrument(skip(_computation_permits), level = "TRACE")]
+#[instrument(skip(_computation_permits))]
 async fn prepare_archive(
     _computation_permits: Arc<Semaphore>,
     source: Arc<SourceKind>,

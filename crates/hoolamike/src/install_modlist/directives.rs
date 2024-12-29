@@ -483,8 +483,8 @@ impl PreheatedArchiveHashPaths {
             .try_fold(
                 (BTreeMap::<_, Arc<SourceKind>>::new(), Vec::new()),
                 |(acc, mut buffer), (current_len, next_chunk_by_length)| {
-                    let _span = info_span!("preheating_archives_in_chunk_by_length", nesting_level=%current_len).entered();
-
+                    info_span!("preheating_archives_in_chunk_by_length", nesting_level=%current_len).in_scope(|| {
+                        
                     next_chunk_by_length
                         .into_iter()
                         .map(|(parent, paths)| {
@@ -520,83 +520,89 @@ impl PreheatedArchiveHashPaths {
                                 pb.pb_set_style(&count_progress_style());
                                 pb.pb_set_length(tasks.len() as _);
                             });
-                            let _enter = performing_tasks.enter();
-                            tasks
-                                .into_par_iter()
-                                .map({
-                                    move |(archive, parent, archive_paths)| {
-                                        let performing_task = info_span!("performing_task", ?archive, ?parent, archive_paths=%archive_paths.len());
-                                        let _enter = performing_task.enter();
-
-                                        archive_paths
-                                            .iter()
-                                            .map(|p| p.as_path())
-                                            .collect_vec()
-                                            .pipe_ref(|archive_paths| {
-                                                info_span!("extracting_archive", archive_paths=%archive_paths.len()).in_scope(|| {
-                                                    crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref(), parent.last().extension())
-                                                        .pipe(once)
-                                                        .try_flat_map(|mut archive| {
-                                                            let kind = ArchiveHandleKind::from(&archive);
-                                                            let span = info_span!("getting_many_handles");
-                                                            span.in_scope(|| {
-                                                                archive
-                                                                    .get_many_handles(archive_paths)
-                                                                    .and_then(|handles| {
-                                                                        handles
-                                                                            .into_iter()
-                                                                            .map(|(path, mut file)| {
-                                                                                file.size()
-                                                                                    .context("checking size")
-                                                                                    .and_then(|size| file.seek_with_temp_file_blocking_raw(size))
-                                                                                    .map(|e| (path, e))
-                                                                            })
-                                                                            .collect::<Result<Vec<_>>>()
-                                                                            .context("writing all files to temp files")
-                                                                    })
-                                                                    .with_context(|| format!("when unpacking files from archive [{kind:?}]"))
+                            performing_tasks.in_scope(|| {
+                                let performing_task = info_span!("performing_task");
+                                tasks
+                                    .into_par_iter()
+                                    .map({
+                                        move |(archive, parent, archive_paths)| {
+                                            performing_task.in_scope(|| {
+                                                info_span!("task", ?archive, ?parent, archive_paths=%archive_paths.len()).in_scope(|| {
+                                                    archive_paths
+                                                        .iter()
+                                                        .map(|p| p.as_path())
+                                                        .collect_vec()
+                                                        .pipe_ref(|archive_paths| {
+                                                            info_span!("extracting_archive", archive_paths=%archive_paths.len()).in_scope(|| {
+                                                                crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref(), parent.last().extension())
                                                                     .pipe(once)
-                                                                    .try_flat_map(|multiple_files| {
-                                                                        multiple_files
-                                                                            .into_iter()
-                                                                            .map(|(archive_path, extracted)| {
-                                                                                (
-                                                                                    parent
-                                                                                        .clone()
-                                                                                        .tap_mut(|parent| parent.push(archive_path.clone())),
-                                                                                    extracted,
-                                                                                )
-                                                                            })
-                                                                            .map(Ok)
+                                                                    .try_flat_map(|mut archive| {
+                                                                        let kind = ArchiveHandleKind::from(&archive);
+                                                                        let span = info_span!("getting_many_handles");
+                                                                        span.in_scope(|| {
+                                                                            archive
+                                                                                .get_many_handles(archive_paths)
+                                                                                .and_then(|handles| {
+                                                                                    handles
+                                                                                        .into_iter()
+                                                                                        .map(|(path, mut file)| {
+                                                                                            file.size()
+                                                                                                .context("checking size")
+                                                                                                .and_then(|size| file.seek_with_temp_file_blocking_raw(size))
+                                                                                                .map(|e| (path, e))
+                                                                                        })
+                                                                                        .collect::<Result<Vec<_>>>()
+                                                                                        .context("writing all files to temp files")
+                                                                                })
+                                                                                .with_context(|| format!("when unpacking files from archive [{kind:?}]"))
+                                                                                .pipe(once)
+                                                                                .try_flat_map(|multiple_files| {
+                                                                                    multiple_files
+                                                                                        .into_iter()
+                                                                                        .map(|(archive_path, extracted)| {
+                                                                                            (
+                                                                                                parent
+                                                                                                    .clone()
+                                                                                                    .tap_mut(|parent| parent.push(archive_path.clone())),
+                                                                                                extracted,
+                                                                                            )
+                                                                                        })
+                                                                                        .map(Ok)
+                                                                                })
+                                                                        })
+                                                                    })
+                                                                    .collect::<Result<Vec<(NonEmpty<PathBuf>, (u64, TempPath))>>>()
+                                                                    .with_context(|| {
+                                                                        format!(
+                                                                            "extracting from archive [{archive:?}] (parent={parent:?}, \
+                                                                             archive_paths={archive_paths:#?})"
+                                                                        )
                                                                     })
                                                             })
                                                         })
-                                                        .collect::<Result<Vec<(NonEmpty<PathBuf>, (u64, TempPath))>>>()
-                                                        .with_context(|| {
-                                                            format!(
-                                                                "extracting from archive [{archive:?}] (parent={parent:?}, archive_paths={archive_paths:#?})"
-                                                            )
-                                                        })
                                                 })
                                             })
-                                    }
-                                })
-                                .inspect(|_| performing_tasks.pb_inc(1))
-                                .collect_into_vec(&mut buffer)
-                                .pipe(|_| {
-                                    buffer.drain(..).try_fold(acc, |acc, next| {
-                                        next.map(|next| {
-                                            acc.tap_mut(|acc| {
-                                                acc.extend(
-                                                    next.into_iter()
-                                                        .map(|(k, (_, v))| (k, v.pipe(SourceKind::CachedPath).pipe(Arc::new))),
-                                                );
+                                        }
+                                    })
+                                    .inspect(|_| performing_tasks.pb_inc(1))
+                                    .collect_into_vec(&mut buffer)
+                                    .pipe(|_| {
+                                        buffer.drain(..).try_fold(acc, |acc, next| {
+                                            next.map(|next| {
+                                                acc.tap_mut(|acc| {
+                                                    acc.extend(
+                                                        next.into_iter()
+                                                            .map(|(k, (_, v))| (k, v.pipe(SourceKind::CachedPath).pipe(Arc::new))),
+                                                    );
+                                                })
                                             })
                                         })
                                     })
-                                })
-                                .map(|acc| (acc, buffer))
+                                    .map(|acc| (acc, buffer))
+                            })
                         })
+                    })
+
                 },
             )
             .map(|(preheated, _)| preheated)
