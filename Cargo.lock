@@ -570,8 +570,7 @@ checksum = "5b63caa9aa9397e2d9480a9b13673856c78d8ac123288526c37d7839f2a86990"
 [[package]]
 name = "compress-tools"
 version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecbcea9a172acabd98f272919faf0b1830a2ccec90d518d67c5eb13742e769a7"
+source = "git+https://github.com/Niedzwiedzw/compress-tools-rs#f233aa29d35f8a93056a3ffe21a21c6fce6ef60f"
 dependencies = [
  "derive_more 0.99.18",
  "libc",
@@ -4152,6 +4151,7 @@ dependencies = [
  "pretty_assertions",
  "serde_json",
  "tap",
+ "tempfile",
  "test-log",
  "tokio",
  "tracing",

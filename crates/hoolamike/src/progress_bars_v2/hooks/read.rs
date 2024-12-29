@@ -1,6 +1,6 @@
 use {
     super::IoHook,
-    std::io::{self, Read},
+    std::io::{self, Read, Seek},
 };
 
 #[extension_traits::extension(pub trait ReadHookExt)]
@@ -25,5 +25,11 @@ where
         let bytes_read = self.inner.read(buf)?;
         (self.callback)(bytes_read);
         Ok(bytes_read)
+    }
+}
+
+impl<R: Seek, F> Seek for IoHook<R, F> {
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        self.inner.seek(pos)
     }
 }

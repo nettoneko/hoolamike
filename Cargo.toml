@@ -30,7 +30,8 @@ binrw = "0.14.1"
 bon = "3.1.1"
 chrono = { version = "0.4.38", features = ["serde"] }
 clap = { version = "4.5.21", features = ["derive", "cargo", "env", "string"] }
-compress-tools = "0.15.1"
+# compress-tools = "0.15.1"
+compress-tools.git = "https://github.com/Niedzwiedzw/compress-tools-rs"
 console = { version = "0.15.8", features = ["windows-console-colors"] }
 console-subscriber = "0.4.1"
 derivative = "2.2.0"

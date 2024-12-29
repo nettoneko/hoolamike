@@ -1,7 +1,7 @@
 // use {
 //     super::{ProcessArchive, *},
 //     itertools::Itertools,
-//     std::{convert::identity, path::PathBuf},
+//     std::{convert::identity, fs::File, path::PathBuf},
 // };
 
 // pub type ZipFile<'a> = ::zip::read::ZipFile<'a>;

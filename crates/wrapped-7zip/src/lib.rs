@@ -6,6 +6,7 @@ use {
     list_output::{ListOutput, ListOutputEntry},
     parking_lot::Mutex,
     std::{
+        collections::BTreeMap,
         io::{BufReader, Read},
         iter::once,
         path::{Path, PathBuf},
@@ -221,6 +222,25 @@ impl ArchiveHandle {
             .and_then(|o| list_output::ListOutput::from_str(&o).with_context(|| format!("unexpected output from list command:\n{o}")))
             .map(|ListOutput { entries }| entries)
     }
+    // pub fn get_files(&self, files: &[&Path]) -> Result<Vec<(ListOutputEntry, tempfile::TempPath)>> {
+    //     self.list_files().and_then(|listing| {
+    //         listing
+    //             .into_iter()
+    //             .map(|file| (file.path.as_path(), file))
+    //             .collect::<BTreeMap<_, _>>()
+    //             .pipe(|lookup| {
+    //                 files.iter().map(|file| {
+    //                     lookup
+    //                         .remove(file)
+    //                         .with_context(|| format!("file [{file}] not in archive"))
+    //                 })
+    //             })
+    //             .collect::<Result<Vec<_>>>()
+    //             .context("not all files found")
+    //     }).and_then(|files| {
+
+    //         })
+    // }
     pub fn get_file(&self, file: &Path) -> Result<(ListOutputEntry, ArchiveFileHandle)> {
         self.list_files()
             .and_then(|files| {

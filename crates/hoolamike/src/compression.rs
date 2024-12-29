@@ -2,7 +2,7 @@ use {
     crate::{
         install_modlist::directives::nested_archive_manager::{max_open_files, WithPermit, OPEN_FILE_PERMITS},
         progress_bars_v2::IndicatifWrapIoExt,
-        utils::{boxed_iter, ReadableCatchUnwindExt},
+        utils::{boxed_iter, PathReadWrite, ReadableCatchUnwindExt},
     },
     ::wrapped_7zip::WRAPPED_7ZIP,
     anyhow::{Context, Result},
@@ -62,6 +62,7 @@ pub enum ArchiveFileHandle {
     // CompressTools(compress_tools::CompressToolsFile),
     Wrapped7Zip((::wrapped_7zip::list_output::ListOutputEntry, ::wrapped_7zip::ArchiveFileHandle)),
     Bethesda(self::bethesda_archive::BethesdaArchiveFile),
+    CompressTools(self::compress_tools::CompressToolsFile),
 }
 
 impl ArchiveFileHandle {
@@ -71,6 +72,10 @@ impl ArchiveFileHandle {
             ArchiveFileHandle::Bethesda(bethesda_archive_file) => bethesda_archive_file
                 .stream_len()
                 .context("could not seek to find the stream length"),
+            // TODO
+            ArchiveFileHandle::CompressTools(compress_tools_file) => compress_tools_file
+                .stream_len()
+                .context("could not seek to find stream length"),
         }
     }
 }
@@ -84,20 +89,28 @@ static_assertions::assert_impl_all!(ArchiveFileHandle: Send , Sync);
 impl ArchiveHandle<'_> {
     pub fn guess(path: &Path) -> anyhow::Result<Self> {
         std::panic::catch_unwind(|| {
-            Err(())
-                .or_else(|_| {
-                    bethesda_archive::BethesdaArchive::open(path)
+            {
+                match path.extension().map(|b| b.as_encoded_bytes()) {
+                    Some(b"bsa" | b"BSA") => bethesda_archive::BethesdaArchive::open(path)
                         .context("reading zip")
                         .map(Self::Bethesda)
-                        .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
-                })
-                .or_else(|_| {
-                    WRAPPED_7ZIP
-                        .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
-                        .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
-                })
-                .tap_ok(|a| tracing::trace!("succesfully opened an archive: {a:?}"))
-                .map_err(|_| anyhow::anyhow!("no defined archive handler could handle this file"))
+                        .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}")),
+                    _ => Err(())
+                        .or_else(|_| {
+                            path.open_file_read()
+                                .and_then(|(_, file)| self::compress_tools::CompressToolsArchive::new(file).map(Self::CompressTools))
+                                .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                        })
+                        .or_else(|_| {
+                            WRAPPED_7ZIP
+                                .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                                .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                        })
+                        .tap_ok(|a| tracing::trace!("succesfully opened an archive: {a:?}"))
+                        .map_err(|_| anyhow::anyhow!("no defined archive handler could handle this file")),
+                }
+            }
+            .map_err(|_| anyhow::anyhow!("no defined archive handler could handle this file"))
         })
         .for_anyhow()
         .context("unexpected panic")
@@ -111,6 +124,7 @@ impl std::io::Read for ArchiveFileHandle {
             // ArchiveFileHandle::CompressTools(compress_tools_seek) => compress_tools_seek.read(buf),
             ArchiveFileHandle::Wrapped7Zip(wrapped_7zip) => wrapped_7zip.1.read(buf),
             ArchiveFileHandle::Bethesda(bethesda_archive_file) => bethesda_archive_file.read(buf),
+            ArchiveFileHandle::CompressTools(compress_tools_file) => compress_tools_file.read(buf),
         }
     }
 }
@@ -124,6 +138,7 @@ pub enum ArchiveHandle<'a> {
     // CompressTools(compress_tools::CompressToolsArchive),
     Wrapped7Zip(::wrapped_7zip::ArchiveHandle),
     Bethesda(bethesda_archive::BethesdaArchive<'a>),
+    CompressTools(compress_tools::CompressToolsArchive),
 }
 
 pub mod wrapped_7zip;
