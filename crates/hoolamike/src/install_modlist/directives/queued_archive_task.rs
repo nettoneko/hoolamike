@@ -8,6 +8,7 @@ use {
     nonempty::NonEmpty,
     std::{
         convert::identity,
+        ffi::{OsStr, OsString},
         future::ready,
         path::{Path, PathBuf},
         sync::Arc,
@@ -90,13 +91,18 @@ impl QueuedArchiveService {
         match popped(archive_path.clone()) {
             Some((parent, archive_path)) => {
                 self.clone()
-                    .get_archive(parent)
+                    .get_archive(parent.clone())
                     .pipe(Box::pin)
                     .instrument(debug_span!("entry was not found, so scheduling creation of parent"))
-                    .and_then(|parent| {
-                        prepare_archive(self.permits.clone(), parent, archive_path)
-                            .instrument(tracing::Span::current())
-                            .pipe(Box::pin)
+                    .and_then(|parent_source| {
+                        prepare_archive(
+                            self.permits.clone(),
+                            parent_source,
+                            parent.last().extension().map(ToOwned::to_owned),
+                            archive_path,
+                        )
+                        .instrument(tracing::Span::current())
+                        .pipe(Box::pin)
                     })
                     .map_ok(SourceKind::CachedPath)
                     .await
@@ -135,8 +141,8 @@ impl QueuedArchiveService {
 }
 
 #[instrument(level = "TRACE")]
-pub fn prepare_archive_blocking(source: &SourceKind, archive_path: &Path) -> anyhow::Result<(u64, Extracted)> {
-    ArchiveHandle::guess(source.as_ref())
+pub fn prepare_archive_blocking(source: &SourceKind, archive_path: &Path, extension: Option<&OsStr>) -> anyhow::Result<(u64, Extracted)> {
+    ArchiveHandle::guess(source.as_ref(), extension)
         .and_then(|mut archive| {
             archive.get_handle(archive_path).and_then(|mut handle| {
                 handle
@@ -148,11 +154,16 @@ pub fn prepare_archive_blocking(source: &SourceKind, archive_path: &Path) -> any
 }
 
 #[instrument(skip(_computation_permits), level = "TRACE")]
-async fn prepare_archive(_computation_permits: Arc<Semaphore>, source: Arc<SourceKind>, archive_path: PathBuf) -> Result<Extracted> {
+async fn prepare_archive(
+    _computation_permits: Arc<Semaphore>,
+    source: Arc<SourceKind>,
+    extension: Option<OsString>,
+    archive_path: PathBuf,
+) -> Result<Extracted> {
     tokio::task::spawn({
         async move {
             let prepare_archive_on_thread = trace_span!("prepare_archive_on_thread");
-            spawn_rayon(move || prepare_archive_on_thread.in_scope(|| prepare_archive_blocking(&source, &archive_path)))
+            spawn_rayon(move || prepare_archive_on_thread.in_scope(|| prepare_archive_blocking(&source, &archive_path, extension.as_deref())))
                 .map_err(self::Error::extracting_from_archive)
                 .instrument(debug_span!("waiting for thread to finish"))
                 .await

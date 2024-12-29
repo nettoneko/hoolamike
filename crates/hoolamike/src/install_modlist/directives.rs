@@ -516,28 +516,30 @@ impl PreheatedArchiveHashPaths {
                                 .collect_vec()
                         })
                         .and_then(|tasks| {
-                            let performing_tasks = info_span!("performing_tasks", count=%tasks.len())
-                                .tap_mut(|pb| {
-                                    pb.pb_set_style(&count_progress_style());
-                                    pb.pb_set_length(tasks.len() as _);
-                                })
-                                .entered();
+                            let performing_tasks = info_span!("performing_tasks", count=%tasks.len()).tap_mut(|pb| {
+                                pb.pb_set_style(&count_progress_style());
+                                pb.pb_set_length(tasks.len() as _);
+                            });
+                            let _enter = performing_tasks.enter();
                             tasks
                                 .into_par_iter()
                                 .map({
-                                    let performing_task = info_span!("performing_task");
                                     move |(archive, parent, archive_paths)| {
+                                        let performing_task = info_span!("performing_task", ?archive, ?parent, archive_paths=%archive_paths.len());
+                                        let _enter = performing_task.enter();
+
                                         archive_paths
                                             .iter()
                                             .map(|p| p.as_path())
                                             .collect_vec()
                                             .pipe_ref(|archive_paths| {
-                                                performing_task.in_scope(|| {
-                                                    info_span!("extracting_archive", archive_paths=%archive_paths.len()).in_scope(|| {
-                                                        crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref())
-                                                            .pipe(once)
-                                                            .try_flat_map(|mut archive| {
-                                                                let kind = ArchiveHandleKind::from(&archive);
+                                                info_span!("extracting_archive", archive_paths=%archive_paths.len()).in_scope(|| {
+                                                    crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref(), parent.last().extension())
+                                                        .pipe(once)
+                                                        .try_flat_map(|mut archive| {
+                                                            let kind = ArchiveHandleKind::from(&archive);
+                                                            let span = info_span!("getting_many_handles");
+                                                            span.in_scope(|| {
                                                                 archive
                                                                     .get_many_handles(archive_paths)
                                                                     .and_then(|handles| {
@@ -568,14 +570,13 @@ impl PreheatedArchiveHashPaths {
                                                                             .map(Ok)
                                                                     })
                                                             })
-                                                            .collect::<Result<Vec<(NonEmpty<PathBuf>, (u64, TempPath))>>>()
-                                                            .with_context(|| {
-                                                                format!(
-                                                                    "extracting from archive [{archive:?}] (parent={parent:?}, \
-                                                                     archive_paths={archive_paths:#?})"
-                                                                )
-                                                            })
-                                                    })
+                                                        })
+                                                        .collect::<Result<Vec<(NonEmpty<PathBuf>, (u64, TempPath))>>>()
+                                                        .with_context(|| {
+                                                            format!(
+                                                                "extracting from archive [{archive:?}] (parent={parent:?}, archive_paths={archive_paths:#?})"
+                                                            )
+                                                        })
                                                 })
                                             })
                                     }

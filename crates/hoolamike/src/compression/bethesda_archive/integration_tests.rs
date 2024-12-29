@@ -1,8 +1,8 @@
 use {
     super::*,
-    tap::prelude::*,
     tracing::{info, info_span},
 };
+
 const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 const INTEGRATION_TEST_DIRECTORY: &str = env!("HOOLAMIKE_INTEGRATION_TEST_DIR");
 

@@ -8,6 +8,7 @@ use {
     anyhow::{Context, Result},
     std::{
         convert::identity,
+        ffi::OsStr,
         io::{Seek, Write},
         path::{Path, PathBuf},
         sync::Arc,
@@ -127,12 +128,12 @@ static_assertions::assert_impl_all!(ArchiveFileHandle: Send, Sync);
 
 impl ArchiveHandle<'_> {
     #[tracing::instrument(level = "TRACE")]
-    pub fn guess(path: &Path) -> anyhow::Result<Self> {
+    pub fn guess(path: &Path, extension: Option<&OsStr>) -> anyhow::Result<Self> {
         std::panic::catch_unwind(|| {
             {
-                match path.extension().map(|b| b.as_encoded_bytes()) {
+                match extension.map(|b| b.as_encoded_bytes()) {
                     Some(b"bsa" | b"BSA") => bethesda_archive::BethesdaArchive::open(path)
-                        .context("reading zip")
+                        .context("reading bsa")
                         .map(Self::Bethesda)
                         .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}")),
                     _ => Err(())

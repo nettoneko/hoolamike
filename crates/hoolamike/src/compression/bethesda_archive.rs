@@ -2,16 +2,18 @@ use {
     super::ProcessArchive,
     crate::{
         progress_bars_v2::IndicatifWrapIoExt,
-        utils::{MaybeWindowsPath, PathReadWrite, ReadableCatchUnwindExt, ResultZipExt},
+        utils::{MaybeWindowsPath, PathReadWrite, ReadableCatchUnwindExt},
     },
     anyhow::{Context, Result},
-    ba2::{ByteSlice, Reader},
+    ba2::{BStr, ByteSlice, Reader},
     std::{
+        borrow::Cow,
         convert::identity,
         io::{Seek, Write},
         panic::catch_unwind,
         path::{Path, PathBuf},
     },
+    tap::prelude::*,
 };
 
 #[cfg(test)]
@@ -46,9 +48,20 @@ impl Fallout4Archive<'_> {
             .context("listing paths for bethesda archive")
     }
 }
+
+fn try_utf8(bstr: &BStr) -> Cow<str> {
+    bstr.to_str()
+        .map(Cow::Borrowed)
+        .context("file name is not a valid string")
+        .unwrap_or_else(|invalid_utf8| {
+            tracing::error!(?invalid_utf8, bstr=?bstr, "could not decode archive path as utf-8, using best-effort");
+            bstr.to_str_lossy()
+        })
+}
+
 #[extension_traits::extension(pub trait Tes4ArchiveCompat)]
 impl Tes4Archive<'_> {
-    fn list_paths_with_originals(&self) -> Result<Vec<(PathBuf, (ba2::tes4::ArchiveKey<'_>, ba2::tes4::DirectoryKey<'_>))>> {
+    fn list_paths_with_originals(&self) -> Vec<(PathBuf, (ba2::tes4::ArchiveKey<'_>, ba2::tes4::DirectoryKey<'_>))> {
         self.0
             .iter()
             .flat_map(|(archive_key, directory)| {
@@ -57,26 +70,15 @@ impl Tes4Archive<'_> {
                     .map(|(directory_key, _)| (archive_key.clone(), directory_key.clone()))
             })
             .map(|(archive_key, directory_key)| {
-                archive_key
-                    .name()
-                    .to_str()
-                    .context("directory name is not a valid string")
-                    .zip(
-                        directory_key
-                            .name()
-                            .to_str()
-                            .context("file name is not a valid string"),
-                    )
-                    .context("validating entry")
-                    .map(|(directory, filename)| {
+                (archive_key.name().pipe(try_utf8), directory_key.name().pipe(try_utf8))
+                    .pipe(|(directory, filename)| {
                         MaybeWindowsPath(directory.into())
                             .into_path()
-                            .join(filename)
+                            .join(filename.as_ref())
                     })
-                    .map(|path| (path, (archive_key, directory_key)))
+                    .pipe(|path| (path, (archive_key, directory_key)))
             })
-            .collect::<Result<Vec<_>>>()
-            .context("listing paths for bethesda archive")
+            .collect::<Vec<_>>()
     }
 }
 
@@ -138,7 +140,8 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
 impl super::ProcessArchive for Tes4Archive<'_> {
     fn list_paths(&mut self) -> Result<Vec<PathBuf>> {
         self.list_paths_with_originals()
-            .map(|paths| paths.into_iter().map(|(p, _)| p).collect())
+            .pipe(|paths| paths.into_iter().map(|(p, _)| p).collect::<Vec<_>>())
+            .pipe(Ok)
     }
     #[tracing::instrument(skip(self))]
     fn get_handle(&mut self, path: &Path) -> Result<super::ArchiveFileHandle> {
@@ -148,8 +151,7 @@ impl super::ProcessArchive for Tes4Archive<'_> {
         let options = ba2::tes4::FileCompressionOptions::builder().version(self.1.version());
 
         self.list_paths_with_originals()
-            .context("listing entries")
-            .and_then(|paths| {
+            .pipe(|paths| {
                 paths
                     .iter()
                     .find_map(|(entry, repr)| entry.eq(path).then_some(repr))
