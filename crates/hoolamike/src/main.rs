@@ -238,15 +238,11 @@ async fn async_main() -> Result<()> {
     })
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     rayon::ThreadPoolBuilder::new()
         .num_threads(num_cpus::get().saturating_sub(2).max(1))
         .build_global()
         .unwrap();
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .worker_threads(num_cpus::get().min(2))
-        .build()
-        .unwrap();
-    runtime.block_on(async move { async_main().await })
+    async_main().await
 }
