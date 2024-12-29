@@ -5,7 +5,7 @@ use {
     std::{convert::identity, future::ready, path::PathBuf, sync::Arc},
     tap::prelude::*,
     tokio::{
-        sync::{watch::error::RecvError, AcquireError, Semaphore},
+        sync::{oneshot::error::RecvError, AcquireError, Semaphore},
         task::JoinHandle,
     },
     tracing::{debug_span, instrument, trace_span, Instrument},
@@ -27,6 +27,8 @@ pub enum Error {
     ),
     #[error("could not acquire permit")]
     AcquiringPermit(#[source] Arc<AcquireError>),
+    #[error("could not communicate with worker thread")]
+    Recv(#[source] RecvError),
 }
 
 impl Error {
@@ -137,22 +139,32 @@ async fn prepare_archive(computation_permits: Arc<Semaphore>, source: Arc<Source
                 .and_then({
                     move |(source, permit)| {
                         let span = trace_span!("performing_work");
-                        tokio::task::spawn_blocking(move || {
-                            span.in_scope(|| {
-                                ArchiveHandle::guess(source.as_ref().as_ref())
-                                    .map_err(self::Error::extracting_from_archive)
-                                    .and_then(|mut archive| {
-                                        archive
-                                            .get_handle(&archive_path)
-                                            .map_err(self::Error::extracting_from_archive)
-                                            .and_then(|mut handle| {
-                                                handle
-                                                    .size()
-                                                    .and_then(|size| handle.seek_with_temp_file_blocking_unbounded(size, permit))
-                                                    .map_err(self::Error::extracting_from_archive)
-                                            })
-                                    })
-                            })
+                        tokio::task::spawn(async move {
+                            let (tx, rx) = tokio::sync::oneshot::channel();
+                            rayon::spawn(move || {
+                                span.in_scope(|| {
+                                    ArchiveHandle::guess(source.as_ref().as_ref())
+                                        .map_err(self::Error::extracting_from_archive)
+                                        .and_then(|mut archive| {
+                                            archive
+                                                .get_handle(&archive_path)
+                                                .map_err(self::Error::extracting_from_archive)
+                                                .and_then(|mut handle| {
+                                                    handle
+                                                        .size()
+                                                        .and_then(|size| handle.seek_with_temp_file_blocking_unbounded(size, permit))
+                                                        .map_err(self::Error::extracting_from_archive)
+                                                })
+                                        })
+                                        .pipe(|res| {
+                                            if let Err(error) = tx.send(res) {
+                                                tracing::error!(?error, "channel closed?");
+                                            }
+                                        })
+                                })
+                            });
+
+                            rx.await.map_err(self::Error::Recv).and_then(identity)
                         })
                         .map_err(self::Error::thread_crashed)
                         .and_then(ready)
