@@ -6,10 +6,10 @@ use {
         modlist_json::directive::FromArchiveDirective,
         progress_bars_v2::IndicatifWrapIoExt,
         read_wrappers::ReadExt,
+        utils::spawn_rayon,
     },
     queued_archive_task::QueuedArchiveService,
     std::{
-        convert::identity,
         io::{Read, Write},
         path::Path,
     },
@@ -59,8 +59,6 @@ impl FromArchiveHandler {
             archive_hash_path,
         }: FromArchiveDirective,
     ) -> Result<u64> {
-        tokio::task::yield_now().await;
-
         let source_file = self
             .download_summary
             .resolve_archive_path(archive_hash_path.clone())
@@ -74,7 +72,7 @@ impl FromArchiveHandler {
             .with_context(|| format!("reading archive for [{archive_hash_path:?}]"))?;
         let output_path = self.output_directory.join(to.into_path());
 
-        tokio::task::spawn_blocking(move || -> Result<_> {
+        spawn_rayon(move || -> Result<_> {
             let perform_copy = move |from: &mut dyn Read, to: &mut dyn Write, target_path: PathBuf| {
                 info_span!("perform_copy").in_scope(|| {
                     let mut writer = to;
@@ -114,8 +112,6 @@ impl FromArchiveHandler {
         })
         .instrument(tracing::Span::current())
         .await
-        .context("thread crashed")
-        .and_then(identity)?;
-        Ok(size)
+        .map(|_| size)
     }
 }

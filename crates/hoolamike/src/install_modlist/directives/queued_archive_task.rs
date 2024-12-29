@@ -1,5 +1,8 @@
 use {
-    crate::compression::{ArchiveHandle, ProcessArchive, SeekWithTempFileExt},
+    crate::{
+        compression::{ArchiveHandle, ProcessArchive, SeekWithTempFileExt},
+        utils::spawn_rayon,
+    },
     futures::TryFutureExt,
     nonempty::NonEmpty,
     std::{convert::identity, future::ready, path::PathBuf, sync::Arc},
@@ -139,35 +142,18 @@ async fn prepare_archive(computation_permits: Arc<Semaphore>, source: Arc<Source
                 .and_then({
                     move |(source, permit)| {
                         let span = trace_span!("performing_work");
-                        tokio::task::spawn(async move {
-                            let (tx, rx) = tokio::sync::oneshot::channel();
-                            rayon::spawn(move || {
-                                span.in_scope(|| {
-                                    ArchiveHandle::guess(source.as_ref().as_ref())
-                                        .map_err(self::Error::extracting_from_archive)
-                                        .and_then(|mut archive| {
-                                            archive
-                                                .get_handle(&archive_path)
-                                                .map_err(self::Error::extracting_from_archive)
-                                                .and_then(|mut handle| {
-                                                    handle
-                                                        .size()
-                                                        .and_then(|size| handle.seek_with_temp_file_blocking_unbounded(size, permit))
-                                                        .map_err(self::Error::extracting_from_archive)
-                                                })
-                                        })
-                                        .pipe(|res| {
-                                            if let Err(error) = tx.send(res) {
-                                                tracing::error!(?error, "channel closed?");
-                                            }
-                                        })
+                        spawn_rayon(move || {
+                            span.in_scope(|| {
+                                ArchiveHandle::guess(source.as_ref().as_ref()).and_then(|mut archive| {
+                                    archive.get_handle(&archive_path).and_then(|mut handle| {
+                                        handle
+                                            .size()
+                                            .and_then(|size| handle.seek_with_temp_file_blocking_unbounded(size, permit))
+                                    })
                                 })
-                            });
-
-                            rx.await.map_err(self::Error::Recv).and_then(identity)
+                            })
                         })
-                        .map_err(self::Error::thread_crashed)
-                        .and_then(ready)
+                        .map_err(self::Error::extracting_from_archive)
                     }
                 })
                 .instrument(debug_span!("waiting for thread to finish"))

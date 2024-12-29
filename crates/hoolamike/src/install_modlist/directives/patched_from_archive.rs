@@ -7,6 +7,7 @@ use {
         modlist_json::directive::PatchedFromArchiveDirective,
         progress_bars_v2::IndicatifWrapIoExt,
         read_wrappers::ReadExt,
+        utils::spawn_rayon,
     },
     queued_archive_task::QueuedArchiveService,
     std::{
@@ -40,7 +41,6 @@ impl PatchedFromArchiveHandler {
             patch_id,
         }: PatchedFromArchiveDirective,
     ) -> Result<u64> {
-        tokio::task::yield_now().await;
         let source_file = self
             .download_summary
             .resolve_archive_path(archive_hash_path.clone())
@@ -55,7 +55,7 @@ impl PatchedFromArchiveHandler {
 
         let output_path = self.output_directory.join(to.into_path());
 
-        tokio::task::spawn_blocking(move || -> Result<_> {
+        spawn_rayon(move || -> Result<_> {
             let wabbajack_file = self.wabbajack_file.clone();
             #[tracing::instrument(skip(source, delta, target), level = "INFO")]
             fn perform_copy<S, D, T>(source: S, delta: D, target: T, expected_size: u64, expected_hash: String) -> Result<()>
@@ -81,8 +81,9 @@ impl PatchedFromArchiveHandler {
                 .map(|_| ())
             }
             let delta_file = wabbajack_file
-                .get_file(Path::new(&patch_id.hyphenated().to_string()))
-                .map(|(_, delta_file)| delta_file)
+                .lock_arc()
+                .get_handle(Path::new(&patch_id.hyphenated().to_string()))
+                .map(|delta_file| delta_file)
                 .with_context(|| format!("patch {patch_id:?} does not exist"))?;
 
             source_file
@@ -97,8 +98,6 @@ impl PatchedFromArchiveHandler {
         })
         .instrument(tracing::Span::current())
         .await
-        .context("thread crashed")
-        .and_then(identity)?;
-        Ok(size)
+        .map(|_| size)
     }
 }

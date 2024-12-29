@@ -2,8 +2,9 @@ use {
     anyhow::Context,
     itertools::Itertools,
     serde::{Deserialize, Serialize},
-    std::{path::PathBuf, sync::Arc},
+    std::{convert::identity, path::PathBuf, sync::Arc},
     tap::prelude::*,
+    tracing::debug_span,
 };
 
 #[extension_traits::extension(pub trait ReadableCatchUnwindExt)]
@@ -117,4 +118,27 @@ impl std::error::Error for ArcError {
     fn cause(&self) -> Option<&dyn std::error::Error> {
         self.source()
     }
+}
+
+#[tracing::instrument(skip(task), level = "TRACE")]
+pub(crate) async fn spawn_rayon<T, F>(task: F) -> anyhow::Result<T>
+where
+    F: FnOnce() -> anyhow::Result<T> + Send + 'static,
+    T: Send + Sync + 'static,
+{
+    let span = debug_span!("performing_work_on_threadpool");
+    tokio::task::spawn(async move {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        rayon::spawn(move || {
+            span.in_scope(|| {
+                if tx.send(task()).is_err() {
+                    tracing::error!("could not communicate from thread")
+                }
+            })
+        });
+        rx.await.context("thread crashed?").and_then(identity)
+    })
+    .await
+    .context("task crashed")
+    .and_then(identity)
 }

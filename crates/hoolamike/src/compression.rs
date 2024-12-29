@@ -98,7 +98,7 @@ impl ArchiveHandle<'_> {
                     _ => Err(())
                         .or_else(|_| {
                             path.open_file_read()
-                                .and_then(|(_, file)| self::compress_tools::CompressToolsArchive::new(file).map(Self::CompressTools))
+                                .and_then(|(_, file)| self::compress_tools::ArchiveHandle::new(file).map(Self::CompressTools))
                                 .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
                         })
                         .or_else(|_| {
@@ -138,7 +138,7 @@ pub enum ArchiveHandle<'a> {
     // CompressTools(compress_tools::CompressToolsArchive),
     Wrapped7Zip(::wrapped_7zip::ArchiveHandle),
     Bethesda(bethesda_archive::BethesdaArchive<'a>),
-    CompressTools(compress_tools::CompressToolsArchive),
+    CompressTools(compress_tools::ArchiveHandle),
 }
 
 pub mod wrapped_7zip;

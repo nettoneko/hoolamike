@@ -12,9 +12,9 @@ use {
 pub type CompressToolsFile = tempfile::SpooledTempFile;
 
 #[derive(Debug)]
-pub struct CompressToolsArchive(std::fs::File);
+pub struct ArchiveHandle(std::fs::File);
 
-impl CompressToolsArchive {
+impl ArchiveHandle {
     pub fn new(mut file: std::fs::File) -> Result<Self> {
         list_archive_files(&mut file)
             .context("listing files")
@@ -57,7 +57,7 @@ impl CompressToolsArchive {
     }
 }
 
-impl ProcessArchive for CompressToolsArchive {
+impl ProcessArchive for ArchiveHandle {
     fn list_paths(&mut self) -> Result<Vec<PathBuf>> {
         ::compress_tools::list_archive_files(&mut self.0)
             .context("listing archive files")

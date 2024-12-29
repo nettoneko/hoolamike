@@ -118,18 +118,13 @@ fn setup_logging(generate_flamegraph: bool) -> Option<impl Drop> {
                 .map(|(_width, height)| height)
                 .unwrap_or(16)
                 .div(2)
-                .pipe(|half_height| {
-                    IndicatifLayer::new()
-                        .with_max_progress_bars(
-                            half_height as _,
-                            Some(indicatif::ProgressStyle::with_template("...and {pending_progress_bars} more not shown above.").expect("bad footer template")),
-                        )
-                        .with_tick_settings(tracing_indicatif::TickSettings {
-                            term_draw_hz: 4,
-                            default_tick_interval: Some(std::time::Duration::from_millis(250)),
-                            footer_tick_interval: None,
-                            ..Default::default()
-                        })
+                .pipe(|_half_height| {
+                    IndicatifLayer::new().with_tick_settings(tracing_indicatif::TickSettings {
+                        term_draw_hz: 4,
+                        default_tick_interval: Some(std::time::Duration::from_millis(250)),
+                        footer_tick_interval: None,
+                        ..Default::default()
+                    })
                 });
             // let indicatif_layer = ;
             let subscriber = tracing_subscriber::registry()
@@ -144,78 +139,88 @@ fn setup_logging(generate_flamegraph: bool) -> Option<impl Drop> {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let Cli {
-        command,
-        hoolamike_config,
-        generate_flamegraph,
-    } = Cli::parse();
-    let _guard = setup_logging(generate_flamegraph);
+fn main() -> Result<()> {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(num_cpus::get().div(2))
+        .build_global()
+        .unwrap();
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(num_cpus::get().div(2))
+        .build()
+        .unwrap()
+        .block_on(async move {
+            let Cli {
+                command,
+                hoolamike_config,
+                generate_flamegraph,
+            } = Cli::parse();
+            let _guard = setup_logging(generate_flamegraph);
 
-    match command {
-        Commands::ValidateModlist { path } => tokio::fs::read_to_string(&path)
-            .await
-            .context("reading test file")
-            .and_then(|input| modlist_json::parsing_helpers::validate_modlist_file(&input))
-            .with_context(|| format!("testing file {}", path.display())),
-        Commands::ModlistInfo { path } => wabbajack_file::WabbajackFile::load_wabbajack_file(path)
-            .context("reading modlist")
-            .map(|(_, modlist)| ModlistSummary::new(&modlist.modlist))
-            .map(|modlist| modlist.print())
-            .map(|modlist| println!("\n{modlist}")),
-        Commands::PrintDefaultConfig => config_file::HoolamikeConfig::default()
-            .write()
-            .map(|config| println!("{config}")),
-        Commands::Install { debug } => {
-            let (config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
-            tracing::info!("found config at [{}]", config_path.display());
+            match command {
+                Commands::ValidateModlist { path } => tokio::fs::read_to_string(&path)
+                    .await
+                    .context("reading test file")
+                    .and_then(|input| modlist_json::parsing_helpers::validate_modlist_file(&input))
+                    .with_context(|| format!("testing file {}", path.display())),
+                Commands::ModlistInfo { path } => wabbajack_file::WabbajackFile::load_wabbajack_file(path)
+                    .context("reading modlist")
+                    .map(|(_, modlist)| ModlistSummary::new(&modlist.modlist))
+                    .map(|modlist| modlist.print())
+                    .map(|modlist| println!("\n{modlist}")),
+                Commands::PrintDefaultConfig => config_file::HoolamikeConfig::default()
+                    .write()
+                    .map(|config| println!("{config}")),
+                Commands::Install { debug } => {
+                    let (config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
+                    tracing::info!("found config at [{}]", config_path.display());
 
-            install_modlist::install_modlist(config, debug)
-                .await
-                .map_err(|errors| {
-                    errors
-                        .iter()
-                        .enumerate()
-                        .for_each(|(idx, reason)| eprintln!("{idx}. {reason:?}", idx = idx + 1));
+                    install_modlist::install_modlist(config, debug)
+                        .await
+                        .map_err(|errors| {
+                            errors
+                                .iter()
+                                .enumerate()
+                                .for_each(|(idx, reason)| eprintln!("{idx}. {reason:?}", idx = idx + 1));
 
-                    anyhow::anyhow!(
-                        "could not finish installation due to errors:\n{}",
-                        errors
-                            .iter()
-                            .map(|e| format!(
-                                "{e}:\n{}",
-                                e.chain()
-                                    .map(|c| c.to_string())
-                                    .enumerate()
-                                    .map(|(idx, error)| format!("{idx}. {error}"))
+                            anyhow::anyhow!(
+                                "could not finish installation due to errors:\n{}",
+                                errors
+                                    .iter()
+                                    .map(|e| format!(
+                                        "{e}:\n{}",
+                                        e.chain()
+                                            .map(|c| c.to_string())
+                                            .enumerate()
+                                            .map(|(idx, error)| format!("{idx}. {error}"))
+                                            .join("\n")
+                                    ))
                                     .join("\n")
-                            ))
-                            .join("\n")
-                    )
-                })
-                .map(|count| println!("successfully installed [{}] mods", count.len()))
-        }
-        Commands::HoolamikeDebug(HoolamikeDebug { command }) => match command {
-            HoolamikeDebugCommand::ReserializeDirectives { modlist_file } => wabbajack_file::WabbajackFile::load_wabbajack_file(modlist_file)
-                .context("loading modlist file")
-                .and_then(|modlist| {
-                    modlist
-                        .1
-                        .modlist
-                        .directives
-                        .pipe_ref(|directives| serde_json::to_string_pretty(directives).context("serializing directives"))
-                })
-                .map(|directives| println!("{directives}")),
-        },
-    }
-    .with_context(|| {
-        format!(
-            "\n\nerror occurred, run with --help, check your configuration or file a ticket at {}",
-            env!("CARGO_PKG_REPOSITORY")
-        )
-    })
-    .tap_err(|e| {
-        tracing::error!("\n\n{e:?}");
-    })
+                            )
+                        })
+                        .map(|count| println!("successfully installed [{}] mods", count.len()))
+                }
+                Commands::HoolamikeDebug(HoolamikeDebug { command }) => match command {
+                    HoolamikeDebugCommand::ReserializeDirectives { modlist_file } => wabbajack_file::WabbajackFile::load_wabbajack_file(modlist_file)
+                        .context("loading modlist file")
+                        .and_then(|modlist| {
+                            modlist
+                                .1
+                                .modlist
+                                .directives
+                                .pipe_ref(|directives| serde_json::to_string_pretty(directives).context("serializing directives"))
+                        })
+                        .map(|directives| println!("{directives}")),
+                },
+            }
+            .with_context(|| {
+                format!(
+                    "\n\nerror occurred, run with --help, check your configuration or file a ticket at {}",
+                    env!("CARGO_PKG_REPOSITORY")
+                )
+            })
+            .tap_err(|e| {
+                tracing::error!("\n\n{e:?}");
+            })
+        })
 }

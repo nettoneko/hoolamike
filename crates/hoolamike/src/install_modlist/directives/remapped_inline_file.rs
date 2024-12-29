@@ -1,7 +1,14 @@
 use {
     super::*,
-    crate::{modlist_json::directive::RemappedInlineFileDirective, progress_bars_v2::IndicatifWrapIoExt, utils::PathReadWrite},
-    std::{convert::identity, io::Read},
+    crate::{
+        modlist_json::directive::RemappedInlineFileDirective,
+        progress_bars_v2::IndicatifWrapIoExt,
+        utils::{spawn_rayon, PathReadWrite},
+    },
+    std::{
+        convert::identity,
+        io::{Read, Seek},
+    },
     tracing::instrument,
 };
 
@@ -102,19 +109,19 @@ impl RemappedInlineFileHandler {
             to,
         }: RemappedInlineFileDirective,
     ) -> Result<u64> {
-        tokio::task::yield_now().await;
         let Self {
             remapping_context,
             wabbajack_file,
         } = self;
-        tokio::task::spawn_blocking(move || {
+        spawn_rayon(move || {
             wabbajack_file
-                .get_file(Path::new(&source_data_id.hyphenated().to_string()))
+                .lock_arc()
+                .get_handle(Path::new(&source_data_id.hyphenated().to_string()))
                 .context("reading the file for remapping")
-                .and_then(|handle| {
+                .and_then(|mut handle| {
                     String::new().pipe(|mut out| {
                         tracing::Span::current()
-                            .wrap_read(0, handle.1)
+                            .wrap_read(handle.stream_len().context("seeking file")?, handle)
                             .read_to_string(&mut out)
                             .context("extracting file for remapping")
                             .map(|_| out)
@@ -133,7 +140,5 @@ impl RemappedInlineFileHandler {
         })
         .instrument(info_span!("loading and remapping a file", ?source_data_id))
         .await
-        .context("thread crashed")
-        .and_then(identity)
     }
 }

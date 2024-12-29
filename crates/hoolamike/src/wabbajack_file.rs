@@ -3,6 +3,7 @@ use {
         compression::ProcessArchive,
         install_modlist::directives::{WabbajackFileHandle, WabbajackFileHandleExt},
         progress_bars_v2::IndicatifWrapIoExt,
+        utils::PathReadWrite,
     },
     anyhow::{Context, Result},
     std::path::{Path, PathBuf},
@@ -20,8 +21,9 @@ const MODLIST_JSON_FILENAME: &str = "modlist";
 impl WabbajackFile {
     #[tracing::instrument]
     pub fn load_wabbajack_file(at_path: PathBuf) -> Result<(WabbajackFileHandle, Self)> {
-        crate::compression::wrapped_7zip::WRAPPED_7ZIP
-            .with(|w| w.open_file(&at_path))
+        at_path
+            .open_file_read()
+            .and_then(|(_, file)| crate::compression::compress_tools::ArchiveHandle::new(file))
             .context("reading archive")
             .and_then(|mut archive| {
                 archive.list_paths().and_then(|entries| {

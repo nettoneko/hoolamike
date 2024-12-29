@@ -1,6 +1,6 @@
 use {
     super::*,
-    crate::{modlist_json::directive::InlineFileDirective, progress_bars_v2::IndicatifWrapIoExt},
+    crate::{modlist_json::directive::InlineFileDirective, progress_bars_v2::IndicatifWrapIoExt, utils::spawn_rayon},
     std::{convert::identity, io::Write, path::Path},
 };
 
@@ -21,16 +21,16 @@ impl InlineFileHandler {
             to,
         }: InlineFileDirective,
     ) -> Result<u64> {
-        tokio::task::yield_now().await;
         let output_path = self.output_directory.join(to.into_path());
         let wabbajack_file = self.wabbajack_file.clone();
-        tokio::task::spawn_blocking(move || -> Result<_> {
+        spawn_rayon(move || -> Result<_> {
             let output_file = create_file_all(&output_path)?;
 
             let archive = wabbajack_file;
             archive
-                .get_file(Path::new(&source_data_id.as_hyphenated().to_string()))
-                .and_then(|(_, file)| {
+                .lock_arc()
+                .get_handle(Path::new(&source_data_id.as_hyphenated().to_string()))
+                .and_then(|file| {
                     let mut writer = std::io::BufWriter::new(output_file);
                     std::io::copy(
                         &mut tracing::Span::current().wrap_read(size, file),
@@ -45,8 +45,6 @@ impl InlineFileHandler {
                 .map(|_| ())
         })
         .await
-        .context("thread crashed")
-        .and_then(identity)?;
-        Ok(size)
+        .map(|_| size)
     }
 }

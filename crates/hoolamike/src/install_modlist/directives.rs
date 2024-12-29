@@ -21,6 +21,7 @@ use {
     itertools::Itertools,
     nonempty::NonEmpty,
     num::ToPrimitive,
+    parking_lot::Mutex,
     queued_archive_task::QueuedArchiveService,
     remapped_inline_file::RemappingContext,
     std::{
@@ -54,12 +55,12 @@ pub mod transformed_texture;
 
 use crate::modlist_json::Directive;
 
-pub type WabbajackFileHandle = Arc<crate::compression::wrapped_7zip::ArchiveHandle>;
+pub type WabbajackFileHandle = Arc<Mutex<crate::compression::compress_tools::ArchiveHandle>>;
 
 #[extension_traits::extension(pub trait WabbajackFileHandleExt)]
 impl WabbajackFileHandle {
-    fn from_archive(archive: crate::compression::wrapped_7zip::ArchiveHandle) -> Self {
-        Arc::new(archive)
+    fn from_archive(archive: crate::compression::compress_tools::ArchiveHandle) -> Self {
+        Arc::new(Mutex::new(archive))
     }
 }
 
@@ -196,6 +197,30 @@ fn handle_nested_archive_directives(
     concurrency: usize,
 ) -> impl Stream<Item = Result<u64>> {
     let handle_directives = tracing::Span::current();
+    let preheat = {
+        cloned![archive_extraction_queue];
+        move |paths: Vec<NonEmpty<PathBuf>>| {
+            cloned![archive_extraction_queue];
+            async move {
+                paths
+                    .into_iter()
+                    .collect_vec()
+                    .pipe(|paths| {
+                        tracing::info!("preheating [{}] archives", paths.len());
+                        paths
+                            .into_iter()
+                            .map(|path| archive_extraction_queue.clone().get_archive_spawn(path))
+                            .collect_vec()
+                            .pipe(|tasks| {
+                                futures::stream::iter(tasks)
+                                    .buffered(2137)
+                                    .for_each(|_| ready(()))
+                            })
+                    })
+                    .await
+            }
+        }
+    };
 
     directives
         .tap_mut(|directives| {
@@ -205,78 +230,52 @@ fn handle_nested_archive_directives(
                 archive.archive_path().clone()
             });
         })
-        .tap(|directives| {
-            let preheat_subpaths_of_len = |len: usize| {
-                // preheat
-                directives
-                    .iter()
-                    .map(|directive| {
-                        directive.archive_path().clone().pipe(|path| {
-                            manager
-                                .download_summary
-                                .resolve_archive_path(path.clone())
-                                .map(|path| (path, directive.directive_size()))
+        .tap({
+            cloned![preheat, manager];
+            move |directives| {
+                cloned![preheat, manager];
+                let preheat_subpaths_of_len = move |directives: &[ArchivePathDirective], len: usize, slice: usize| {
+                    // preheat
+                    directives
+                        .iter()
+                        .map(|directive| {
+                            directive
+                                .archive_path()
+                                .clone()
+                                .pipe(|path| manager.download_summary.resolve_archive_path(path.clone()))
                         })
-                    })
-                    .filter_map(|res| {
-                        res.tap_err(|reason| {
-                            tracing::error!(?reason, "the the program will continue, but it will likely not finish");
+                        .filter_map(|res| {
+                            res.tap_err(|reason| {
+                                tracing::error!(?reason, "the the program will continue, but it will likely not finish");
+                            })
+                            .ok()
                         })
-                        .ok()
+                        .filter_map(|path| {
+                            path.len()
+                                .eq(&len)
+                                .then(|| path.tap_mut(|path| path.truncate(slice)))
+                        })
+                        .collect_vec()
+                        .pipe(|paths| {
+                            cloned![preheat];
+                            preheat(paths)
+                        })
+                };
+                [(3, 2), (4, 2), (4, 3), (2, 2)]
+                    .into_iter()
+                    .map({
+                        cloned![preheat_subpaths_of_len];
+                        let directives = directives.clone();
+                        move |(len, slice)| preheat_subpaths_of_len(&directives, len, slice)
                     })
-                    .collect_vec()
-                    .pipe(|paths| {
-                        cloned![archive_extraction_queue];
-                        async move {
-                            tokio::task::yield_now().await;
-                            paths
-                                .into_iter()
-                                .filter_map(|(archive_path, size)| {
-                                    archive_path
-                                        .len()
-                                        .gt(&len)
-                                        .then(|| archive_path.tap_mut(|p| p.truncate(len)))
-                                        .map(|subpath| (subpath, size))
-                                })
-                                .unique()
-                                .collect_vec()
-                                .pipe(|truncated| {
-                                    let total_size = truncated.iter().map(|(_, size)| size).sum::<u64>();
-                                    let _span = info_span!("preheating")
-                                        .tap_mut(|pb| {
-                                            pb.pb_set_message(&format!("preheating {} archives", truncated.len()));
-                                            pb.pb_set_length(total_size);
-                                        })
-                                        .entered();
-                                    tracing::info!("preheating [{}] archives with nesting of [{len}] to keep the loop busy", truncated.len());
-                                    truncated
-                                        .into_iter()
-                                        .map(|(truncated, _)| {
-                                            archive_extraction_queue
-                                                .clone()
-                                                .get_archive_spawn(truncated)
-                                        })
-                                        .collect_vec()
-                                        .pipe(|tasks| {
-                                            futures::stream::iter(tasks)
-                                                .buffered(2137)
-                                                .for_each(|_| ready(()))
-                                        })
-                                })
-                                .await
-                        }
-                    })
-            };
-            (2..5)
-                .map(preheat_subpaths_of_len)
-                .collect_vec()
-                .pipe(|tasks| {
-                    tokio::task::spawn(async move {
-                        for task in tasks {
-                            task.await;
-                        }
-                    })
-                });
+                    .pipe(|tasks| {
+                        tokio::task::spawn(async move {
+                            for task in tasks {
+                                task.await;
+                            }
+                        })
+                    });
+            }
         })
         .pipe(futures::stream::iter)
         .map(move |directive| match directive {
@@ -490,11 +489,7 @@ impl DirectivesHandler {
             .map(|s| (s.descriptor.hash.clone(), s))
             .collect::<BTreeMap<_, _>>()
             .pipe(Arc::new);
-        let archive_extraction_queue = queued_archive_task::QueuedArchiveService::new(
-            concurrency()
-                .pipe(|c| c.to_f32().unwrap().mul(0.8).to_usize().unwrap())
-                .max(1),
-        );
+        let archive_extraction_queue = queued_archive_task::QueuedArchiveService::new(num_cpus::get());
 
         Self {
             config,
@@ -680,7 +675,7 @@ impl DirectivesHandler {
                                 .collect_vec()
                                 .pipe(|directives| {
                                     handle_directives.in_scope(|| {
-                                        handle_nested_archive_directives(manager.clone(), self.archive_extraction_queue.clone(), directives, concurrency())
+                                        handle_nested_archive_directives(manager.clone(), self.archive_extraction_queue.clone(), directives, concurrency() * 10)
                                     })
                                 }),
                         )

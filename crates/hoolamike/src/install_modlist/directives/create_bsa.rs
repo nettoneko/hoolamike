@@ -3,7 +3,7 @@ use {
     crate::{
         modlist_json::directive::create_bsa_directive::CreateBSADirective,
         progress_bars_v2::{count_progress_style, IndicatifWrapIoExt},
-        utils::PathReadWrite,
+        utils::{spawn_rayon, PathReadWrite},
     },
     remapped_inline_file::wabbajack_consts::BSA_CREATION_DIR,
 };
@@ -29,11 +29,10 @@ fn try_optimize_memory_mapping(memmap: &memmap2::Mmap) {
 impl CreateBSAHandler {
     #[tracing::instrument(level = "INFO")]
     pub async fn handle(self, create_bsa_directive: CreateBSADirective) -> Result<u64> {
-        tokio::task::yield_now().await;
         let Self { output_directory } = self;
         let size = create_bsa_directive.size();
         let span = tracing::Span::current();
-        tokio::task::spawn_blocking(move || {
+        spawn_rayon(move || {
             span.in_scope(|| {
                 let bsa_creation_dir = output_directory.join(BSA_CREATION_DIR.with(|p| p.to_owned()));
                 match create_bsa_directive {
@@ -64,7 +63,6 @@ impl CreateBSAHandler {
         })
         .instrument(tracing::Span::current())
         .await
-        .context("thread crashed")
         .map(|_| size)
     }
 }

@@ -42,7 +42,6 @@ where
         Fut: std::future::Future<Output = Result<T>>,
         F: FnOnce() -> Fut,
     {
-        tokio::task::yield_now().await;
         semaphore
             .clone()
             .acquire_owned()

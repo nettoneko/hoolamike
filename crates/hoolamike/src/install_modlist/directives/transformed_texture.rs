@@ -6,12 +6,10 @@ use {
         modlist_json::{directive::TransformedTextureDirective, ImageState},
         progress_bars_v2::IndicatifWrapIoExt,
         read_wrappers::ReadExt,
+        utils::spawn_rayon,
     },
     queued_archive_task::QueuedArchiveService,
-    std::{
-        convert::identity,
-        io::{Read, Seek, Write},
-    },
+    std::io::{Read, Seek, Write},
 };
 
 #[derive(Clone, derivative::Derivative)]
@@ -90,7 +88,6 @@ impl TransformedTextureHandler {
         }: TransformedTextureDirective,
     ) -> Result<u64> {
         let handle = tracing::Span::current();
-        tokio::task::yield_now().await;
         let format = supported_image_format(format).context("checking for format support")?;
         let output_path = self.output_directory.join(to.into_path());
         let source_file = self
@@ -105,7 +102,7 @@ impl TransformedTextureHandler {
             .await
             .with_context(|| format!("reading archive for [{archive_hash_path:?}]"))?;
 
-        tokio::task::spawn_blocking(move || -> Result<_> {
+        spawn_rayon(move || -> Result<_> {
             handle.in_scope(|| {
                 let perform_copy = {
                     move |from: &mut dyn Read, to: &mut dyn Write, target_path: PathBuf| {
@@ -157,9 +154,6 @@ impl TransformedTextureHandler {
         })
         .instrument(tracing::Span::current())
         .await
-        .context("thread crashed")
-        .and_then(identity)?;
-
-        Ok(size)
+        .map(|_| size)
     }
 }
