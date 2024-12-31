@@ -81,6 +81,9 @@ impl<T: AsRef<std::path::Path>> T {
             .map(|file| (self.as_ref().to_owned(), file))
     }
     fn open_file_write(&self) -> anyhow::Result<(PathBuf, std::fs::File)> {
+        if let Some(parent) = self.as_ref().parent() {
+            std::fs::create_dir_all(parent).context("creating full path for output file")?;
+        }
         std::fs::OpenOptions::new()
             .write(true)
             .create(true)

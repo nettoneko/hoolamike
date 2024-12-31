@@ -1,5 +1,6 @@
 use {
     super::{ProcessArchive, *},
+    crate::progress_bars_v2::io_progress_style,
     ::compress_tools::*,
     anyhow::{Context, Result},
     itertools::Itertools,
@@ -93,7 +94,7 @@ impl ProcessArchive for ArchiveHandle {
                             .collect::<Result<HashSet<PathBuf>>>()
                             .context("some paths were not found")
                             .and_then(|mut validated_paths| {
-                                let extracting_mutliple_files = info_span!("extracting_mutliple_files", file_count=%validated_paths.len()).entered();
+                                let _extracting_mutltiple_files = info_span!("extracting_mutliple_files", file_count=%validated_paths.len()).entered();
                                 compress_tools::ArchiveIteratorBuilder::new(&mut self.0)
                                     .filter({
                                         cloned![validated_paths];
@@ -103,31 +104,40 @@ impl ProcessArchive for ArchiveHandle {
                                     .context("building archive iterator")
                                     .and_then(|mut iterator| {
                                         iterator
-                                            .try_fold(vec![], |mut acc, entry| match entry {
+                                            .try_fold((vec![], info_span!("current_file").entered()), |(mut acc, span), entry| match entry {
                                                 ArchiveContents::StartOfEntry(entry_path, stat) => entry_path.pipe(PathBuf::from).pipe(|entry_path| {
-                                                    extracting_mutliple_files.pb_set_message(&entry_path.to_string_lossy());
-                                                    extracting_mutliple_files.pb_inc_length(stat.st_size.to_u64().context("negative size")?);
+                                                    drop(span);
+
                                                     validated_paths
                                                         .remove(entry_path.as_path())
                                                         .then_some(entry_path.clone())
                                                         .with_context(|| format!("unrequested entry: {entry_path:?}"))
-                                                        .map(|path| acc.tap_mut(|acc| acc.push((path, stat.st_size, SpooledTempFile::new(16 * 1024)))))
+                                                        .map(|path| {
+                                                            (
+                                                                acc.tap_mut(|acc| acc.push((path, stat.st_size, SpooledTempFile::new(16 * 1024)))),
+                                                                info_span!("current_file", entry_path=%entry_path.display())
+                                                                    .tap_mut(|pb| {
+                                                                        pb.pb_set_length(stat.st_size as u64);
+                                                                        pb.pb_set_style(&io_progress_style());
+                                                                    })
+                                                                    .entered(),
+                                                            )
+                                                        })
                                                 }),
                                                 ArchiveContents::DataChunk(chunk) => acc
                                                     .last_mut()
                                                     .context("no write in progress")
                                                     .and_then({
-                                                        cloned![extracting_mutliple_files];
-                                                        move |(_, size, acc)| {
+                                                        cloned![span];
+                                                        |(_, size, acc)| {
                                                             std::io::copy(
-                                                                &mut extracting_mutliple_files
-                                                                    .wrap_read(size.to_u64().context("negative size")?, std::io::Cursor::new(chunk)),
+                                                                &mut span.wrap_read(size.to_u64().context("negative size")?, std::io::Cursor::new(chunk)),
                                                                 acc,
                                                             )
                                                             .context("writing to temp file failed")
                                                         }
                                                     })
-                                                    .map(|_| acc),
+                                                    .map(|_| (acc, span)),
                                                 ArchiveContents::EndOfEntry => acc
                                                     .last_mut()
                                                     .context("finished entry before reading anything")
@@ -153,7 +163,7 @@ impl ProcessArchive for ArchiveHandle {
                                                             })
                                                             .map(drop)
                                                     })
-                                                    .map(|_| acc),
+                                                    .map(|_| (acc, span)),
                                                 ArchiveContents::Err(error) => Err(error).with_context(|| {
                                                     format!(
                                                         "when reading: {}",
@@ -165,6 +175,7 @@ impl ProcessArchive for ArchiveHandle {
                                             })
                                             .context("reading multiple paths from archive")
                                     })
+                                    .map(|(paths, _span)| paths)
                                     .map(|paths| {
                                         paths
                                             .into_iter()

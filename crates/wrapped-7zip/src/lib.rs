@@ -141,7 +141,14 @@ fn run_watcher(error_callback: Sender<anyhow::Error>, mut child: Child) {
         }
     }
 }
-fn spawn_watcher(error_callback: Sender<anyhow::Error>, child: Child) {
+
+fn spawn_watcher_rayon(error_callback: Sender<anyhow::Error>, child: Child) {
+    rayon::spawn(move || {
+        run_watcher(error_callback, child);
+    });
+}
+
+fn spawn_watcher_tokio(error_callback: Sender<anyhow::Error>, child: Child) {
     tokio::task::spawn_blocking(move || {
         run_watcher(error_callback, child);
     });
@@ -280,12 +287,18 @@ impl ArchiveHandle {
                             .map(|stdout| (stdout, child))
                     })
                     .map(|(stdout, child)| {
-                        let (tx, rx) = mpsc::channel();
-                        spawn_watcher(tx, child);
-                        ArchiveFileHandle {
-                            error_callback: rx.pipe(Mutex::new).pipe(Arc::new),
-                            reader: stdout.pipe(BufReader::new),
-                            finished: false,
+                        #[allow(dead_code)]
+                        {
+                            let (tx, rx) = mpsc::channel();
+                            #[cfg(feature = "rayon")]
+                            spawn_watcher_rayon(tx, child);
+                            #[cfg(feature = "tokio")]
+                            spawn_watcher_tokio(tx, child);
+                            ArchiveFileHandle {
+                                error_callback: rx.pipe(Mutex::new).pipe(Arc::new),
+                                reader: stdout.pipe(BufReader::new),
+                                finished: false,
+                            }
                         }
                     })
                     .with_context(|| format!("when initializing read from archive file [{}]", file.path.display()))

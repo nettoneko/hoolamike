@@ -71,6 +71,7 @@ tracing-flame = "0.2.0"
 tracing-indicatif = "0.3.8"
 tracing-subscriber.workspace = true
 transpare.workspace = true
+unrar = "0.5.7"
 url.workspace = true
 uuid.workspace = true
 wrapped-7zip.workspace = true

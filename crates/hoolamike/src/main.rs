@@ -7,6 +7,7 @@ use {
     itertools::Itertools,
     modlist_data::ModlistSummary,
     modlist_json::DirectiveKind,
+    num::ToPrimitive,
     std::{ops::Div, path::PathBuf, str::FromStr},
     tap::{Pipe, TapFallible},
 };
@@ -124,11 +125,12 @@ fn setup_logging(logging_mode: LoggingMode) -> Option<impl Drop> {
             let indicatif_layer = console::Term::stdout()
                 .size_checked()
                 .map(|(_width, height)| height)
-                .unwrap_or(16)
+                .and_then(|v| v.to_u64())
+                .unwrap_or(50)
                 .div(2)
-                .pipe(|_half_height| {
+                .pipe(|half_height| {
                     IndicatifLayer::new().with_max_progress_bars(
-                        14,
+                        half_height,
                         Some(indicatif::ProgressStyle::with_template("...and {pending_progress_bars} more not shown above.").unwrap()),
                     )
                 });

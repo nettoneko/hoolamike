@@ -53,8 +53,8 @@ fn try_utf8(bstr: &BStr) -> Cow<str> {
     bstr.to_str()
         .map(Cow::Borrowed)
         .context("file name is not a valid string")
-        .unwrap_or_else(|invalid_utf8| {
-            tracing::error!(?invalid_utf8, bstr=?bstr, "could not decode archive path as utf-8, using best-effort");
+        .unwrap_or_else(|error| {
+            tracing::warn!(?error, non_utf_bytes=?bstr, "could not decode archive path as utf-8, using best-effort");
             bstr.to_str_lossy()
         })
 }

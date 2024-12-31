@@ -17,27 +17,13 @@ use {
         },
         progress_bars_v2::count_progress_style,
         utils::{MaybeWindowsPath, PathReadWrite},
-    },
-    anyhow::{Context, Result},
-    futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt},
-    indexmap::IndexMap,
-    itertools::Itertools,
-    nonempty::NonEmpty,
-    parking_lot::Mutex,
-    queued_archive_task::{QueuedArchiveService, SourceKind},
-    rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
-    remapped_inline_file::RemappingContext,
-    std::{
+    }, anyhow::{Context, Result}, futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt}, indexmap::IndexMap, itertools::Itertools, nonempty::NonEmpty, parking_lot::Mutex, queued_archive_task::{QueuedArchiveService, SourceKind}, rand::seq::SliceRandom, rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator}, remapped_inline_file::RemappingContext, std::{
         collections::BTreeMap,
         future::ready,
         iter::once,
         path::{Path, PathBuf},
         sync::Arc,
-    },
-    tap::prelude::*,
-    tempfile::TempPath,
-    tracing::{info_span, instrument, Instrument},
-    tracing_indicatif::span_ext::IndicatifSpanExt,
+    }, tap::prelude::*, tempfile::TempPath, tracing::{info_span, instrument, Instrument}, tracing_indicatif::span_ext::IndicatifSpanExt
 };
 
 pub(crate) fn create_file_all(path: &Path) -> Result<std::fs::File> {
@@ -507,8 +493,9 @@ impl PreheatedArchiveHashPaths {
                             tasks
                                 .into_iter()
                                 .flat_map(|(a, b, c)| {
-                                    c.into_iter()
-                                        .chunks(512)
+                                    c.tap_mut(|files| files.shuffle(&mut rand::thread_rng())).into_iter()
+                                        // TODO: this is guesstimated, ideally they would be chunked by actual size
+                                        .chunks(64)
                                         .into_iter()
                                         .map(move |c| (a.clone(), b.clone(), c.collect_vec()))
                                         .collect_vec()
@@ -570,6 +557,11 @@ impl PreheatedArchiveHashPaths {
                                                                                         .map(Ok)
                                                                                 })
                                                                         })
+                                                                    })
+                                                                    .inspect(|res| {
+                                                                        if let Err(error) = res.as_ref() {
+                                                                            tracing::error!(?error, "error occurred when preheating archives")
+                                                                        }
                                                                     })
                                                                     .collect::<Result<Vec<(NonEmpty<PathBuf>, (u64, TempPath))>>>()
                                                                     .with_context(|| {
