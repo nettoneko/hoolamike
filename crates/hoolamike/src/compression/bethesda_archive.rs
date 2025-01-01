@@ -220,14 +220,17 @@ impl BethesdaArchive<'_> {
             .and_then(|(_path, mut archive)| {
                 ba2::guess_format(&mut archive)
                     .context("unrecognized format")
-                    .and_then(|format| match format {
-                        ba2::FileFormat::FO4 => ba2::fo4::Archive::read(file)
-                            .context("opening fo4")
-                            .map(BethesdaArchive::Fallout4),
-                        ba2::FileFormat::TES3 => anyhow::bail!("{format:?} is not supported"),
-                        ba2::FileFormat::TES4 => ba2::tes4::Archive::read(file)
-                            .context("opening fo4")
-                            .map(BethesdaArchive::Tes4),
+                    .and_then(|format| {
+                        (match format {
+                            ba2::FileFormat::FO4 => ba2::fo4::Archive::read(file)
+                                .context("opening fo4")
+                                .map(BethesdaArchive::Fallout4),
+                            ba2::FileFormat::TES3 => anyhow::bail!("{format:?} is not supported"),
+                            ba2::FileFormat::TES4 => ba2::tes4::Archive::read(file)
+                                .context("opening fo4")
+                                .map(BethesdaArchive::Tes4),
+                        })
+                        .with_context(|| format!("opening archive based on guessed format: {format:?}"))
                     })
             })
     }

@@ -44,7 +44,7 @@ impl CreateBSAHandler {
                             .and_then(|(output_path, output)| {
                                 archive
                                     .write(&mut tracing::Span::current().wrap_write(size, output), &options)
-                                    .with_context(|| format!("writing bsa file to {output_path:?}"))
+                                    .with_context(|| format!("writing ba2 (fallout 4 / starfield) file to {output_path:?}"))
                             })
                     }),
                     CreateBSADirective::Bsa(bsa) => self::tes_4::create_archive(bsa_creation_dir, bsa, |archive, options, output_path| {
@@ -55,7 +55,7 @@ impl CreateBSAHandler {
                             .and_then(|(output_path, output)| {
                                 archive
                                     .write(&mut tracing::Span::current().wrap_write(size, output), &options)
-                                    .with_context(|| format!("writing bsa file to {output_path:?}"))
+                                    .with_context(|| format!("writing bsa file (skyrim and before) to {output_path:?}"))
                             })
                     }),
                 }

@@ -18,7 +18,7 @@ use {
         ReaderWithOptions,
     },
     rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
-    std::path::PathBuf,
+    std::path::{Path, PathBuf},
     tap::prelude::*,
     tracing::info_span,
     tracing_indicatif::span_ext::IndicatifSpanExt,
@@ -48,27 +48,24 @@ impl LazyArchiveFile {
                     .build(),
             })
     }
-    pub fn new_dx_entry(temp_id_directory_path: PathBuf, BA2DX10Entry { height, width, path, .. }: BA2DX10Entry) -> Result<Self> {
-        temp_id_directory_path
-            .join(path.into_path())
-            .open_file_read()
-            .and_then(|(_, from_file)| {
-                // SAFETY: do not touch that file while it's opened please
-                unsafe { memmap2::Mmap::map(&from_file) }
-                    .context("creating file")
-                    .tap_ok(try_optimize_memory_mapping)
-                    .map(|file| Self {
-                        file,
-                        read_options: FileReadOptions::builder()
-                            .format(ba2::fo4::Format::DX10)
-                            .compression_format(ba2::fo4::CompressionFormat::Zip)
-                            .compression_level(ba2::fo4::CompressionLevel::FO4)
-                            .compression_result(CompressionResult::Compressed)
-                            .mip_chunk_height(height.conv())
-                            .mip_chunk_width(width.conv())
-                            .build(),
-                    })
-            })
+    pub fn new_dx_entry(path: &Path, BA2DX10Entry { height, width, path: _, .. }: BA2DX10Entry) -> Result<Self> {
+        path.open_file_read().and_then(|(_, from_file)| {
+            // SAFETY: do not touch that file while it's opened please
+            unsafe { memmap2::Mmap::map(&from_file) }
+                .context("creating file")
+                .tap_ok(try_optimize_memory_mapping)
+                .map(|file| Self {
+                    file,
+                    read_options: FileReadOptions::builder()
+                        .format(ba2::fo4::Format::DX10)
+                        .compression_format(ba2::fo4::CompressionFormat::Zip)
+                        .compression_level(ba2::fo4::CompressionLevel::FO4)
+                        .compression_result(CompressionResult::Compressed)
+                        .mip_chunk_height(height.conv())
+                        .mip_chunk_width(width.conv())
+                        .build(),
+                })
+        })
     }
     fn as_bytes(&self) -> &[u8] {
         &self.file[..]
@@ -158,7 +155,7 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
                 .and_then(|(_path, file)| LazyArchiveFile::new(&file, false))
                 .and_then(|file| create_key(&extension, name_hash, dir_hash).map(|key| (key, file))),
             FileState::BA2DX10Entry(ba2_dx10_entry) => {
-                LazyArchiveFile::new_dx_entry(temp_id_dir.join(ba2_dx10_entry.path.clone().into_path()), ba2_dx10_entry.clone()).and_then(|file| {
+                LazyArchiveFile::new_dx_entry(&temp_id_dir.join(ba2_dx10_entry.path.clone().into_path()), ba2_dx10_entry.clone()).and_then(|file| {
                     ba2_dx10_entry.pipe(
                         |BA2DX10Entry {
                              dir_hash,

@@ -78,8 +78,8 @@ impl PatchedFromArchiveHandler {
                 .map(|_| ())
             }
             let delta_file = wabbajack_file
-                .lock_arc()
-                .get_handle(Path::new(&patch_id.hyphenated().to_string()))
+                .get_archive()
+                .and_then(|mut archive| archive.get_handle(Path::new(&patch_id.hyphenated().to_string())))
                 .with_context(|| format!("patch {patch_id:?} does not exist"))?;
 
             source_file

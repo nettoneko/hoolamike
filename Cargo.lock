@@ -267,7 +267,7 @@ dependencies = [
 [[package]]
 name = "ba2"
 version = "3.0.1"
-source = "git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?rev=b716bcbbf51ec8f7d5e5261128fabfbe3357ddb3#b716bcbbf51ec8f7d5e5261128fabfbe3357ddb3"
+source = "git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?branch=overflow-verbose#35b833711e1544020446d1a4b010599c701b9f35"
 dependencies = [
  "bitflags 2.6.0",
  "bstr",
@@ -308,8 +308,7 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 [[package]]
 name = "bcdec_rs"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9934c2b68e46448d814db20e34a840ef9b4e7b3b7c8b1da91161481230f6350"
+source = "git+https://github.com/ScanMountGoat/image_dds?rev=97872bbc7ad3a2dc5e1a0f8596de3a1dafd10e43#97872bbc7ad3a2dc5e1a0f8596de3a1dafd10e43"
 
 [[package]]
 name = "binrw"
@@ -398,7 +397,7 @@ dependencies = [
 
 [[package]]
 name = "bsa-cli"
-version = "0.5.6"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "ba2 3.0.0",
@@ -1431,7 +1430,7 @@ dependencies = [
 
 [[package]]
 name = "hoolamike"
-version = "0.5.6"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1837,8 +1836,7 @@ dependencies = [
 [[package]]
 name = "image_dds"
 version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84c6d1a2d80bc7dd2928b2a72a46d71bccbb6becf8ce207522b0b92daf0a417f"
+source = "git+https://github.com/ScanMountGoat/image_dds?rev=97872bbc7ad3a2dc5e1a0f8596de3a1dafd10e43#97872bbc7ad3a2dc5e1a0f8596de3a1dafd10e43"
 dependencies = [
  "bcdec_rs",
  "bytemuck",
@@ -3498,7 +3496,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-cached-future"
-version = "0.5.6"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4204,7 +4202,7 @@ checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
 name = "wrapped-7zip"
-version = "0.5.6"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "chrono",

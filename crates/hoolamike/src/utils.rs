@@ -1,10 +1,11 @@
 use {
     anyhow::Context,
+    futures::FutureExt,
     itertools::Itertools,
     serde::{Deserialize, Serialize},
-    std::{convert::identity, path::PathBuf, sync::Arc},
+    std::{convert::identity, future::Future, path::PathBuf, sync::Arc},
     tap::prelude::*,
-    tracing::debug_span,
+    tracing::info_span,
 };
 
 #[extension_traits::extension(pub trait ReadableCatchUnwindExt)]
@@ -123,25 +124,20 @@ impl std::error::Error for ArcError {
     }
 }
 
-#[tracing::instrument(skip(task_fn))]
-pub(crate) async fn spawn_rayon<T, F>(task_fn: F) -> anyhow::Result<T>
+// #[tracing::instrument(skip(task_fn))]
+pub(crate) fn spawn_rayon<T, F>(task_fn: F) -> impl Future<Output = anyhow::Result<T>>
 where
     F: FnOnce() -> anyhow::Result<T> + Send + 'static,
     T: Send + Sync + 'static,
 {
-    let span = debug_span!("performing_work_on_threadpool");
-    tokio::task::spawn(async move {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
-            span.in_scope(|| {
-                if tx.send(task_fn()).is_err() {
-                    tracing::error!("could not communicate from thread")
-                }
-            })
-        });
-        rx.await.context("thread crashed?").and_then(identity)
-    })
-    .await
-    .context("task crashed")
-    .and_then(identity)
+    let span = info_span!("performing_work_on_threadpool");
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    rayon::spawn_fifo(move || {
+        span.in_scope(|| {
+            if tx.send(task_fn()).is_err() {
+                tracing::error!("could not communicate from thread")
+            }
+        })
+    });
+    rx.map(|res| res.context("task crashed?").and_then(identity))
 }

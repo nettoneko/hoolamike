@@ -17,13 +17,27 @@ use {
         },
         progress_bars_v2::count_progress_style,
         utils::{MaybeWindowsPath, PathReadWrite},
-    }, anyhow::{Context, Result}, futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt}, indexmap::IndexMap, itertools::Itertools, nonempty::NonEmpty, parking_lot::Mutex, queued_archive_task::{QueuedArchiveService, SourceKind}, rand::seq::SliceRandom, rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator}, remapped_inline_file::RemappingContext, std::{
+    },
+    anyhow::{Context, Result},
+    futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt},
+    indexmap::IndexMap,
+    itertools::Itertools,
+    nonempty::NonEmpty,
+    queued_archive_task::{QueuedArchiveService, SourceKind},
+    rand::seq::SliceRandom,
+    rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
+    remapped_inline_file::RemappingContext,
+    std::{
         collections::BTreeMap,
         future::ready,
         iter::once,
         path::{Path, PathBuf},
         sync::Arc,
-    }, tap::prelude::*, tempfile::TempPath, tracing::{info_span, instrument, Instrument}, tracing_indicatif::span_ext::IndicatifSpanExt
+    },
+    tap::prelude::*,
+    tempfile::TempPath,
+    tracing::{info_span, instrument, Instrument},
+    tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
 pub(crate) fn create_file_all(path: &Path) -> Result<std::fs::File> {
@@ -45,12 +59,24 @@ pub mod transformed_texture;
 
 use crate::modlist_json::Directive;
 
-pub type WabbajackFileHandle = Arc<Mutex<crate::compression::compress_tools::ArchiveHandle>>;
+// pub type WabbajackFileHandle = Arc<Mutex<crate::compression::compress_tools::ArchiveHandle>>;
 
-#[extension_traits::extension(pub trait WabbajackFileHandleExt)]
+#[derive(Debug, Clone)]
+pub struct WabbajackFileHandle {
+    wabbajack_file_path: Arc<PathBuf>,
+}
+
 impl WabbajackFileHandle {
-    fn from_archive(archive: crate::compression::compress_tools::ArchiveHandle) -> Self {
-        Arc::new(Mutex::new(archive))
+    pub(crate) fn from_archive(archive: PathBuf) -> Self {
+        Self {
+            wabbajack_file_path: Arc::new(archive),
+        }
+    }
+    pub(crate) fn get_archive(&self) -> Result<crate::compression::zip::ZipArchive> {
+        self.wabbajack_file_path
+            .open_file_read()
+            .and_then(|(at_path, _file)| crate::compression::zip::ZipArchive::new(&at_path).with_context(|| format!("opening archive at path [{at_path:#?}]")))
+            .context("opening wabbajack file as archive")
     }
 }
 
@@ -244,168 +270,6 @@ fn handle_nested_archive_directives(
     })
 }
 
-// /// it's dirty as hell but saves disk space
-// fn handle_nested_archive_directives(
-//     manager: Arc<DirectivesHandler>,
-//     nested_archive_manager: Arc<NestedArchivesService>,
-//     directives: Vec<ArchivePathDirective>,
-//     concurrency: usize,
-// ) -> impl Stream<Item = ArcResult<u64>> {
-//     pub const CHUNK_SIZE_BYTES: u64 = 64 * 1024 * 1024;
-//     let handle_directives: &'static _ = tracing::Span::current().pipe(Box::new).pipe(Box::leak);
-//     directives
-//         .into_iter()
-//         .sorted_unstable_by_key(|a| a.archive_path().clone())
-//         .chunk_by(|a| a.archive_path().clone().parent().map(|(path, _)| path))
-//         .into_iter()
-//         .map(|(parent_archive, chunk)| (parent_archive, chunk.into_iter().collect_vec()))
-//         .collect_vec()
-//         .into_iter()
-//         .fold(vec![vec![]], |acc: Vec<Vec<(_, Vec<ArchivePathDirective>)>>, next| {
-//             acc.tap_mut(|acc| {
-//                 if acc
-//                     .last()
-//                     .unwrap()
-//                     .iter()
-//                     .map(|(_, d)| d.iter().map(|d| d.directive_size()).sum::<u64>())
-//                     .sum::<u64>()
-//                     > CHUNK_SIZE_BYTES
-//                 {
-//                     acc.push(vec![]);
-//                 }
-//                 acc.last_mut().unwrap().push(next);
-//             })
-//         })
-//         .into_iter()
-//         .collect_vec()
-//         .pipe(futures::stream::iter)
-//         .pipe(Box::pin)
-//         .flat_map_unordered(concurrency.div(4).max(1), {
-//             cloned![nested_archive_manager];
-//             cloned![manager];
-//             move |chunk| {
-//                 let preheat = {
-//                     cloned![nested_archive_manager];
-//                     cloned![handle_directives];
-//                     move |parent_archive: ArchiveHashPath| {
-//                         cloned![nested_archive_manager];
-//                         {
-//                             cloned![parent_archive];
-//                             cloned![handle_directives];
-//                             async move {
-//                                 nested_archive_manager
-//                                     .clone()
-//                                     .preheat(parent_archive.clone())
-//                                     .boxed()
-//                                     .instrument(handle_directives.clone())
-//                                     .await
-//                             }
-//                             .boxed()
-//                         }
-//                         .instrument(info_span!("preheating_archive", ?parent_archive))
-//                     }
-//                 };
-//                 let cleanup = {
-//                     cloned![nested_archive_manager];
-//                     move |parent_archive: ArchiveHashPath| {
-//                         cloned![nested_archive_manager];
-//                         {
-//                             cloned![parent_archive];
-
-//                             async move {
-//                                 nested_archive_manager
-//                                     .clone()
-//                                     .cleanup(parent_archive.clone())
-//                                     .instrument(handle_directives.clone())
-//                                     .await
-//                             }
-//                         }
-//                         .instrument(info_span!("cleaning_up", ?parent_archive))
-//                     }
-//                 };
-
-//                 let parent_chunk = chunk
-//                     .iter()
-//                     .filter_map(|(parent, _)| parent.clone())
-//                     .collect_vec();
-//                 let preheat_all = {
-//                     cloned![parent_chunk];
-//                     cloned![preheat];
-//                     move || async move {
-//                         parent_chunk
-//                             .pipe(futures::stream::iter)
-//                             .map(preheat.clone())
-//                             .buffer_unordered(concurrency.div(4).max(1))
-//                             .try_collect::<()>()
-//                             .await
-//                             .context("preheating chunk")
-//                             .arced()
-//                     }
-//                 };
-//                 let cleanup_all = {
-//                     cloned![parent_chunk];
-//                     cloned![cleanup];
-//                     move || async move {
-//                         parent_chunk
-//                             .pipe(futures::stream::iter)
-//                             .map(cleanup.clone())
-//                             .buffer_unordered(concurrency.div(4).max(1))
-//                             .collect::<()>()
-//                             .map(anyhow::Ok)
-//                             .await
-//                             .context("preheating chunk")
-//                             .arced()
-//                     }
-//                 };
-//                 preheat_all()
-//                     .boxed()
-//                     .into_stream()
-//                     .try_flat_map({
-//                         cloned![manager, chunk];
-//                         move |_| {
-//                             chunk
-//                                 .pipe(futures::stream::iter)
-//                                 .flat_map(|(_, chunk)| futures::stream::iter(chunk))
-//                                 .map(move |directive| match directive {
-//                                     ArchivePathDirective::TransformedTexture(transformed_texture) => manager
-//                                         .transformed_texture
-//                                         .clone()
-//                                         .handle(transformed_texture.clone())
-//                                         .instrument(handle_directives.clone())
-//                                         .map(move |res| {
-//                                             res.with_context(|| format!("handling directive: {transformed_texture:#?}"))
-//                                                 .arced()
-//                                         })
-//                                         .boxed(),
-//                                     ArchivePathDirective::FromArchive(from_archive) => manager
-//                                         .from_archive
-//                                         .clone()
-//                                         .handle(from_archive.clone())
-//                                         .instrument(handle_directives.clone())
-//                                         .map(move |res| {
-//                                             res.with_context(|| format!("handling directive: {from_archive:#?}"))
-//                                                 .arced()
-//                                         })
-//                                         .boxed(),
-//                                     ArchivePathDirective::PatchedFromArchive(patched_from_archive_directive) => manager
-//                                         .patched_from_archive
-//                                         .clone()
-//                                         .handle(patched_from_archive_directive.clone())
-//                                         .instrument(handle_directives.clone())
-//                                         .map(move |res| {
-//                                             res.with_context(|| format!("handling directive: {patched_from_archive_directive:#?}"))
-//                                                 .arced()
-//                                         })
-//                                         .boxed(),
-//                                 })
-//                                 .buffered(concurrency.div(2).max(1))
-//                         }
-//                     })
-//                     .chain(cleanup_all().boxed().map_ok(|_| 0).into_stream())
-//             }
-//         })
-// }
-
 #[extension_traits::extension(pub (crate) trait ResolvePathExt)]
 impl DownloadSummary {
     fn resolve_archive_path(&self, ArchiveHashPath { source_hash, path }: &ArchiveHashPath) -> Result<NonEmpty<PathBuf>> {
@@ -453,16 +317,27 @@ impl PreheatedArchiveHashPaths {
             std::iter::successors(popped(path), |(parent, _path)| popped(parent.clone()))
         }
 
-        paths
+        let all_necessary_extracts = paths
             .into_iter()
             .flat_map(ancestors)
             .unique()
             .sorted_by_cached_key(|(parent, _)| parent.clone())
+            .collect_vec();
+
+        let all_necessary_extracts_span = info_span!("files_to_preheat")
+            .tap_mut(|pb| {
+                pb.pb_set_style(&count_progress_style());
+                pb.pb_set_length(all_necessary_extracts.len() as _);
+            })
+            .entered();
+        all_necessary_extracts
+            .into_iter()
             .chunk_by(|(parent, _path)| parent.clone())
             .into_iter()
             .map(|(parent, paths)| (parent, paths.into_iter().map(|(_, path)| path).collect_vec()))
             .collect::<IndexMap<_, _>>()
             .into_iter()
+            .sorted_by_key(|(parent, _)| parent.len())
             .chunk_by(|(parent, _)| parent.len())
             .into_iter()
             .map(|(len, chunk)| (len, chunk.into_iter().collect_vec()))
@@ -470,58 +345,61 @@ impl PreheatedArchiveHashPaths {
                 (BTreeMap::<_, Arc<SourceKind>>::new(), Vec::new()),
                 |(acc, mut buffer), (current_len, next_chunk_by_length)| {
                     info_span!("preheating_archives_in_chunk_by_length", nesting_level=%current_len).in_scope(|| {
-                        
-                    next_chunk_by_length
-                        .into_iter()
-                        .map(|(parent, paths)| {
-                            (match parent.tail.as_slice() {
-                                &[] => parent
-                                    .head
-                                    .clone()
-                                    .pipe(SourceKind::JustPath)
-                                    .pipe(Arc::new)
-                                    .pipe(Ok),
-                                _more => acc
-                                    .get(&parent)
-                                    .with_context(|| format!("parent not preheated: {parent:#?}"))
-                                    .cloned(),
-                            })
-                            .map(|resolved_parent| (resolved_parent, parent, paths))
-                        })
-                        .collect::<Result<Vec<_>>>()
-                        .map(|tasks| {
-                            tasks
-                                .into_iter()
-                                .flat_map(|(a, b, c)| {
-                                    c.tap_mut(|files| files.shuffle(&mut rand::thread_rng())).into_iter()
-                                        // TODO: this is guesstimated, ideally they would be chunked by actual size
-                                        .chunks(64)
-                                        .into_iter()
-                                        .map(move |c| (a.clone(), b.clone(), c.collect_vec()))
-                                        .collect_vec()
+                        next_chunk_by_length
+                            .into_iter()
+                            .map(|(parent, paths)| {
+                                (match parent.tail.as_slice() {
+                                    &[] => parent
+                                        .head
+                                        .clone()
+                                        .pipe(SourceKind::JustPath)
+                                        .pipe(Arc::new)
+                                        .pipe(Ok),
+                                    _more => acc
+                                        .get(&parent)
+                                        .with_context(|| format!("parent not preheated: {parent:#?}"))
+                                        .cloned(),
                                 })
-                                .collect_vec()
-                        })
-                        .and_then(|tasks| {
-                            let performing_tasks = info_span!("performing_tasks", count=%tasks.len()).tap_mut(|pb| {
-                                pb.pb_set_style(&count_progress_style());
-                                pb.pb_set_length(tasks.len() as _);
-                            });
-                            performing_tasks.in_scope(|| {
-                                let performing_task = info_span!("performing_task");
+                                .map(|resolved_parent| (resolved_parent, parent, paths))
+                            })
+                            .collect::<Result<Vec<_>>>()
+                            .map(|tasks| {
                                 tasks
-                                    .into_par_iter()
-                                    .map({
-                                        move |(archive, parent, archive_paths)| {
-                                            performing_task.in_scope(|| {
-                                                info_span!("task", ?archive, ?parent, archive_paths=%archive_paths.len()).in_scope(|| {
-                                                    archive_paths
-                                                        .iter()
-                                                        .map(|p| p.as_path())
-                                                        .collect_vec()
-                                                        .pipe_ref(|archive_paths| {
-                                                            info_span!("extracting_archive", archive_paths=%archive_paths.len()).in_scope(|| {
-                                                                crate::compression::ArchiveHandle::guess(archive.as_ref().as_ref(), parent.last().extension())
+                                    .into_iter()
+                                    .flat_map(|(a, b, c)| {
+                                        c.tap_mut(|files| files.shuffle(&mut rand::thread_rng()))
+                                            .into_iter()
+                                            // TODO: this is guesstimated, ideally they would be chunked by actual size
+                                            .chunks(64)
+                                            .into_iter()
+                                            .map(move |c| (a.clone(), b.clone(), c.collect_vec()))
+                                            .collect_vec()
+                                    })
+                                    .collect_vec()
+                            })
+                            .and_then(|tasks| {
+                                let performing_tasks = info_span!("performing_tasks", count=%tasks.len()).tap_mut(|pb| {
+                                    pb.pb_set_style(&count_progress_style());
+                                    pb.pb_set_length(tasks.len() as _);
+                                });
+                                performing_tasks.in_scope(|| {
+                                    let performing_task = info_span!("performing_task");
+                                    tasks
+                                        .into_par_iter()
+                                        .map({
+                                            move |(archive, parent, archive_paths)| {
+                                                performing_task.in_scope(|| {
+                                                    info_span!("task", ?archive, ?parent, archive_paths=%archive_paths.len()).in_scope(|| {
+                                                        archive_paths
+                                                            .iter()
+                                                            .map(|p| p.as_path())
+                                                            .collect_vec()
+                                                            .pipe_ref(|archive_paths| {
+                                                                info_span!("extracting_archive", archive_paths=%archive_paths.len()).in_scope(|| {
+                                                                    crate::compression::ArchiveHandle::guess(
+                                                                        archive.as_ref().as_ref(),
+                                                                        parent.last().extension(),
+                                                                    )
                                                                     .pipe(once)
                                                                     .try_flat_map(|mut archive| {
                                                                         let kind = ArchiveHandleKind::from(&archive);
@@ -558,8 +436,11 @@ impl PreheatedArchiveHashPaths {
                                                                                 })
                                                                         })
                                                                     })
-                                                                    .inspect(|res| {
-                                                                        if let Err(error) = res.as_ref() {
+                                                                    .inspect(|res| match res.as_ref() {
+                                                                        Ok(chunk) => {
+                                                                            tracing::trace!(?chunk, "OK");
+                                                                        }
+                                                                        Err(error) => {
                                                                             tracing::error!(?error, "error occurred when preheating archives")
                                                                         }
                                                                     })
@@ -570,31 +451,35 @@ impl PreheatedArchiveHashPaths {
                                                                              archive_paths={archive_paths:#?})"
                                                                         )
                                                                     })
+                                                                })
                                                             })
-                                                        })
+                                                    })
                                                 })
-                                            })
-                                        }
-                                    })
-                                    .inspect(|_| performing_tasks.pb_inc(1))
-                                    .collect_into_vec(&mut buffer)
-                                    .pipe(|_| {
-                                        buffer.drain(..).try_fold(acc, |acc, next| {
-                                            next.map(|next| {
-                                                acc.tap_mut(|acc| {
-                                                    acc.extend(
-                                                        next.into_iter()
-                                                            .map(|(k, (_, v))| (k, v.pipe(SourceKind::CachedPath).pipe(Arc::new))),
-                                                    );
+                                            }
+                                        })
+                                        .inspect(|_| performing_tasks.pb_inc(1))
+                                        .inspect(|r| {
+                                            if let Ok(chunk) = r.as_ref() {
+                                                all_necessary_extracts_span.pb_inc(chunk.len() as _)
+                                            }
+                                        })
+                                        .collect_into_vec(&mut buffer)
+                                        .pipe(|_| {
+                                            buffer.drain(..).try_fold(acc, |acc, next| {
+                                                next.map(|next| {
+                                                    acc.tap_mut(|acc| {
+                                                        acc.extend(
+                                                            next.into_iter()
+                                                                .map(|(k, (_, v))| (k, v.pipe(SourceKind::CachedPath).pipe(Arc::new))),
+                                                        );
+                                                    })
                                                 })
                                             })
                                         })
-                                    })
-                                    .map(|acc| (acc, buffer))
+                                        .map(|acc| (acc, buffer))
+                                })
                             })
-                        })
                     })
-
                 },
             )
             .map(|(preheated, _)| preheated)
@@ -808,22 +693,27 @@ impl DirectivesHandler {
                                             self.download_summary.clone(),
                                             self.archive_extraction_queue.clone(),
                                             directives,
-                                            concurrency() * 10,
+                                            concurrency(),
                                         )
                                     })
                                 }),
                         )
-                        .chain(remapped_inline_file.pipe(futures::stream::iter).then({
-                            cloned![manager];
-                            move |remapped_inline_file| {
-                                manager
-                                    .remapped_inline_file
-                                    .clone()
-                                    .handle(remapped_inline_file.clone())
-                                    .instrument(handle_directives.clone())
-                                    .map(move |res| res.with_context(|| format!("handling {remapped_inline_file:#?}")))
-                            }
-                        }))
+                        .chain(
+                            remapped_inline_file
+                                .pipe(futures::stream::iter)
+                                .map({
+                                    cloned![manager];
+                                    move |remapped_inline_file| {
+                                        manager
+                                            .remapped_inline_file
+                                            .clone()
+                                            .handle(remapped_inline_file.clone())
+                                            .instrument(handle_directives.clone())
+                                            .map(move |res| res.with_context(|| format!("handling {remapped_inline_file:#?}")))
+                                    }
+                                })
+                                .buffer_unordered(concurrency()),
+                        )
                         .chain(create_bsa.pipe(futures::stream::iter).then({
                             cloned![manager];
                             move |create_bsa| {

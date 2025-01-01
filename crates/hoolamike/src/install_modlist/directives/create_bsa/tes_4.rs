@@ -192,7 +192,7 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
                                 )
                             })
                     })
-                    .context("creating BA2 (fallout4/starfield) archive")
+                    .context("creating BSA (skyrim and before) archive")
             })
         })
 }

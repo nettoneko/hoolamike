@@ -142,12 +142,14 @@ fn run_watcher(error_callback: Sender<anyhow::Error>, mut child: Child) {
     }
 }
 
+#[allow(dead_code)]
 fn spawn_watcher_rayon(error_callback: Sender<anyhow::Error>, child: Child) {
     rayon::spawn(move || {
         run_watcher(error_callback, child);
     });
 }
 
+#[allow(dead_code)]
 fn spawn_watcher_tokio(error_callback: Sender<anyhow::Error>, child: Child) {
     tokio::task::spawn_blocking(move || {
         run_watcher(error_callback, child);

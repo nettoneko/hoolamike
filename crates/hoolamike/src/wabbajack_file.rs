@@ -1,10 +1,5 @@
 use {
-    crate::{
-        compression::ProcessArchive,
-        install_modlist::directives::{WabbajackFileHandle, WabbajackFileHandleExt},
-        progress_bars_v2::IndicatifWrapIoExt,
-        utils::PathReadWrite,
-    },
+    crate::{compression::ProcessArchive, install_modlist::directives::WabbajackFileHandle, progress_bars_v2::IndicatifWrapIoExt, utils::PathReadWrite},
     anyhow::{Context, Result},
     std::{
         io::BufReader,
@@ -39,11 +34,11 @@ impl WabbajackFile {
                         })
                         .with_context(|| format!("reading [{MODLIST_JSON_FILENAME}]"))
                         .map(|modlist| Self {
-                            wabbajack_file_path: at_path,
+                            wabbajack_file_path: at_path.clone(),
                             wabbajack_entries: entries,
                             modlist,
                         })
-                        .map(|data| (WabbajackFileHandle::from_archive(archive), data))
+                        .map(|data| (WabbajackFileHandle::from_archive(at_path), data))
                 })
             })
     }

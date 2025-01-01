@@ -10,7 +10,8 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 async-recursion = "1.1.1"
-ba2 = { git = "https://github.com/Ryan-rsm-McKenzie/bsa-rs", rev = "b716bcbbf51ec8f7d5e5261128fabfbe3357ddb3" }
+# ba2 = { git = "https://github.com/Ryan-rsm-McKenzie/bsa-rs", rev = "b716bcbbf51ec8f7d5e5261128fabfbe3357ddb3" }
+ba2 = { git = "https://github.com/Ryan-rsm-McKenzie/bsa-rs", branch = "overflow-verbose" }
 # ba2 = { path = "/home/niedzwiedz/Games/modding/bsa-rs" }
 base64.workspace = true
 binrw.workspace = true
@@ -32,7 +33,9 @@ fs2.workspace = true
 futures.workspace = true
 futures-util.workspace = true
 hex.workspace = true
-image_dds = { version = "0.6.2", features = ["serde"] }
+image_dds = { git = "https://github.com/ScanMountGoat/image_dds", rev = "97872bbc7ad3a2dc5e1a0f8596de3a1dafd10e43", features = [
+  "serde",
+] }
 indexmap.workspace = true
 indicatif = { workspace = true, features = ["rayon"] }
 iter-read.workspace = true

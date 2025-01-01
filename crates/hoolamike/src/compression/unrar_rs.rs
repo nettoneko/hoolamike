@@ -1,5 +1,6 @@
 use {
     super::{ProcessArchive, *},
+    crate::utils::MaybeWindowsPath,
     anyhow::{Context, Result},
     itertools::Itertools,
     std::{collections::HashSet, path::PathBuf},
@@ -30,7 +31,6 @@ impl ArchiveHandle {
             .context("opening archive using unrar")
     }
 }
-
 impl ProcessArchive for ArchiveHandle {
     #[instrument(skip(self))]
     fn list_paths(&mut self) -> Result<Vec<PathBuf>> {
@@ -39,7 +39,15 @@ impl ProcessArchive for ArchiveHandle {
             .context("opening for listing")
             .and_then(|opened| {
                 opened
-                    .map(|f| f.context("bad file").map(|f| f.filename))
+                    .map(|f| {
+                        f.context("bad file").map(|f| {
+                            f.filename
+                                .display()
+                                .to_string()
+                                .pipe(MaybeWindowsPath)
+                                .pipe(MaybeWindowsPath::into_path)
+                        })
+                    })
                     .collect::<Result<Vec<_>>>()
             })
             .context("listing archive")
@@ -87,7 +95,7 @@ impl ProcessArchive for ArchiveHandle {
                                                             file.path()
                                                                 .pipe_ref(|temp| {
                                                                     post_header
-                                                                        .extract_to(&temp)
+                                                                        .extract_to(temp)
                                                                         .with_context(|| format!("extracting to [{temp:?}]"))
                                                                 })
                                                                 .map(|post_extract| {

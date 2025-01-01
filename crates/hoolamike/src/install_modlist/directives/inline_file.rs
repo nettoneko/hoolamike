@@ -28,8 +28,8 @@ impl InlineFileHandler {
 
             let archive = wabbajack_file;
             archive
-                .lock_arc()
-                .get_handle(Path::new(&source_data_id.as_hyphenated().to_string()))
+                .get_archive()
+                .and_then(|mut archive| archive.get_handle(Path::new(&source_data_id.as_hyphenated().to_string())))
                 .and_then(|file| {
                     let mut writer = std::io::BufWriter::new(output_file);
                     std::io::copy(
