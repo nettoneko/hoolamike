@@ -67,23 +67,35 @@ impl RemappingContext {
                         .trim_start_matches(r#"./"#)
                         .to_string()
                 }
-                let game_folder = game_folder
-                    .join_with_delimiter(r#"\\"#)
-                    .pipe_as_ref(trim_relative_path_start);
-                let install_directory = install_directory
-                    .join_with_delimiter(r#"\\"#)
-                    .pipe_as_ref(trim_relative_path_start);
-                let downloads_directory = downloads_directory
-                    .join_with_delimiter(r#"\\"#)
-                    .pipe_as_ref(trim_relative_path_start);
-                data.replace(wabbajack_consts::GAME_PATH_MAGIC_DOUBLE_BACK, game_folder.as_str())
-                    .replace(wabbajack_consts::GAME_PATH_MAGIC_FORWARD, game_folder.as_str())
-                    .replace(wabbajack_consts::MO2_PATH_MAGIC_BACK, install_directory.as_str())
-                    .replace(wabbajack_consts::MO2_PATH_MAGIC_DOUBLE_BACK, install_directory.as_str())
-                    .replace(wabbajack_consts::MO2_PATH_MAGIC_FORWARD, install_directory.as_str())
-                    .replace(wabbajack_consts::DOWNLOAD_PATH_MAGIC_BACK, downloads_directory.as_str())
-                    .replace(wabbajack_consts::DOWNLOAD_PATH_MAGIC_DOUBLE_BACK, downloads_directory.as_str())
-                    .replace(wabbajack_consts::DOWNLOAD_PATH_MAGIC_FORWARD, downloads_directory.as_str())
+                let game_folder = |delimiter| {
+                    game_folder
+                        .join_with_delimiter(delimiter)
+                        .pipe_as_ref(trim_relative_path_start)
+                };
+                let install_directory = |delimiter| {
+                    install_directory
+                        .join_with_delimiter(delimiter)
+                        .pipe_as_ref(trim_relative_path_start)
+                };
+                let downloads_directory = |delimiter| {
+                    downloads_directory
+                        .join_with_delimiter(delimiter)
+                        .pipe_as_ref(trim_relative_path_start)
+                };
+
+                const BACK: &str = r#"\"#;
+                const DOUBLE_BACK: &str = r#"\\"#;
+                const FORWARD: &str = r#"/"#;
+                data.replace(wabbajack_consts::GAME_PATH_MAGIC_BACK, game_folder(BACK).as_str())
+                    .replace(wabbajack_consts::GAME_PATH_MAGIC_DOUBLE_BACK, game_folder(DOUBLE_BACK).as_str())
+                    .replace(wabbajack_consts::GAME_PATH_MAGIC_FORWARD, game_folder(FORWARD).as_str())
+                    .replace(wabbajack_consts::MO2_PATH_MAGIC_BACK, install_directory(BACK).as_str())
+                    .replace(wabbajack_consts::MO2_PATH_MAGIC_DOUBLE_BACK, install_directory(DOUBLE_BACK).as_str())
+                    .replace(wabbajack_consts::MO2_PATH_MAGIC_FORWARD, install_directory(FORWARD).as_str())
+                    .replace(wabbajack_consts::DOWNLOAD_PATH_MAGIC_BACK, downloads_directory(BACK).as_str())
+                    .replace(wabbajack_consts::DOWNLOAD_PATH_MAGIC_DOUBLE_BACK, downloads_directory(DOUBLE_BACK).as_str())
+                    .replace(wabbajack_consts::DOWNLOAD_PATH_MAGIC_FORWARD, downloads_directory(FORWARD).as_str())
+                    .tap(|new| tracing::trace!("remapped:\n{data}-->\n{new}"))
             },
         )
     }

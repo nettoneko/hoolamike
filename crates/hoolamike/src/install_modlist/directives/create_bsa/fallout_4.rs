@@ -48,7 +48,16 @@ impl LazyArchiveFile {
                     .build(),
             })
     }
-    pub fn new_dx_entry(path: &Path, BA2DX10Entry { height, width, path: _, .. }: BA2DX10Entry) -> Result<Self> {
+    pub fn new_dx_entry(
+        path: &Path,
+        BA2DX10Entry {
+            height,
+            width,
+            path: _,
+            chunks,
+            ..
+        }: BA2DX10Entry,
+    ) -> Result<Self> {
         path.open_file_read().and_then(|(_, from_file)| {
             // SAFETY: do not touch that file while it's opened please
             unsafe { memmap2::Mmap::map(&from_file) }
@@ -60,7 +69,10 @@ impl LazyArchiveFile {
                         .format(ba2::fo4::Format::DX10)
                         .compression_format(ba2::fo4::CompressionFormat::Zip)
                         .compression_level(ba2::fo4::CompressionLevel::FO4)
-                        .compression_result(CompressionResult::Compressed)
+                        .compression_result(match chunks.iter().any(|c| c.compressed) {
+                            true => CompressionResult::Compressed,
+                            false => CompressionResult::Decompressed,
+                        })
                         .mip_chunk_height(height.conv())
                         .mip_chunk_width(width.conv())
                         .build(),
