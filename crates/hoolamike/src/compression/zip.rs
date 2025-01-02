@@ -1,7 +1,6 @@
 use {
     super::{ProcessArchive, *},
     crate::utils::MaybeWindowsPath,
-    itertools::Itertools,
     std::{collections::HashMap, fs::File, io::BufWriter, path::PathBuf},
     tempfile::NamedTempFile,
 };

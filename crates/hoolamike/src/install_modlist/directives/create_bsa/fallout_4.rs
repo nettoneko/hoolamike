@@ -7,86 +7,174 @@ use {
                 Ba2,
             },
             type_guard::WithTypeGuard,
+            BA2DX10EntryChunk,
         },
         utils::MaybeWindowsPath,
     },
     anyhow::{Context, Result},
     ba2::{
-        fo4::{Archive, ArchiveKey, ArchiveOptions, File, FileHeader, FileReadOptions, Format, Version as ArchiveVersion},
+        fo4::{
+            Archive,
+            ArchiveKey,
+            ArchiveOptions,
+            ChunkCompressionOptions,
+            CompressionFormat,
+            CompressionLevel,
+            File,
+            FileHeader,
+            FileReadOptions,
+            Format,
+            Version as ArchiveVersion,
+        },
         Borrowed,
         CompressionResult,
         ReaderWithOptions,
     },
     rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
-    std::path::{Path, PathBuf},
+    std::path::PathBuf,
     tap::prelude::*,
     tracing::info_span,
     tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
-pub(super) struct LazyArchiveFile {
-    file: memmap2::Mmap,
-    read_options: FileReadOptions,
+#[derive(derive_more::From)]
+enum LazyArchiveKind {
+    File(LazyArchiveFile<BA2FileEntry>),
+    DX10(LazyArchiveFile<BA2DX10Entry>),
 }
 
-impl LazyArchiveFile {
-    pub fn new(from_file: &std::fs::File, compressed: bool) -> Result<Self> {
-        // SAFETY: do not touch that file while it's opened please
+impl LazyArchiveKind {
+    fn as_archive_file(&self) -> Result<File<'_>> {
+        match self {
+            LazyArchiveKind::File(i) => i.as_archive_file(),
+            LazyArchiveKind::DX10(i) => i.as_archive_file(),
+        }
+    }
+}
+
+pub(super) struct LazyArchiveFile<Directive> {
+    file: memmap2::Mmap,
+    directive: Directive,
+}
+
+impl<Directive> LazyArchiveFile<Directive> {
+    pub fn new(from_file: &std::fs::File, directive: Directive) -> Result<Self> {
         unsafe { memmap2::Mmap::map(from_file) }
             .context("creating file")
-            .tap_ok(super::try_optimize_memory_mapping)
-            .map(|file| Self {
-                file,
-                read_options: FileReadOptions::builder()
-                    .compression_format(ba2::fo4::CompressionFormat::Zip)
-                    .compression_level(ba2::fo4::CompressionLevel::FO4)
-                    .compression_result(if compressed {
-                        CompressionResult::Compressed
-                    } else {
-                        CompressionResult::Decompressed
-                    })
-                    .build(),
-            })
-    }
-    pub fn new_dx_entry(
-        path: &Path,
-        BA2DX10Entry {
-            height,
-            width,
-            path: _,
-            chunks,
-            ..
-        }: BA2DX10Entry,
-    ) -> Result<Self> {
-        path.open_file_read().and_then(|(_, from_file)| {
-            // SAFETY: do not touch that file while it's opened please
-            unsafe { memmap2::Mmap::map(&from_file) }
-                .context("creating file")
-                .tap_ok(try_optimize_memory_mapping)
-                .map(|file| Self {
-                    file,
-                    read_options: FileReadOptions::builder()
-                        .format(ba2::fo4::Format::DX10)
-                        .compression_format(ba2::fo4::CompressionFormat::Zip)
-                        .compression_level(ba2::fo4::CompressionLevel::FO4)
-                        .compression_result(match chunks.iter().any(|c| c.compressed) {
-                            true => CompressionResult::Compressed,
-                            false => CompressionResult::Decompressed,
-                        })
-                        .mip_chunk_height(height.conv())
-                        .mip_chunk_width(width.conv())
-                        .build(),
-                })
-        })
+            .tap_ok(try_optimize_memory_mapping)
+            .map(|file| Self { file, directive })
     }
     fn as_bytes(&self) -> &[u8] {
         &self.file[..]
     }
-    pub fn as_archive_file(&self) -> Result<File<'_>> {
-        File::read(Borrowed(self.as_bytes()), &self.read_options)
-            .context("reading file using memory mapping")
-            .context("building bsa archive file")
+}
+
+impl LazyArchiveFile<BA2FileEntry> {
+    fn as_archive_file(&self) -> Result<File<'_>> {
+        File::read(
+            Borrowed(self.as_bytes()),
+            &FileReadOptions::builder()
+                .format(Format::GNRL)
+                .compression_format(CompressionFormat::Zip)
+                .compression_level(CompressionLevel::FO4)
+                .compression_result(if self.directive.compressed {
+                    CompressionResult::Compressed
+                } else {
+                    CompressionResult::Decompressed
+                })
+                .build(),
+        )
+        .context("reading file using memory mapping")
+        .context("building bsa archive file")
     }
+}
+
+impl LazyArchiveFile<BA2DX10Entry> {
+    fn as_archive_file(&self) -> Result<File<'_>> {
+        File::read(
+            Borrowed(self.as_bytes()),
+            &FileReadOptions::builder()
+                .format(Format::DX10)
+                .compression_result(CompressionResult::Decompressed)
+                .build(),
+        )
+        .context("reading file using memory mapping")
+        .context("building bsa archive file")
+        .and_then(|mut file| {
+            let res = file
+                .iter_mut()
+                .zip(&self.directive.chunks)
+                .try_for_each(|(chunk, BA2DX10EntryChunk { compressed, .. })| {
+                    if *compressed {
+                        *chunk = chunk
+                            .compress(
+                                &ChunkCompressionOptions::builder()
+                                    .compression_format(CompressionFormat::Zip)
+                                    .compression_level(CompressionLevel::FO4)
+                                    .build(),
+                            )
+                            .context("compressing chunk")?
+                    }
+                    Ok(())
+                });
+            res.map(move |_| file)
+        })
+    }
+}
+
+impl<Directive> LazyArchiveFile<Directive> {
+    // pub fn new_(from_file: &std::fs::File, directive: Directive) -> Result<Self> {
+    //     // SAFETY: do not touch that file while it's opened please
+    //     unsafe { memmap2::Mmap::map(from_file) }
+    //         .context("creating file")
+    //         .tap_ok(super::try_optimize_memory_mapping)
+    //         .map(|file| Self {
+    //             file,
+    //             read_options: FileReadOptions::builder()
+    //                 .compression_format(ba2::fo4::CompressionFormat::Zip)
+    //                 .compression_level(ba2::fo4::CompressionLevel::FO4)
+    //                 .compression_result(if compressed {
+    //                     CompressionResult::Compressed
+    //                 } else {
+    //                     CompressionResult::Decompressed
+    //                 })
+    //                 .build(),
+    //         })
+    // }
+    // pub fn new_dx_entry(
+    //     path: &Path,
+    //     BA2DX10Entry {
+    //         height,
+    //         width,
+    //         path: _,
+    //         chunks,
+    //         ..
+    //     }: BA2DX10Entry,
+    // ) -> Result<Self> {
+    //     path.open_file_read().and_then(|(_, from_file)| {
+    //         // SAFETY: do not touch that file while it's opened please
+    //         unsafe { memmap2::Mmap::map(&from_file) }
+    //             .context("creating file")
+    //             .tap_ok(try_optimize_memory_mapping)
+    //             .map(|file| Self {
+    //                 file,
+    //                 read_options: FileReadOptions::builder()
+    //                     .format(ba2::fo4::Format::DX10)
+    //                     .compression_result(CompressionResult::Decompressed)
+    //                     .mip_chunk_height(height.conv())
+    //                     .mip_chunk_width(width.conv())
+    //                     .build(),
+    //             })
+    //     })
+    // }
+    // fn as_bytes(&self) -> &[u8] {
+    //     &self.file[..]
+    // }
+    // pub fn as_archive_file(&self) -> Result<File<'_>> {
+    //     File::read(Borrowed(self.as_bytes()), &self.read_options)
+    //         .context("reading file using memory mapping")
+    //         .context("building bsa archive file")
+    // }
 }
 
 pub(super) fn create_key<'a>(extension: &str, name_hash: u32, dir_hash: u32) -> Result<ArchiveKey<'a>> {
@@ -155,19 +243,29 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
     file_states
         .into_par_iter()
         .map(move |file_state| match file_state {
-            FileState::BA2File(BA2FileEntry {
-                dir_hash,
-                extension,
-                name_hash,
-                path,
-                ..
-            }) => temp_id_dir
-                .join(path.into_path())
+            FileState::BA2File(ba2_file_entry) => temp_id_dir
+                .join(ba2_file_entry.path.clone().into_path())
                 .pipe(|path| path.open_file_read())
-                .and_then(|(_path, file)| LazyArchiveFile::new(&file, false))
-                .and_then(|file| create_key(&extension, name_hash, dir_hash).map(|key| (key, file))),
-            FileState::BA2DX10Entry(ba2_dx10_entry) => {
-                LazyArchiveFile::new_dx_entry(&temp_id_dir.join(ba2_dx10_entry.path.clone().into_path()), ba2_dx10_entry.clone()).and_then(|file| {
+                .and_then(|(_path, file)| LazyArchiveFile::new(&file, ba2_file_entry.clone()).map(LazyArchiveKind::from))
+                .and_then(|file| {
+                    ba2_file_entry.pipe(
+                        |BA2FileEntry {
+                             dir_hash,
+                             extension,
+                             name_hash,
+                             ..
+                         }| create_key(&extension, name_hash, dir_hash).map(|key| (key, file)),
+                    )
+                }),
+            FileState::BA2DX10Entry(ba2_dx10_entry) => temp_id_dir
+                .join(ba2_dx10_entry.path.clone().into_path())
+                .open_file_read()
+                .and_then(|(path, file)| {
+                    LazyArchiveFile::new(&file, ba2_dx10_entry.clone())
+                        .with_context(|| format!("opening file at [{path:?}]"))
+                        .map(LazyArchiveKind::from)
+                })
+                .and_then(|file| {
                     ba2_dx10_entry.pipe(
                         |BA2DX10Entry {
                              dir_hash,
@@ -176,8 +274,7 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
                              ..
                          }| { create_key(&extension, name_hash, dir_hash).map(|key| (key, file)) },
                     )
-                })
-            }
+                }),
         })
         .inspect(|_| reading_bsa_entries.pb_inc(1))
         .collect::<Result<Vec<_>>>()
