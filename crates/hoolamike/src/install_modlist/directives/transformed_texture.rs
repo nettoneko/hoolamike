@@ -36,6 +36,7 @@ impl std::io::Result<u64> {
 // #[cfg(feature = "dds_recompression")]
 mod dds_recompression;
 
+#[instrument]
 fn supported_image_format(format: crate::modlist_json::image_format::DXGIFormat) -> Result<image_dds::ImageFormat> {
     use crate::modlist_json::image_format::DXGIFormat;
     // TODO: validate this
@@ -50,8 +51,6 @@ fn supported_image_format(format: crate::modlist_json::image_format::DXGIFormat)
         DXGIFormat::B4G4R4A4_UNORM => image_dds::ImageFormat::Bgra4Unorm,
         DXGIFormat::BC1_UNORM => image_dds::ImageFormat::BC1RgbaUnorm,
         DXGIFormat::BC1_UNORM_SRGB => image_dds::ImageFormat::BC1RgbaUnormSrgb,
-        DXGIFormat::BC2_UNORM => image_dds::ImageFormat::BC2RgbaUnorm,
-        DXGIFormat::BC2_UNORM_SRGB => image_dds::ImageFormat::BC2RgbaUnormSrgb,
         DXGIFormat::BC3_UNORM => image_dds::ImageFormat::BC3RgbaUnorm,
         DXGIFormat::BC3_UNORM_SRGB => image_dds::ImageFormat::BC3RgbaUnormSrgb,
         DXGIFormat::BC4_UNORM => image_dds::ImageFormat::BC4RUnorm,
@@ -63,6 +62,14 @@ fn supported_image_format(format: crate::modlist_json::image_format::DXGIFormat)
         DXGIFormat::BC7_UNORM => image_dds::ImageFormat::BC7RgbaUnorm,
         DXGIFormat::BC7_UNORM_SRGB => image_dds::ImageFormat::BC7RgbaUnormSrgb,
         // WARN: hacks
+        DXGIFormat::BC2_UNORM => {
+            tracing::warn!("BC2 is not supported, using BC3 instead");
+            image_dds::ImageFormat::BC3RgbaUnorm
+        }
+        DXGIFormat::BC2_UNORM_SRGB => {
+            tracing::warn!("BC2 is not supported, using BC3 instead");
+            image_dds::ImageFormat::BC3RgbaUnormSrgb
+        }
         unsupported => anyhow::bail!("{unsupported:?} is not supported"),
     }
     .pipe(Ok)

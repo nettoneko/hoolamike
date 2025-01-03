@@ -1,5 +1,5 @@
 use {
-    crate::modlist_json::GameName,
+    crate::{modlist_json::GameName, post_install_fixup::common::Resolution},
     anyhow::{Context, Result},
     indexmap::IndexMap,
     serde::{Deserialize, Serialize},
@@ -59,6 +59,16 @@ fn default_games_config() -> GamesConfig {
             .pipe(|_| ())
     })
 }
+
+#[serde_with::serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, derivative::Derivative)]
+#[derivative(Default)]
+pub struct FixupConfig {
+    #[derivative(Default(value = "Resolution {x: 1280, y: 800}"))]
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub game_resolution: Resolution,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, derivative::Derivative)]
 #[derivative(Default)]
 pub struct HoolamikeConfig {
@@ -66,6 +76,7 @@ pub struct HoolamikeConfig {
     pub installation: InstallationConfig,
     #[derivative(Default(value = "default_games_config()"))]
     pub games: GamesConfig,
+    pub fixup: FixupConfig,
 }
 
 pub static CONFIG_FILE_NAME: &str = "hoolamike.yaml";

@@ -1,7 +1,14 @@
 use {
     anyhow::{Context, Result},
-    image_dds::{self, image::DynamicImage, mip_dimension, SurfaceRgba32Float},
+    image_dds::{
+        self,
+        ddsfile::{D3DFormat, Dds, PixelFormat},
+        image::DynamicImage,
+        mip_dimension,
+        SurfaceRgba32Float,
+    },
     std::io::{Read, Write},
+    tap::prelude::*,
 };
 
 #[tracing::instrument(skip(input, output))]
@@ -17,7 +24,7 @@ where
     R: Read,
     W: Write,
 {
-    image_dds::ddsfile::Dds::read(input)
+    Dds::read(input)
         .context("reading dds file")
         .and_then(|dds| {
             image_dds::Surface::from_dds(&dds)
@@ -33,14 +40,14 @@ where
                                 .flat_map(|layer| (0..decoded.depth).map(move |depth| (layer, depth)))
                                 .map(|(layer, depth)| {
                                     // we will regenerate mipmaps
-                                    let mipmap = 0;
+                                    const MIPMAP: u32 = 0;
                                     decoded
-                                        .get(layer, depth, mipmap)
+                                        .get(layer, depth, MIPMAP)
                                         .context("getting the chunk from decoded surface")
                                         .and_then(|data| {
                                             image_dds::image::ImageBuffer::from_raw(
-                                                mip_dimension(surface.width, mipmap),
-                                                mip_dimension(surface.height, mipmap),
+                                                mip_dimension(surface.width, MIPMAP),
+                                                mip_dimension(surface.height, MIPMAP),
                                                 data.to_vec(),
                                             )
                                             .context("loading part into an ImageBuffer failed")
@@ -48,7 +55,7 @@ where
                                         .map(DynamicImage::ImageRgba32F)
                                         .map(|image| image.resize_exact(target_width, target_height, image_dds::image::imageops::FilterType::Lanczos3))
                                         .map(|resized| resized.into_rgba32f())
-                                        .with_context(|| format!("processing part layer={layer}, depth={depth}, mipmap={mipmap}"))
+                                        .with_context(|| format!("processing part layer={layer}, depth={depth}, mipmap={MIPMAP}"))
                                 })
                                 .try_fold(Vec::new(), |mut acc, part| {
                                     part.map(|part| {

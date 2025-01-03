@@ -33,11 +33,25 @@ fs2.workspace = true
 futures.workspace = true
 futures-util.workspace = true
 hex.workspace = true
-image_dds = { git = "https://github.com/ScanMountGoat/image_dds", rev = "97872bbc7ad3a2dc5e1a0f8596de3a1dafd10e43", features = [
+# image_dds = { git = "https://github.com/ScanMountGoat/image_dds", rev = "97872bbc7ad3a2dc5e1a0f8596de3a1dafd10e43", features = [
+#   "serde",
+# ] }
+image_dds = { git = "https://github.com/Niedzwiedzw/image_dds.git", rev = "20439194dbfb117252278c9600b79260197b0dab", features = [
   "serde",
 ] }
 indexmap.workspace = true
 indicatif = { workspace = true, features = ["rayon"] }
+inquire = { version = "0.7.5", default-features = false, features = [
+  "chrono",
+  "console",
+  "date",
+  "editor",
+  "fuzzy",
+  "fuzzy-matcher",
+  "macros",
+  "one-liners",
+  "tempfile",
+] }
 iter-read.workspace = true
 itertools.workspace = true
 lru = "0.12.5"
@@ -59,8 +73,10 @@ scraper.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_urlencoded.workspace = true
+serde_with = "3.12.0"
 serde_yaml.workspace = true
 sevenz-rust.workspace = true
+similar = { version = "2.6.0", features = ["inline"] }
 static_assertions = { version = "1.1.0", features = ["nightly"] }
 tabled.workspace = true
 tap.workspace = true
@@ -77,6 +93,7 @@ transpare.workspace = true
 unrar = "0.5.7"
 url.workspace = true
 uuid.workspace = true
+walkdir = "2.5.0"
 wrapped-7zip.workspace = true
 xxhash-rust.workspace = true
 zip.workspace = true

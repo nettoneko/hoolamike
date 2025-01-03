@@ -76,6 +76,9 @@ enum Commands {
     },
     /// prints prints default config. save it and modify to your liking
     PrintDefaultConfig,
+    /// runs post-install fixup - wouldn't be possible without extensive research done by Omni
+    /// make sure to star his repo: https://github.com/Omni-guides/Wabbajack-Modlist-Linux
+    PostInstallFixup,
 }
 
 pub mod read_wrappers;
@@ -91,6 +94,7 @@ pub mod install_modlist;
 pub mod modlist_data;
 pub mod modlist_json;
 pub mod octadiff_reader;
+pub mod post_install_fixup;
 pub mod progress_bars_v2;
 pub mod wabbajack_file;
 
@@ -174,6 +178,10 @@ async fn async_main() -> Result<()> {
     let _guard = setup_logging(logging_mode);
 
     match command {
+        Commands::PostInstallFixup => {
+            let (_config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
+            post_install_fixup::run_post_install_fixup(&config)
+        }
         Commands::ValidateModlist { path } => tokio::fs::read_to_string(&path)
             .await
             .context("reading test file")
