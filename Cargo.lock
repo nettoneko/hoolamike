@@ -951,9 +951,9 @@ dependencies = [
 
 [[package]]
 name = "directxtex"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "515c37206e36366b013b26a62011a19335dda74f0a740f8b220251180b07a205"
+checksum = "54350c48fc9793b2c705ebc29b654c4a0a34573a7224ccca216b4195e0054050"
 dependencies = [
  "bitflags 2.6.0",
  "cc",
@@ -1463,6 +1463,7 @@ dependencies = [
  "dashmap",
  "derivative",
  "derive_more 1.0.0",
+ "directxtex",
  "enum-kinds",
  "enum_dispatch",
  "extension-traits",

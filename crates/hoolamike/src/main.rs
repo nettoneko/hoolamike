@@ -4,7 +4,6 @@
 use {
     anyhow::{Context, Result},
     clap::{Args, Parser, Subcommand, ValueEnum},
-    itertools::Itertools,
     modlist_data::ModlistSummary,
     modlist_json::DirectiveKind,
     num::ToPrimitive,
@@ -205,22 +204,9 @@ async fn async_main() -> Result<()> {
                     errors
                         .iter()
                         .enumerate()
-                        .for_each(|(idx, reason)| eprintln!("{idx}. {reason:?}", idx = idx + 1));
+                        .for_each(|(idx, reason)| tracing::error!("{idx}. {reason:?}", idx = idx + 1));
 
-                    anyhow::anyhow!(
-                        "could not finish installation due to errors:\n{}",
-                        errors
-                            .iter()
-                            .map(|e| format!(
-                                "{e}:\n{}",
-                                e.chain()
-                                    .map(|c| c.to_string())
-                                    .enumerate()
-                                    .map(|(idx, error)| format!("{idx}. {error}"))
-                                    .join("\n")
-                            ))
-                            .join("\n")
-                    )
+                    anyhow::anyhow!("could not finish installation due to [{}] errors", errors.len())
                 })
                 .map(|count| println!("successfully installed [{}] mods", count.len()))
         }

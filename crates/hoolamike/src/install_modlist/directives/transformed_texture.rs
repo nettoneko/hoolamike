@@ -9,7 +9,7 @@ use {
         utils::spawn_rayon,
     },
     queued_archive_task::QueuedArchiveService,
-    std::io::{Read, Seek, Write},
+    std::io::{Read, Write},
 };
 
 #[derive(Clone, derivative::Derivative)]
@@ -35,6 +35,7 @@ impl std::io::Result<u64> {
 
 // #[cfg(feature = "dds_recompression")]
 mod dds_recompression;
+mod dds_recompression_v2;
 
 #[instrument]
 fn supported_image_format(format: crate::modlist_json::image_format::DXGIFormat) -> Result<image_dds::ImageFormat> {
@@ -95,7 +96,7 @@ impl TransformedTextureHandler {
         }: TransformedTextureDirective,
     ) -> Result<u64> {
         let handle = tracing::Span::current();
-        let format = supported_image_format(format).context("checking for format support")?;
+        // let _image_dds_format = supported_image_format(format).context("checking for format support")?;
         let output_path = self.output_directory.join(to.into_path());
         let source_file = self
             .download_summary
@@ -124,7 +125,7 @@ impl TransformedTextureHandler {
                                     .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
                                     .pipe(Box::new),
                             };
-                            dds_recompression::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
+                            dds_recompression_v2::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
                                 .context("copying file from archive")
                                 .and_then(|_| writer.flush().context("flushing write"))
                                 .map(|_| ())
@@ -137,22 +138,22 @@ impl TransformedTextureHandler {
                     .and_then(|(source_path, mut final_source)| {
                         create_file_all(&output_path).and_then(|mut output_file| {
                             perform_copy(&mut final_source, &mut output_file, output_path.clone())
-                                .or_else(|reason| {
-                                    let _span =
-                                        tracing::error_span!("could not resize texture, copying the original", reason = %format!("{reason:#?}")).entered();
-                                    tracing::error!("could not resize the file, but it should still work");
-                                    final_source
-                                        .rewind()
-                                        .context("rewinding original file")
-                                        .map(|_| final_source)
-                                        .and_then(|final_source| {
-                                            output_path.open_file_write().and_then(|(_, mut output)| {
-                                                std::io::copy(&mut tracing::Span::current().wrap_read(size, final_source), &mut output)
-                                                    .with_context(|| format!("writing original because resizing could not be performed due to: {reason:?}"))
-                                            })
-                                        })
-                                        .map(|_| ())
-                                })
+                                // .or_else(|reason| {
+                                //     let _span =
+                                //         tracing::error_span!("could not resize texture, copying the original", reason = %format!("{reason:?}")).entered();
+                                //     tracing::error!("could not resize the file, but it should still work");
+                                //     final_source
+                                //         .rewind()
+                                //         .context("rewinding original file")
+                                //         .map(|_| final_source)
+                                //         .and_then(|final_source| {
+                                //             output_path.open_file_write().and_then(|(_, mut output)| {
+                                //                 std::io::copy(&mut tracing::Span::current().wrap_read(size, final_source), &mut output)
+                                //                     .with_context(|| format!("writing original because resizing could not be performed due to: {reason:?}"))
+                                //             })
+                                //         })
+                                //         .map(|_| ())
+                                // })
                                 .with_context(|| format!("when extracting from [{source_path:?}]({:?}) to [{}]", archive_hash_path, output_path.display()))
                         })
                     })?;

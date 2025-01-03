@@ -1,14 +1,7 @@
 use {
     anyhow::{Context, Result},
-    image_dds::{
-        self,
-        ddsfile::{D3DFormat, Dds, PixelFormat},
-        image::DynamicImage,
-        mip_dimension,
-        SurfaceRgba32Float,
-    },
+    image_dds::{self, ddsfile::Dds, image::DynamicImage, mip_dimension, SurfaceRgba32Float},
     std::io::{Read, Write},
-    tap::prelude::*,
 };
 
 #[tracing::instrument(skip(input, output))]

@@ -25,6 +25,7 @@ crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 dashmap = { version = "6.1.0", features = ["inline"] }
 derivative.workspace = true
 derive_more.workspace = true
+directxtex = "1.1.1"
 enum-kinds.workspace = true
 enum_dispatch.workspace = true
 extension-traits.workspace = true
