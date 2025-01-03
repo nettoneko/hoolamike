@@ -141,7 +141,42 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
                 temp_id_dir
                     .join(path.clone().into_path())
                     .pipe(|path| path.open_file_read())
-                    .and_then(|(_path, file)| LazyArchiveFile::new(&file, flip_compression))
+                    .and_then(|(path, file)| {
+                        (match flip_compression {
+                            true => Err(anyhow::anyhow!("flip_compression is not supported")),
+                            false => std::fs::read(&path)
+                                .context("reading file to deduce compression")
+                                .map(|data| {
+                                    Err(())
+                                        .or_else(|_| {
+                                            directxtex::TexMetadata::from_dds(&data, directxtex::DDS_FLAGS::DDS_FLAGS_PERMISSIVE, None)
+                                                .context("reading dds file metadata")
+                                        })
+                                        .or_else(|dds_error| {
+                                            directxtex::TexMetadata::from_tga(&data, directxtex::TGA_FLAGS::TGA_FLAGS_NONE)
+                                                .context("reading tga file metadata")
+                                                .with_context(|| format!("trying because: {dds_error:?}"))
+                                        })
+                                        .or_else(|tga_error| {
+                                            directxtex::TexMetadata::from_hdr(&data)
+                                                .context("reading hdr file metadata")
+                                                .with_context(|| format!("trying because: {tga_error:?}"))
+                                        })
+                                        .context("deducing texture metadata")
+                                        .map(|metadata| metadata.format.is_compressed())
+                                        .unwrap_or_else(|error| {
+                                            tracing::error!(error=%format!("{error:?}"), "could not deduce format for file at [{path:?}], so assuming the file is NOT compressed");
+                                            false
+                                        })
+                                })
+                                .map(|is_compressed| match flip_compression {
+                                    true => !is_compressed,
+                                    false => is_compressed,
+                                })
+                                .and_then(|is_compressed| LazyArchiveFile::new(&file, is_compressed)),
+                        })
+                        .with_context(|| format!("loading file at [{path:?}]"))
+                    })
                     .and_then(|file| create_key(path).map(|key| (key, file)))
             },
         )
