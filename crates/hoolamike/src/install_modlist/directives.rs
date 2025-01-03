@@ -618,7 +618,13 @@ impl DirectivesHandler {
                                 .for_each(|directive| match directive {
                                     DirectiveStatus::Completed(size) => completed.push(size),
                                     DirectiveStatus::NeedsRebuild { reason, directive } => {
-                                        tracing::debug!("recomputing directive\ndirective:{directive:#?}:\nreason:{reason:?}");
+                                        tracing::debug!(
+                                            "recomputing directive\ndirective:{directive}:\nreason:{reason:?}",
+                                            directive = format!("{directive:#?}")
+                                                .chars()
+                                                .take(256)
+                                                .collect::<String>(),
+                                        );
                                         match directive {
                                             Directive::CreateBSA(create_bsadirective) => create_bsa.push(create_bsadirective),
                                             Directive::FromArchive(from_archive_directive) => from_archive.push(from_archive_directive),

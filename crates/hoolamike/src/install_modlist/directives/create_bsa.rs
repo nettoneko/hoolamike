@@ -20,14 +20,14 @@ pub mod tes_4;
 fn try_optimize_memory_mapping(memmap: &memmap2::Mmap) {
     #[cfg(unix)]
     if let Err(err) = memmap.advise(memmap2::Advice::Sequential) {
-        tracing::warn!(?err, "sequential memory mapping is not supported");
+        tracing::trace!(?err, "sequential memory mapping is not supported");
     } else {
-        tracing::debug!("memory mapping optimized for sequential access")
+        tracing::trace!("memory mapping optimized for sequential access")
     }
 }
 
 impl CreateBSAHandler {
-    #[tracing::instrument(level = "INFO")]
+    #[tracing::instrument(skip(create_bsa_directive), level = "INFO")]
     pub async fn handle(self, create_bsa_directive: CreateBSADirective) -> Result<u64> {
         let Self { output_directory } = self;
         let size = create_bsa_directive.size();

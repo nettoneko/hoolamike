@@ -18,6 +18,7 @@ where
     let dds_flags = DDS_FLAGS::DDS_FLAGS_PERMISSIVE;
     let tex_filter_flags = TEX_FILTER_FLAGS::TEX_FILTER_TRIANGLE;
     let tex_compress_flags = TEX_COMPRESS_FLAGS::TEX_COMPRESS_DEFAULT;
+
     let target_format = self::dxgi_format_mapping::map_dxgi_format(target_format);
 
     Vec::new()
@@ -53,11 +54,15 @@ where
                                 })
                         })
                         .context("modifying image")
-                        .and_then(|image| {
-                            image
-                                .compress(target_format, TEX_COMPRESS_FLAGS::empty(), TEX_THRESHOLD_DEFAULT)
+                        .and_then(|image| match target_format.is_compressed() {
+                            true => image
+                                .compress(target_format, tex_compress_flags, TEX_THRESHOLD_DEFAULT)
                                 .with_context(|| format!("compressing using target_format={target_format:?}"))
-                                .context("compressing image")
+                                .context("compressing image"),
+                            false => image
+                                .convert(target_format, tex_filter_flags, TEX_THRESHOLD_DEFAULT)
+                                .with_context(|| format!("compressing using target_format={target_format:?}"))
+                                .context("compressing image"),
                         })
                         .context("preparing image for dump")
                 })
