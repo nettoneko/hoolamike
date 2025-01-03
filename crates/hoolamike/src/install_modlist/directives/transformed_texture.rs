@@ -37,45 +37,6 @@ impl std::io::Result<u64> {
 mod dds_recompression;
 mod dds_recompression_v2;
 
-#[instrument]
-fn supported_image_format(format: crate::modlist_json::image_format::DXGIFormat) -> Result<image_dds::ImageFormat> {
-    use crate::modlist_json::image_format::DXGIFormat;
-    // TODO: validate this
-    match format {
-        DXGIFormat::R8_UNORM => image_dds::ImageFormat::R8Unorm,
-        DXGIFormat::R8G8B8A8_UNORM => image_dds::ImageFormat::Rgba8Unorm,
-        DXGIFormat::R8G8B8A8_UNORM_SRGB => image_dds::ImageFormat::Rgba8UnormSrgb,
-        DXGIFormat::R16G16B16A16_FLOAT => image_dds::ImageFormat::Rgba16Float,
-        DXGIFormat::R32G32B32A32_FLOAT => image_dds::ImageFormat::Rgba32Float,
-        DXGIFormat::B8G8R8A8_UNORM => image_dds::ImageFormat::Bgra8Unorm,
-        DXGIFormat::B8G8R8A8_UNORM_SRGB => image_dds::ImageFormat::Bgra8UnormSrgb,
-        DXGIFormat::B4G4R4A4_UNORM => image_dds::ImageFormat::Bgra4Unorm,
-        DXGIFormat::BC1_UNORM => image_dds::ImageFormat::BC1RgbaUnorm,
-        DXGIFormat::BC1_UNORM_SRGB => image_dds::ImageFormat::BC1RgbaUnormSrgb,
-        DXGIFormat::BC3_UNORM => image_dds::ImageFormat::BC3RgbaUnorm,
-        DXGIFormat::BC3_UNORM_SRGB => image_dds::ImageFormat::BC3RgbaUnormSrgb,
-        DXGIFormat::BC4_UNORM => image_dds::ImageFormat::BC4RUnorm,
-        DXGIFormat::BC4_SNORM => image_dds::ImageFormat::BC4RSnorm,
-        DXGIFormat::BC5_UNORM => image_dds::ImageFormat::BC5RgUnorm,
-        DXGIFormat::BC5_SNORM => image_dds::ImageFormat::BC5RgSnorm,
-        DXGIFormat::BC6H_UF16 => image_dds::ImageFormat::BC6hRgbUfloat,
-        DXGIFormat::BC6H_SF16 => image_dds::ImageFormat::BC6hRgbSfloat,
-        DXGIFormat::BC7_UNORM => image_dds::ImageFormat::BC7RgbaUnorm,
-        DXGIFormat::BC7_UNORM_SRGB => image_dds::ImageFormat::BC7RgbaUnormSrgb,
-        // WARN: hacks
-        DXGIFormat::BC2_UNORM => {
-            tracing::warn!("BC2 is not supported, using BC3 instead");
-            image_dds::ImageFormat::BC3RgbaUnorm
-        }
-        DXGIFormat::BC2_UNORM_SRGB => {
-            tracing::warn!("BC2 is not supported, using BC3 instead");
-            image_dds::ImageFormat::BC3RgbaUnormSrgb
-        }
-        unsupported => anyhow::bail!("{unsupported:?} is not supported"),
-    }
-    .pipe(Ok)
-}
-
 impl TransformedTextureHandler {
     #[instrument(skip(self))]
     pub async fn handle(

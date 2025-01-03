@@ -122,61 +122,6 @@ impl LazyArchiveFile<BA2DX10Entry> {
     }
 }
 
-impl<Directive> LazyArchiveFile<Directive> {
-    // pub fn new_(from_file: &std::fs::File, directive: Directive) -> Result<Self> {
-    //     // SAFETY: do not touch that file while it's opened please
-    //     unsafe { memmap2::Mmap::map(from_file) }
-    //         .context("creating file")
-    //         .tap_ok(super::try_optimize_memory_mapping)
-    //         .map(|file| Self {
-    //             file,
-    //             read_options: FileReadOptions::builder()
-    //                 .compression_format(ba2::fo4::CompressionFormat::Zip)
-    //                 .compression_level(ba2::fo4::CompressionLevel::FO4)
-    //                 .compression_result(if compressed {
-    //                     CompressionResult::Compressed
-    //                 } else {
-    //                     CompressionResult::Decompressed
-    //                 })
-    //                 .build(),
-    //         })
-    // }
-    // pub fn new_dx_entry(
-    //     path: &Path,
-    //     BA2DX10Entry {
-    //         height,
-    //         width,
-    //         path: _,
-    //         chunks,
-    //         ..
-    //     }: BA2DX10Entry,
-    // ) -> Result<Self> {
-    //     path.open_file_read().and_then(|(_, from_file)| {
-    //         // SAFETY: do not touch that file while it's opened please
-    //         unsafe { memmap2::Mmap::map(&from_file) }
-    //             .context("creating file")
-    //             .tap_ok(try_optimize_memory_mapping)
-    //             .map(|file| Self {
-    //                 file,
-    //                 read_options: FileReadOptions::builder()
-    //                     .format(ba2::fo4::Format::DX10)
-    //                     .compression_result(CompressionResult::Decompressed)
-    //                     .mip_chunk_height(height.conv())
-    //                     .mip_chunk_width(width.conv())
-    //                     .build(),
-    //             })
-    //     })
-    // }
-    // fn as_bytes(&self) -> &[u8] {
-    //     &self.file[..]
-    // }
-    // pub fn as_archive_file(&self) -> Result<File<'_>> {
-    //     File::read(Borrowed(self.as_bytes()), &self.read_options)
-    //         .context("reading file using memory mapping")
-    //         .context("building bsa archive file")
-    // }
-}
-
 pub(super) fn create_key<'a>(extension: &str, name_hash: u32, dir_hash: u32) -> Result<ArchiveKey<'a>> {
     extension
         .as_bytes()

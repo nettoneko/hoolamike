@@ -25,32 +25,40 @@ where
         .context("reading bytes")
         .and_then(|bytes| {
             let tex_metadata = TexMetadata::from_dds(&bytes, dds_flags, None).context("reading tex metadata")?;
-            directxtex::ScratchImage::load_dds(&bytes, dds_flags, None, None)
-                .context("loading texture")
-                .and_then(|image| {
-                    image
-                        .decompress(DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT)
-                        .context("decompressing image")
+            Ok(())
+                .and_then(|_| {
+                    directxtex::ScratchImage::load_dds(&bytes, dds_flags, None, None)
+                        .context("loading dds")
                         .and_then(|image| {
                             image
-                                .resize(
-                                    target_width.to_usize().context("bad target_width")?,
-                                    target_height.to_usize().context("bad target_height")?,
-                                    tex_filter_flags,
-                                )
-                                .context("resizing")
+                                .decompress(DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT)
+                                .context("decompressing image")
                         })
-                        .and_then(|resized| {
-                            resized
-                                .generate_mip_maps(tex_filter_flags, target_mipmaps.to_usize().context("bad target_mipmaps")?)
-                                .context("generating mip maps")
+                        .context("loading image")
+                        .and_then(|image| {
+                            Ok(image)
+                                .and_then(|image| {
+                                    image
+                                        .resize(
+                                            target_width.to_usize().context("bad target_width")?,
+                                            target_height.to_usize().context("bad target_height")?,
+                                            tex_filter_flags,
+                                        )
+                                        .context("resizing")
+                                })
+                                .and_then(|resized| {
+                                    resized
+                                        .generate_mip_maps(tex_filter_flags, target_mipmaps.to_usize().context("bad target_mipmaps")?)
+                                        .context("generating mip maps")
+                                })
                         })
-                })
-                .context("recompressing texture")
-                .and_then(|image| {
-                    image
-                        .compress(target_format, tex_compress_flags, TEX_THRESHOLD_DEFAULT)
-                        .context("compressing image")
+                        .context("modifying image")
+                        .and_then(|image| {
+                            image
+                                .compress(target_format, tex_compress_flags, TEX_THRESHOLD_DEFAULT)
+                                .context("compressing image")
+                        })
+                        .context("preparing image for dump")
                 })
                 .and_then(|image| {
                     image
@@ -67,14 +75,14 @@ where
                                 dds_flags,
                             )
                         })
-                        .context("saving dds image")
+                        .context("saving dds image to bytes")
                 })
                 .and_then(|blob| {
                     std::io::copy(
                         &mut tracing::Span::current().wrap_read(blob.buffer().len() as _, std::io::Cursor::new(blob.buffer())),
                         output,
                     )
-                    .context("dumping dds file")
+                    .context("writing dds file")
                 })
         })
         .map(|wrote| tracing::debug!("wrote {wrote} bytes"))
