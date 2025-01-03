@@ -55,7 +55,8 @@ where
                         .context("modifying image")
                         .and_then(|image| {
                             image
-                                .compress(target_format, tex_compress_flags, TEX_THRESHOLD_DEFAULT)
+                                .compress(target_format, TEX_COMPRESS_FLAGS::empty(), TEX_THRESHOLD_DEFAULT)
+                                .with_context(|| format!("compressing using target_format={target_format:?}"))
                                 .context("compressing image")
                         })
                         .context("preparing image for dump")
@@ -74,6 +75,7 @@ where
                                 }),
                                 dds_flags,
                             )
+                            .with_context(|| format!("saving [{}] images as dds", images.len()))
                         })
                         .context("saving dds image to bytes")
                 })
@@ -84,6 +86,7 @@ where
                     )
                     .context("writing dds file")
                 })
+                .with_context(|| format!("recompressing using derived tex_metadata={tex_metadata:? }"))
         })
         .map(|wrote| tracing::debug!("wrote {wrote} bytes"))
 }
