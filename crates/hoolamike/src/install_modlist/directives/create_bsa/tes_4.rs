@@ -18,44 +18,58 @@ use {
         ReaderWithOptions,
     },
     rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
-    std::path::PathBuf,
+    std::{ffi::OsStr, path::PathBuf},
     tap::prelude::*,
-    tracing::info_span,
+    tracing::{debug, info_span, instrument},
     tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
-pub(super) struct LazyArchiveFile {
+#[derive(Debug)]
+pub(super) struct LazyArchiveFile<Directive> {
     file: memmap2::Mmap,
-    read_options: FileReadOptions,
+    directive: Directive,
 }
 
-impl LazyArchiveFile {
-    pub fn new(from_file: &std::fs::File, compressed: bool) -> Result<Self> {
+impl<Directive: std::fmt::Debug> LazyArchiveFile<Directive> {
+    #[instrument]
+    pub fn new(from_file: &std::fs::File, directive: Directive) -> Result<Self> {
         // SAFETY: do not touch that file while it's opened please
+        debug!("creating file");
         unsafe { memmap2::Mmap::map(from_file) }
             .context("creating file")
             .tap_ok(super::try_optimize_memory_mapping)
-            .map(|file| Self {
-                file,
-                read_options: FileReadOptions::builder()
-                    .compression_result(if compressed {
-                        CompressionResult::Compressed
-                    } else {
-                        CompressionResult::Decompressed
-                    })
-                    .build(),
-            })
+            .map(|file| Self { file, directive })
     }
     fn as_bytes(&self) -> &[u8] {
         &self.file[..]
     }
+}
+
+impl LazyArchiveFile<FileStateData> {
+    #[instrument]
     pub fn as_archive_file(&self) -> Result<File<'_>> {
-        File::read(Borrowed(self.as_bytes()), &self.read_options)
-            .context("reading file using memory mapping")
-            .context("building bsa archive file")
+        self.directive.pipe_ref(
+            |FileStateData {
+                 flip_compression: _,
+                 index: _,
+                 path: _,
+             }| {
+                File::read(
+                    Borrowed(self.as_bytes()),
+                    &FileReadOptions::builder()
+                        .version(Version::SSE)
+                        .compression_result(CompressionResult::Compressed)
+                        .build(),
+                )
+                .context("reading file using memory mapping")
+                .context("building bsa archive file")
+                .tap_ok(|file| tracing::debug!(size=%file.len(), "loaded file"))
+            },
+        )
     }
 }
 
+#[instrument]
 pub(super) fn create_key<'a>(path: MaybeWindowsPath) -> Result<(ArchiveKey<'a>, DirectoryKey<'a>)> {
     // path.0
     //     .into_bytes()
@@ -74,20 +88,39 @@ pub(super) fn create_key<'a>(path: MaybeWindowsPath) -> Result<(ArchiveKey<'a>, 
             .and_then(|directory_key| {
                 path.parent()
                     .context("cannot insert files at root, right?")
-                    .map(|archive_key| {
+                    .and_then(|archive_key| {
                         (
                             archive_key
-                                .join(join_delimiter)
-                                .as_os_str()
+                                .iter()
+                                .map(|os_str| os_str.to_owned())
+                                .reduce(|mut acc, next| {
+                                    acc.push(join_delimiter.pipe(OsStr::new));
+                                    acc.push(next);
+                                    acc
+                                })
+                                .context("empty path?")
+                                .map(|path| {
+                                    path.tap(|path| {
+                                        tracing::debug!("deriving archive key  for {path:?}");
+                                    })
+                                    .as_encoded_bytes()
+                                    .conv::<ArchiveKey>()
+                                })
+                                .context("encoding directory key")?,
+                            directory_key
+                                .tap(|directory_key| {
+                                    tracing::debug!("deriving direcotry key for {directory_key:?}");
+                                })
                                 .as_encoded_bytes()
-                                .conv::<ArchiveKey>(),
-                            directory_key.as_encoded_bytes().conv::<DirectoryKey>(),
+                                .conv::<DirectoryKey>(),
                         )
+                            .pipe(Ok)
                     })
             })
     })
 }
 
+#[instrument(skip(handle_archive, file_states))]
 pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) -> Result<()>>(
     temp_bsa_dir: PathBuf,
     Bsa {
@@ -128,58 +161,15 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
         });
     file_states
         .into_par_iter()
-        .map(
-            move |WithTypeGuard {
-                      inner:
-                          FileStateData {
-                              flip_compression,
-                              index: _,
-                              path,
-                          },
-                      ..
-                  }| {
+        .map(move |WithTypeGuard { inner: file_state_data, .. }| {
+            info_span!("handle_file_state", ?file_state_data).in_scope(|| {
                 temp_id_dir
-                    .join(path.clone().into_path())
+                    .join(file_state_data.path.clone().into_path())
                     .pipe(|path| path.open_file_read())
-                    .and_then(|(path, file)| {
-                        (match flip_compression {
-                            true => Err(anyhow::anyhow!("flip_compression is not supported")),
-                            false => std::fs::read(&path)
-                                .context("reading file to deduce compression")
-                                .map(|data| {
-                                    Err(())
-                                        .or_else(|_| {
-                                            directxtex::TexMetadata::from_dds(&data, directxtex::DDS_FLAGS::DDS_FLAGS_PERMISSIVE, None)
-                                                .context("reading dds file metadata")
-                                        })
-                                        .or_else(|dds_error| {
-                                            directxtex::TexMetadata::from_tga(&data, directxtex::TGA_FLAGS::TGA_FLAGS_NONE)
-                                                .context("reading tga file metadata")
-                                                .with_context(|| format!("trying because: {dds_error:?}"))
-                                        })
-                                        .or_else(|tga_error| {
-                                            directxtex::TexMetadata::from_hdr(&data)
-                                                .context("reading hdr file metadata")
-                                                .with_context(|| format!("trying because: {tga_error:?}"))
-                                        })
-                                        .context("deducing texture metadata")
-                                        .map(|metadata| metadata.format.is_compressed())
-                                        .unwrap_or_else(|error| {
-                                            tracing::error!(error=%format!("{error:?}"), "could not deduce format for file at [{path:?}], so assuming the file is NOT compressed");
-                                            false
-                                        })
-                                })
-                                .map(|is_compressed| match flip_compression {
-                                    true => !is_compressed,
-                                    false => is_compressed,
-                                })
-                                .and_then(|is_compressed| LazyArchiveFile::new(&file, is_compressed)),
-                        })
-                        .with_context(|| format!("loading file at [{path:?}]"))
-                    })
-                    .and_then(|file| create_key(path).map(|key| (key, file)))
-            },
-        )
+                    .and_then(|(path, file)| LazyArchiveFile::new(&file, file_state_data.clone()).with_context(|| format!("loading file at [{path:?}]")))
+                    .and_then(|file| create_key(file_state_data.path).map(|key| (key, file)))
+            })
+        })
         .inspect(|_| reading_bsa_entries.pb_inc(1))
         .collect::<Result<Vec<_>>>()
         .and_then(|entries| {

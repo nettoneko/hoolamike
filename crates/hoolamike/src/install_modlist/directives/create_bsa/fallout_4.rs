@@ -33,7 +33,7 @@ use {
     rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     std::path::PathBuf,
     tap::prelude::*,
-    tracing::info_span,
+    tracing::{info_span, instrument},
     tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
@@ -148,6 +148,7 @@ pub(super) fn create_key<'a>(extension: &str, name_hash: u32, dir_hash: u32) -> 
         .context("creating key")
 }
 
+#[instrument(skip(handle_archive))]
 pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) -> Result<()>>(
     temp_bsa_dir: PathBuf,
     Ba2 {

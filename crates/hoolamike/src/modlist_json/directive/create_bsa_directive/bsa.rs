@@ -1,6 +1,6 @@
 use {super::*, crate::serde_type_guard, type_guard::WithTypeGuard};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct FileStateData {
