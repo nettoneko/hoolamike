@@ -173,6 +173,7 @@ impl Synchronizers {
                                 NexusGameName::GameName(game_name) => game_name.to_string(),
                                 NexusGameName::Special(special) => match special {
                                     crate::modlist_json::SpecialGameName::ModdingTools => "site".into(),
+                                    crate::modlist_json::SpecialGameName::FalloutNewVegas => "newvegas".into(),
                                 },
                             },
                             mod_id,

@@ -213,6 +213,7 @@ pub struct GameName(String);
 #[derive(Debug, Serialize, Deserialize, Clone, derive_more::Display, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SpecialGameName {
     ModdingTools,
+    FalloutNewVegas,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, derive_more::Display, PartialEq, Eq, PartialOrd, Ord, Hash)]
