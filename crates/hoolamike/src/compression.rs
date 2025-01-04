@@ -154,20 +154,43 @@ impl ArchiveHandle<'_> {
                         .context("reading bsa")
                         .map(Self::Bethesda)
                         .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}")),
-                    Some("rar") => unrar_rs::ArchiveHandle::new(path)
-                        .context("reading rar")
-                        .map(Self::Unrar)
-                        .tap_err(|message| tracing::trace!("could not open archive with unrar: {message:?}")),
+                    Some("rar") => Err(())
+                        .or_else(|()| {
+                            unrar_rs::ArchiveHandle::new(path)
+                                .context("reading rar")
+                                .map(Self::Unrar)
+                                .tap_err(|message| tracing::trace!("could not open archive with unrar: {message:?}"))
+                        })
+                        .or_else(|reason| {
+                            self::zip::ZipArchive::new(path)
+                                .map(Self::Zip)
+                                .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                                .with_context(|| format!("trying because: {reason:?}"))
+                        })
+                        .or_else(|reason| {
+                            path.open_file_read()
+                                .and_then(|(_, file)| self::compress_tools::ArchiveHandle::new(file).map(Self::CompressTools))
+                                .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                                .with_context(|| format!("trying because: {reason:?}"))
+                        })
+                        .or_else(|reason| {
+                            WRAPPED_7ZIP
+                                .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                                .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                                .with_context(|| format!("trying because: {reason:?}"))
+                        }),
+
                     Some("zip" | "7z") => Err(())
                         .or_else(|_| {
                             self::zip::ZipArchive::new(path)
                                 .map(Self::Zip)
                                 .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
                         })
-                        .or_else(|_| {
+                        .or_else(|reason| {
                             path.open_file_read()
                                 .and_then(|(_, file)| self::compress_tools::ArchiveHandle::new(file).map(Self::CompressTools))
                                 .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                                .with_context(|| format!("trying because: {reason:?}"))
                         })
                         .or_else(|reason| {
                             WRAPPED_7ZIP
@@ -253,7 +276,7 @@ where
 {
     fn seek_with_temp_file_blocking_raw(mut self, expected_size: u64) -> Result<(u64, tempfile::TempPath)> {
         let _span = tracing::info_span!("seek_with_temp_file_blocking_raw").entered();
-        tempfile::NamedTempFile::new()
+        tempfile::NamedTempFile::new_in(*crate::consts::TEMP_FILE_DIR)
             .context("creating a tempfile")
             .and_then(|mut temp_file| {
                 {
@@ -285,7 +308,7 @@ where
     }
     fn seek_with_temp_file_blocking(mut self, expected_size: u64, permit: tokio::sync::OwnedSemaphorePermit) -> Result<WithPermit<tempfile::TempPath>> {
         let _span = tracing::info_span!("seek_with_temp_file_blocking").entered();
-        tempfile::NamedTempFile::new()
+        tempfile::NamedTempFile::new_in(*crate::consts::TEMP_FILE_DIR)
             .context("creating a tempfile")
             .and_then(|mut temp_file| {
                 {
@@ -321,7 +344,7 @@ where
             cloned![span];
             move || {
                 let span = span.entered();
-                tempfile::NamedTempFile::new()
+                tempfile::NamedTempFile::new_in(*crate::consts::TEMP_FILE_DIR)
                     .context("creating a tempfile")
                     .and_then(|mut temp_file| {
                         {

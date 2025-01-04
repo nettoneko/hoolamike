@@ -97,7 +97,7 @@ impl ProcessArchive for ZipArchive {
                                 .with_context(|| format!("opening [{file}] ({archive_path:#?})"))
                                 .and_then(|mut file| {
                                     file.size().pipe(|expected_size| {
-                                        NamedTempFile::new()
+                                        tempfile::NamedTempFile::new_in(*crate::consts::TEMP_FILE_DIR)
                                             .context("creating temp file")
                                             .and_then(|mut output| {
                                                 #[allow(clippy::let_and_return)]

@@ -10,12 +10,11 @@ use {
         io::{BufWriter, Seek},
         path::PathBuf,
     },
-    tempfile::SpooledTempFile,
     tracing::{instrument, trace, trace_span},
     tracing_indicatif::span_ext::IndicatifSpanExt,
 };
 
-pub type CompressToolsFile = tempfile::SpooledTempFile;
+pub type CompressToolsFile = tempfile::NamedTempFile;
 
 #[derive(Debug)]
 pub struct ArchiveHandle(std::fs::File);
@@ -46,22 +45,24 @@ impl ArchiveHandle {
             })
             .and_then(|lookup| {
                 self.0.rewind().context("rewinding file")?;
-                tempfile::SpooledTempFile::new(16 * 1024).pipe(|mut temp_file| {
-                    {
-                        let mut writer = BufWriter::new(&mut temp_file);
-                        trace_span!("uncompress_archive_file")
-                            .in_scope(|| uncompress_archive_file(&mut tracing::Span::current().wrap_read(0, &mut self.0), &mut writer, lookup))
-                    }
-                    .context("extracting archive")
-                    .tap_ok(|bytes| trace!(%bytes, "extracted from CompressTools archive"))
-                    .and_then(|_| {
-                        temp_file
-                            .flush()
-                            .and_then(|_| temp_file.rewind())
-                            .context("rewinding to beginning of file")
-                            .map(|_| temp_file)
+                tempfile::NamedTempFile::new_in(*crate::consts::TEMP_FILE_DIR)
+                    .context("creating temporary file for output")
+                    .and_then(|mut temp_file| {
+                        {
+                            let mut writer = BufWriter::new(&mut temp_file);
+                            trace_span!("uncompress_archive_file")
+                                .in_scope(|| uncompress_archive_file(&mut tracing::Span::current().wrap_read(0, &mut self.0), &mut writer, lookup))
+                        }
+                        .context("extracting archive")
+                        .tap_ok(|bytes| trace!(%bytes, "extracted from CompressTools archive"))
+                        .and_then(|_| {
+                            temp_file
+                                .flush()
+                                .and_then(|_| temp_file.rewind())
+                                .context("rewinding to beginning of file")
+                                .map(|_| temp_file)
+                        })
                     })
-                })
             })
     }
 }
@@ -112,16 +113,18 @@ impl ProcessArchive for ArchiveHandle {
                                                         .remove(entry_path.as_path())
                                                         .then_some(entry_path.clone())
                                                         .with_context(|| format!("unrequested entry: {entry_path:?}"))
-                                                        .map(|path| {
-                                                            (
-                                                                acc.tap_mut(|acc| acc.push((path, stat.st_size, SpooledTempFile::new(16 * 1024)))),
+                                                        .and_then(|path| {
+                                                            let temp_file = tempfile::NamedTempFile::new_in(*crate::consts::TEMP_FILE_DIR)
+                                                                .context("creating a temp file for output")?;
+                                                            Ok((
+                                                                acc.tap_mut(|acc| acc.push((path, stat.st_size, temp_file))),
                                                                 info_span!("current_file", entry_path=%entry_path.display())
                                                                     .tap_mut(|pb| {
                                                                         pb.pb_set_length(stat.st_size as u64);
                                                                         pb.pb_set_style(&io_progress_style());
                                                                     })
                                                                     .entered(),
-                                                            )
+                                                            ))
                                                         })
                                                 }),
                                                 ArchiveContents::DataChunk(chunk) => acc

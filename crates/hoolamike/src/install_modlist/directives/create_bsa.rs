@@ -1,7 +1,7 @@
 use {
     super::*,
     crate::{
-        modlist_json::directive::create_bsa_directive::{Ba2, Bsa, CreateBSADirective},
+        modlist_json::directive::create_bsa_directive::CreateBSADirective,
         progress_bars_v2::{count_progress_style, IndicatifWrapIoExt},
         utils::{spawn_rayon, PathReadWrite},
     },

@@ -28,14 +28,20 @@ where
             let tex_metadata = TexMetadata::from_dds(&bytes, dds_flags, None).context("reading tex metadata")?;
             Ok(())
                 .and_then(|_| {
-                    directxtex::ScratchImage::load_dds(&bytes, dds_flags, None, None)
-                        .context("loading dds")
-                        .and_then(|image| {
-                            image
-                                .decompress(DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT)
-                                .context("decompressing image")
+                    Ok(())
+                        .and_then(|_| {
+                            directxtex::ScratchImage::load_dds(&bytes, dds_flags, None, None)
+                                .context("loading dds")
+                                .and_then(|image| match tex_metadata.format.is_compressed() {
+                                    true => image
+                                        .decompress(DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT)
+                                        .context("decompressing image into DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT"),
+                                    false => image
+                                        .convert(DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT, tex_filter_flags, TEX_THRESHOLD_DEFAULT)
+                                        .context("converting image DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT"),
+                                })
+                                .context("loading image")
                         })
-                        .context("loading image")
                         .and_then(|image| {
                             Ok(image)
                                 .and_then(|image| {
@@ -53,8 +59,8 @@ where
                                         .generate_mip_maps(tex_filter_flags, target_mipmaps.to_usize().context("bad target_mipmaps")?)
                                         .context("generating mip maps"),
                                 })
+                                .context("modifying image")
                         })
-                        .context("modifying image")
                         .and_then(|image| match target_format.is_compressed() {
                             true => image
                                 .compress(target_format, tex_compress_flags, TEX_THRESHOLD_DEFAULT)
@@ -65,7 +71,6 @@ where
                                 .with_context(|| format!("compressing using target_format={target_format:?}"))
                                 .context("compressing image"),
                         })
-                        .context("preparing image for dump")
                 })
                 .and_then(|image| {
                     image

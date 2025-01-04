@@ -4,7 +4,6 @@ use {
         downloaders::helpers::FutureAnyhowExt,
         modlist_json::{directive::TransformedTextureDirective, ImageState},
         progress_bars_v2::IndicatifWrapIoExt,
-        read_wrappers::ReadExt,
         utils::spawn_rayon,
     },
     queued_archive_task::QueuedArchiveService,

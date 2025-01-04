@@ -92,7 +92,7 @@ impl super::ProcessArchive for Fallout4Archive<'_> {
     fn get_handle(&mut self, path: &Path) -> Result<super::ArchiveFileHandle> {
         use tap::prelude::*;
 
-        let mut output = tempfile::SpooledTempFile::new(256 * 1024 * 1024);
+        let mut output = tempfile::NamedTempFile::new_in(*crate::consts::TEMP_FILE_DIR).context("creating temporary file for output")?;
         let options = ba2::fo4::FileWriteOptionsBuilder::new()
             .compression_format(self.1.compression_format())
             .build();
@@ -148,7 +148,7 @@ impl super::ProcessArchive for Tes4Archive<'_> {
     fn get_handle(&mut self, path: &Path) -> Result<super::ArchiveFileHandle> {
         use tap::prelude::*;
 
-        let mut output = tempfile::SpooledTempFile::new(256 * 1024 * 1024);
+        let mut output = tempfile::NamedTempFile::new_in(*crate::consts::TEMP_FILE_DIR).context("creating temporary file for output")?;
         let options = ba2::tes4::FileCompressionOptions::builder().version(self.1.version());
 
         self.list_paths_with_originals()
@@ -237,4 +237,4 @@ impl BethesdaArchive<'_> {
     }
 }
 
-pub type BethesdaArchiveFile = tempfile::SpooledTempFile;
+pub type BethesdaArchiveFile = tempfile::NamedTempFile;
