@@ -159,8 +159,11 @@ where
 }
 
 const EXTENSION_HASH_WHITELIST: &[&str] = &[
-    // hashes won't match because headers are also hashed in wabbajack
-    "dds",
+    //
+    // hashes won't match because we cannot use welch filter
+    "dds", //
+          // hashes won't match because headers are also hashed in wabbajack, and textures are resized using welch filter
+          // "bsa",
 ];
 
 fn is_whitelisted_by_path(path: &Path) -> bool {

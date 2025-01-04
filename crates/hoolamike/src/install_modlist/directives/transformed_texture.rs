@@ -2,7 +2,6 @@ use {
     super::*,
     crate::{
         downloaders::helpers::FutureAnyhowExt,
-        install_modlist::download_cache::to_u64_from_base_64,
         modlist_json::{directive::TransformedTextureDirective, ImageState},
         progress_bars_v2::IndicatifWrapIoExt,
         read_wrappers::ReadExt,
@@ -77,18 +76,18 @@ impl TransformedTextureHandler {
                     move |from: &mut dyn Read, to: &mut dyn Write, target_path: PathBuf| {
                         info_span!("perform_copy").in_scope(|| {
                             let mut writer = to;
-                            let mut reader: Box<dyn Read> = match is_whitelisted_by_path(&target_path) {
-                                true => tracing::Span::current()
-                                    .wrap_read(size, from)
-                                    .pipe(Box::new),
-                                false => tracing::Span::current()
-                                    .wrap_read(size, from)
-                                    .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on"))
-                                    .pipe(Box::new),
-                            };
+                            let mut reader = tracing::Span::current().wrap_read(size, from);
+
                             dds_recompression_v2::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
+                                .and_then(|wrote| {
+                                    wrote
+                                        .eq(&size)
+                                        .then_some(size)
+                                        .with_context(|| format!("expected output size to be [{size} bytes], but got [{wrote} bytes]"))
+                                })
                                 .context("copying file from archive")
                                 .and_then(|_| writer.flush().context("flushing write"))
+                                .with_context(|| format!("writing to [{target_path:?}]"))
                                 .map(|_| ())
                         })
                     }

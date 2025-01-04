@@ -10,7 +10,7 @@ use {
 pub mod dxgi_format_mapping;
 
 #[tracing::instrument(skip(input, output))]
-pub fn resize_dds<R, W>(input: &mut R, target_width: u32, target_height: u32, target_format: DXGIFormat, target_mipmaps: u32, output: &mut W) -> Result<()>
+pub fn resize_dds<R, W>(input: &mut R, target_width: u32, target_height: u32, target_format: DXGIFormat, target_mipmaps: u32, output: &mut W) -> Result<u64>
 where
     R: Read,
     W: Write,
@@ -94,5 +94,5 @@ where
                 })
                 .with_context(|| format!("recompressing using derived tex_metadata={tex_metadata:? }"))
         })
-        .map(|wrote| tracing::debug!("wrote {wrote} bytes"))
+        .tap_ok(|wrote| tracing::debug!("wrote {wrote} bytes"))
 }
