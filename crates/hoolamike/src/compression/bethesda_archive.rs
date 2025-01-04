@@ -72,9 +72,10 @@ impl Tes4Archive<'_> {
             .map(|(archive_key, directory_key)| {
                 (archive_key.name().pipe(try_utf8), directory_key.name().pipe(try_utf8))
                     .pipe(|(directory, filename)| {
-                        MaybeWindowsPath(directory.into())
-                            .into_path()
-                            .join(filename.as_ref())
+                        MaybeWindowsPath(directory.into()).into_path().join({
+                            let filename: &str = filename.as_ref();
+                            filename
+                        })
                     })
                     .pipe(|path| (path, (archive_key, directory_key)))
             })

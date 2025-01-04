@@ -26,15 +26,17 @@ use {
             Format,
             Version as ArchiveVersion,
         },
+        BString,
         Borrowed,
         CompressionResult,
         ReaderWithOptions,
     },
     rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
-    std::path::PathBuf,
+    std::path::{Path, PathBuf},
     tap::prelude::*,
     tracing::{info_span, instrument},
     tracing_indicatif::span_ext::IndicatifSpanExt,
+    typed_path::Utf8TypedPath,
 };
 
 #[derive(derive_more::From)]
@@ -122,33 +124,27 @@ impl LazyArchiveFile<BA2DX10Entry> {
     }
 }
 
-pub(super) fn create_key<'a>(extension: &str, name_hash: u32, dir_hash: u32) -> Result<ArchiveKey<'a>> {
-    extension
-        .as_bytes()
-        .split_at_checked(4)
-        .context("bad extension_size")
-        .and_then(|(bytes, rest)| {
-            rest.is_empty()
-                .then_some(bytes)
-                .context("extension too long")
+#[instrument]
+pub(super) fn create_key<'a>(for_path: MaybeWindowsPath) -> Result<ArchiveKey<'a>> {
+    for_path
+        .0
+        .pipe_deref(Utf8TypedPath::derive)
+        .with_windows_encoding_checked()
+        .context("could not convert path to windows path")
+        .map(|path| path.normalize())
+        .map(|path| path.with_windows_encoding())
+        .map(|path| {
+            path.as_str()
+                .pipe(Path::new)
+                .as_os_str()
+                .as_encoded_bytes()
+                .conv::<BString>()
+                .tap(|encoded| tracing::debug!("encoded {for_path:?} as [{encoded}]"))
+                .conv::<ArchiveKey>()
         })
-        .and_then(|extension| {
-            extension
-                .to_vec()
-                .try_conv::<[u8; 4]>()
-                .map_err(|bad_size| anyhow::anyhow!("validating size: bad size: {bad_size:?}"))
-        })
-        .map(u32::from_le_bytes)
-        .map(|extension| ba2::fo4::Hash {
-            extension,
-            file: name_hash,
-            directory: dir_hash,
-        })
-        .map(|key_hash| key_hash.conv::<ba2::fo4::FileHash>().conv::<ArchiveKey>())
-        .context("creating key")
 }
 
-#[instrument(skip(handle_archive))]
+#[instrument(skip(handle_archive, file_states))]
 pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) -> Result<()>>(
     temp_bsa_dir: PathBuf,
     Ba2 {
@@ -193,16 +189,7 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
                 .join(ba2_file_entry.path.clone().into_path())
                 .pipe(|path| path.open_file_read())
                 .and_then(|(_path, file)| LazyArchiveFile::new(&file, ba2_file_entry.clone()).map(LazyArchiveKind::from))
-                .and_then(|file| {
-                    ba2_file_entry.pipe(
-                        |BA2FileEntry {
-                             dir_hash,
-                             extension,
-                             name_hash,
-                             ..
-                         }| create_key(&extension, name_hash, dir_hash).map(|key| (key, file)),
-                    )
-                }),
+                .and_then(|file| ba2_file_entry.pipe(|BA2FileEntry { path, .. }| create_key(path).map(|key| (key, file)))),
             FileState::BA2DX10Entry(ba2_dx10_entry) => temp_id_dir
                 .join(ba2_dx10_entry.path.clone().into_path())
                 .open_file_read()
@@ -211,16 +198,7 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
                         .with_context(|| format!("opening file at [{path:?}]"))
                         .map(LazyArchiveKind::from)
                 })
-                .and_then(|file| {
-                    ba2_dx10_entry.pipe(
-                        |BA2DX10Entry {
-                             dir_hash,
-                             extension,
-                             name_hash,
-                             ..
-                         }| { create_key(&extension, name_hash, dir_hash).map(|key| (key, file)) },
-                    )
-                }),
+                .and_then(|file| ba2_dx10_entry.pipe(|BA2DX10Entry { path, .. }| create_key(path).map(|key| (key, file)))),
         })
         .inspect(|_| reading_bsa_entries.pb_inc(1))
         .collect::<Result<Vec<_>>>()

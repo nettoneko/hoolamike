@@ -1514,6 +1514,7 @@ dependencies = [
  "tracing-indicatif",
  "tracing-subscriber",
  "transpare",
+ "typed-path",
  "unrar",
  "url",
  "uuid",
@@ -3844,6 +3845,12 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "typed-path"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41713888c5ccfd99979fcd1afd47b71652e331b3d4a0e19d30769e80fec76cce"
 
 [[package]]
 name = "typenum"

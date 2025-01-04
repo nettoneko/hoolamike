@@ -47,10 +47,11 @@ where
                                         )
                                         .context("resizing")
                                 })
-                                .and_then(|resized| {
-                                    resized
+                                .and_then(|resized| match target_mipmaps {
+                                    1 => Ok(resized),
+                                    target_mipmaps => resized
                                         .generate_mip_maps(tex_filter_flags, target_mipmaps.to_usize().context("bad target_mipmaps")?)
-                                        .context("generating mip maps")
+                                        .context("generating mip maps"),
                                 })
                         })
                         .context("modifying image")

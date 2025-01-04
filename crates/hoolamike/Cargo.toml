@@ -91,6 +91,7 @@ tracing-flame = "0.2.0"
 tracing-indicatif = "0.3.8"
 tracing-subscriber.workspace = true
 transpare.workspace = true
+typed-path = "0.10.0"
 unrar = "0.5.7"
 url.workspace = true
 uuid.workspace = true
