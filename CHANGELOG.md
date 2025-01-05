@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 🚀 Features
+
+- *(installer)* Hoolamike will now mimic the windows case-insensitive path lookup in case copying a local file (typically game directory) fails
+
+## [0.8.10] - 2025-01-05
+
 ### ⚙️ Miscellaneous Tasks
 
 - Cache and write permissions
