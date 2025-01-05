@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [unreleased]
+
+### ⚙️ Miscellaneous Tasks
+
+- Cache
+
 ## [0.8.6] - 2025-01-05
 
 ### ⚙️ Miscellaneous Tasks
