@@ -24,6 +24,8 @@ pub mod sevenz;
 pub mod unrar_rs;
 pub mod zip;
 
+pub mod detect_lzma_method_14;
+
 pub mod forward_only_seek;
 
 pub trait ProcessArchive: Sized {
@@ -180,24 +182,39 @@ impl ArchiveHandle<'_> {
                                 .with_context(|| format!("trying because: {reason:?}"))
                         }),
 
-                    Some("zip" | "7z") => Err(())
-                        .or_else(|_| {
-                            self::zip::ZipArchive::new(path)
-                                .map(Self::Zip)
-                                .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
-                        })
-                        .or_else(|reason| {
-                            path.open_file_read()
-                                .and_then(|(_, file)| self::compress_tools::ArchiveHandle::new(file).map(Self::CompressTools))
-                                .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
-                                .with_context(|| format!("trying because: {reason:?}"))
-                        })
-                        .or_else(|reason| {
-                            WRAPPED_7ZIP
-                                .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
-                                .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
-                                .with_context(|| format!("trying because: {reason:?}"))
-                        }),
+                    Some("zip" | "7z") => {
+                        let is_lzma_method_14 = path
+                            .open_file_read()
+                            .and_then(|(_, file)| detect_lzma_method_14::is_zip_lzma_method_14(&file).context("checking header"))
+                            .context("checking for non-standard 7zip archive format")?;
+                        match is_lzma_method_14 {
+                            true => {
+                                tracing::warn!("detected LZMA method 14 (7zip) non-standard archive");
+                                WRAPPED_7ZIP
+                                    .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                                    .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                                    .context("trying because: detected lzma method 14 file")
+                            }
+                            false => Err(())
+                                .or_else(|_| {
+                                    self::zip::ZipArchive::new(path)
+                                        .map(Self::Zip)
+                                        .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                                })
+                                .or_else(|reason| {
+                                    path.open_file_read()
+                                        .and_then(|(_, file)| self::compress_tools::ArchiveHandle::new(file).map(Self::CompressTools))
+                                        .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                                        .with_context(|| format!("trying because: {reason:?}"))
+                                })
+                                .or_else(|reason| {
+                                    WRAPPED_7ZIP
+                                        .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                                        .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                                        .with_context(|| format!("trying because: {reason:?}"))
+                                }),
+                        }
+                    }
                     other => {
                         warn!("weird extension: [{other:?}] - it's guesswork at this point");
                         Err(())
