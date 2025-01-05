@@ -7,6 +7,8 @@ env:
   RUST_BACKTRACE: 1
 jobs:
   release:
+    permissions:
+      contents: write  # Required to create releases
     name: Release - ${{ matrix.platform.os-name }} with rust ${{ matrix.toolchain }}
     strategy:
       # fail-fast: false
@@ -48,6 +50,8 @@ jobs:
         run: sudo apt-get update --yes && sudo apt-get install --yes pkg-config openssl libssl-dev libarchive-dev
       - name: cache
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: "true"
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
@@ -66,7 +70,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           draft: true
-          token: "{{ secrets.GH_PAT }}"
           files: "hoolamike"
           body_path: CHANGELOG.md
         if: startsWith( github.ref, 'refs/tags/v' )
