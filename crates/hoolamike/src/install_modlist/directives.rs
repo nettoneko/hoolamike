@@ -105,7 +105,7 @@ pub mod nested_archive_manager;
 fn concurrency() -> usize {
     #[cfg(not(debug_assertions))]
     {
-        use std::ops::{Div, Mul};
+        use std::ops::Div;
 
         num_cpus::get().div(2).saturating_sub(1).max(1)
     }

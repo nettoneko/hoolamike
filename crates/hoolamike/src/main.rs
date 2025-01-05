@@ -97,8 +97,9 @@ pub mod post_install_fixup;
 pub mod progress_bars_v2;
 pub mod wabbajack_file;
 pub mod consts {
-    use {once_cell::sync::Lazy, std::path::Path};
-    pub static TEMP_FILE_DIR: Lazy<&'static Path> = Lazy::new(|| Path::new("./.hoolamike"));
+    use {once_cell::sync::Lazy, std::path::Path, tap::prelude::*};
+    pub static TEMP_FILE_DIR: Lazy<&'static Path> =
+        Lazy::new(|| Path::new(".hoolamike/TEMP_FILES").tap(|path| std::fs::create_dir_all(path).expect("could not create temporary dir storage")));
 }
 
 #[derive(Debug, ValueEnum, Clone, Copy, Default, serde::Serialize)]
