@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### ⚙️ Miscellaneous Tasks
 
+- Cache and write permissions
+
+## [0.8.9] - 2025-01-05
+
+### ⚙️ Miscellaneous Tasks
+
 - Cache
 
 ## [0.8.6] - 2025-01-05
