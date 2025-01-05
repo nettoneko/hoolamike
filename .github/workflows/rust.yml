@@ -4,8 +4,9 @@ env:
   RUST_BACKTRACE: 1
 jobs:
   release:
-    name: Release - ${{ matrix.platform.os-name }}
+    name: Release - ${{ matrix.platform.os-name }} with rust ${{ matrix.toolchain }}
     strategy:
+      # fail-fast: false
       matrix:
         platform:
           # - os-name: FreeBSD-x86_64
@@ -46,9 +47,9 @@ jobs:
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
-          command: ${{ matrix.platform.command }}
+          command: "build"
           target: ${{ matrix.platform.target }}
-          toolchain: nightly
+          toolchain: "nightly"
           args: "--locked --release --package hoolamike"
 
       - name: Publish artifacts and release
