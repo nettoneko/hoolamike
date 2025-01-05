@@ -57,3 +57,10 @@ jobs:
         with:
           executable-name: hoolamike
           target: ${{ matrix.platform.target }}
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          files: "hoolamike"
+          body_path: Changes.md
+        if: startsWith( github.ref, 'refs/tags/v' )

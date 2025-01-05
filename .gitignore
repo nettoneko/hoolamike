@@ -1,3 +1,4 @@
 /target
 /playground
 /.direnv
+/crates-io.token
