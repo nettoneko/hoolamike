@@ -1,5 +1,8 @@
-name: Tests and release
-on: [push]
+name: build and release
+on:
+  push:
+    tags:
+      - v*
 env:
   RUST_BACKTRACE: 1
 jobs:
