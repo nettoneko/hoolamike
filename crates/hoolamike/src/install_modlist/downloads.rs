@@ -20,7 +20,7 @@ use {
     },
     anyhow::Result,
     futures::{FutureExt, StreamExt, TryStreamExt},
-    std::{path::PathBuf, sync::Arc},
+    std::{collections::HashMap, path::PathBuf, sync::Arc},
     tracing::{debug, instrument, Instrument},
 };
 
@@ -60,6 +60,71 @@ async fn copy_local_file(from: PathBuf, to: PathBuf, expected_size: u64) -> Resu
         .read(true)
         .open(&from)
         .map_with_context(|| format!("opening [{}]", from.display()))
+        .or_else(|error| {
+            tracing::warn_span!("could not find [{from:?}], trying case insensitive?", reason = format!("{error:?}"))
+                .in_scope(|| {
+                    tokio::task::block_in_place(|| {
+                        from.file_name()
+                            .context("no file name")
+                            .and_then(|name| {
+                                name.to_str()
+                                    .context("filename is not a utf8 string")
+                                    .map(|file_name| file_name.to_lowercase())
+                            })
+                            .and_then(|file_name| {
+                                from.parent()
+                                    .with_context(|| format!("[{from:?}] has no parent"))
+                                    .and_then(|parent| {
+                                        parent
+                                            .read_dir()
+                                            .context("reading directory")
+                                            .and_then(|dir| {
+                                                dir.into_iter()
+                                                    .map(|dir| {
+                                                        dir.context("reading entry")
+                                                            .and_then(|entry| {
+                                                                entry
+                                                                    .file_name()
+                                                                    .into_string()
+                                                                    .map_err(|name| {
+                                                                        anyhow::anyhow!("entry [{entry:?}] ([{name:?}]) is not a valid utf8 string")
+                                                                    })
+                                                                    .map(|name| (name, entry))
+                                                            })
+                                                            .map(|(filename, entry)| (filename.to_lowercase(), entry.path().to_owned()))
+                                                    })
+                                                    .collect::<Result<HashMap<_, _>>>()
+                                                    .with_context(|| format!("when listing [{parent:?}]"))
+                                            })
+                                            .and_then(|mut paths| {
+                                                paths.remove(&file_name).with_context(|| {
+                                                    format!(
+                                                        "no [{file_name}] in [{parent:?}] (looking up by lowercase filename, and choices are:\n[{paths:#?}])"
+                                                    )
+                                                })
+                                            })
+                                    })
+                            })
+                    })
+                })
+                .pipe(ready)
+                .and_then(|lowercase| async move {
+                    tokio::fs::OpenOptions::new()
+                        .read(true)
+                        .open(lowercase.clone())
+                        .map_with_context({
+                            cloned![lowercase];
+                            move || format!("opening lowercase file that matched the path: [{lowercase:?}]")
+                        })
+                        .await
+                        .tap_ok(|_| {
+                            tracing::warn!(
+                                "opened file matched by lowercase filename: [{lowercase:?}]. this is guesswork at this point, if this approach doesn't work \
+                                 file an issue"
+                            )
+                        })
+                })
+        })
         .await?;
     let target_file = tokio::fs::OpenOptions::new()
         .write(true)
