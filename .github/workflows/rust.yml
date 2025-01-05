@@ -57,6 +57,7 @@ jobs:
         with:
           executable-name: hoolamike
           target: ${{ matrix.platform.target }}
+          changes-file: "CHANGELOG.md"
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v1
         with:
