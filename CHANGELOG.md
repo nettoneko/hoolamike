@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### ⚙️ Miscellaneous Tasks
 
+- Use secrets for tokens
+
+## [0.8.5] - 2025-01-05
+
+### ⚙️ Miscellaneous Tasks
+
 - Only run CI on new versions
 
 ## [0.8.2] - 2025-01-05
