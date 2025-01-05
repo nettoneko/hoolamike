@@ -67,7 +67,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           draft: true
-          token: {{ secrets.GH_PAT }}
+          token: "{{ secrets.GH_PAT }}"
           files: "hoolamike"
           body_path: CHANGELOG.md
         if: startsWith( github.ref, 'refs/tags/v' )
