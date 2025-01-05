@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [unreleased]
+## [0.8.2] - 2025-01-05
+
+### 🚀 Features
+
+- *(ci)* CI with automatic publishes
 
 ### 💼 Other
 

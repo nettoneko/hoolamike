@@ -11,7 +11,9 @@ TAG="v${VERSION}"
 echo "creating release for ${PACKAGE} ${TAG}"
 
 # cargo publish --package "${PACKAGE}"
-
+git cliff -o CHANGELOG.md
+git add .
+git commit -m "${PACKAGE} release ${TAG}"
 git tag -a "${TAG}" -m "release ${TAG} of ${PACKAGE}"
 
 git push origin $(git rev-parse --abbrev-ref HEAD) --tags

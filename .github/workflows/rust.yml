@@ -62,5 +62,5 @@ jobs:
         with:
           draft: true
           files: "hoolamike"
-          body_path: Changes.md
+          body_path: CHANGELOG.md
         if: startsWith( github.ref, 'refs/tags/v' )
