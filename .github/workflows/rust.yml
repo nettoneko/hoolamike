@@ -46,7 +46,8 @@ jobs:
 
       - name: Install libarchive
         run: sudo apt-get update --yes && sudo apt-get install --yes pkg-config openssl libssl-dev libarchive-dev
-
+      - name: cache
+        uses: Swatinem/rust-cache@v2
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
