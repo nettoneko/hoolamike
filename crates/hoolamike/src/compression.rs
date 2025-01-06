@@ -2,12 +2,11 @@ use {
     crate::{
         install_modlist::directives::nested_archive_manager::{max_open_files, WithPermit, OPEN_FILE_PERMITS},
         progress_bars_v2::IndicatifWrapIoExt,
-        utils::{boxed_iter, PathReadWrite, ReadableCatchUnwindExt},
+        utils::{boxed_iter, PathReadWrite},
     },
     ::wrapped_7zip::WRAPPED_7ZIP,
     anyhow::{Context, Result},
     std::{
-        convert::identity,
         ffi::OsStr,
         io::{Seek, Write},
         path::{Path, PathBuf},
@@ -24,6 +23,7 @@ pub mod sevenz;
 pub mod unrar_rs;
 pub mod zip;
 
+#[cfg(test)]
 pub mod detect_lzma_method_14;
 
 pub mod forward_only_seek;
