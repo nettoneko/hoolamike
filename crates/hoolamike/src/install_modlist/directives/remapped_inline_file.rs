@@ -138,8 +138,9 @@ impl RemappedInlineFileHandler {
                 })
                 .map(|file| remapping_context.remap_file_contents(&file))
                 .and_then(|output| {
-                    to.clone()
-                        .into_path()
+                    remapping_context
+                        .output_directory
+                        .join(to.clone().into_path())
                         .open_file_write()
                         .and_then(|(_, mut file)| {
                             std::io::copy(&mut tracing::Span::current().wrap_read(size, std::io::Cursor::new(output)), &mut file)
