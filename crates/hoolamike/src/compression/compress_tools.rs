@@ -1,6 +1,6 @@
 use {
     super::{ProcessArchive, *},
-    crate::progress_bars_v2::io_progress_style,
+    crate::{progress_bars_v2::io_progress_style, utils::MaybeWindowsPath},
     ::compress_tools::*,
     anyhow::{Context, Result},
     itertools::Itertools,
@@ -72,7 +72,12 @@ impl ProcessArchive for ArchiveHandle {
     fn list_paths(&mut self) -> Result<Vec<PathBuf>> {
         ::compress_tools::list_archive_files(&mut self.0)
             .context("listing archive files")
-            .map(|e| e.into_iter().map(PathBuf::from).collect())
+            .map(|e| {
+                e.into_iter()
+                    .map(MaybeWindowsPath)
+                    .map(MaybeWindowsPath::into_path)
+                    .collect()
+            })
             .and_then(|out| self.0.rewind().context("rewinding file").map(|_| out))
     }
 
