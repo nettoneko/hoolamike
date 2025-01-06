@@ -6,6 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
+- *(archives)* More readable error messages for archive extraction failures
+- *(textures)* Recompressing textures using BC7 methods now uses the minimal level, which results in 100x decrease in speed
+
+### 🐛 Bug Fixes
+
+- Detect lzma method 14 archives to offload them to 7z binary
+- *(install)* Fix paths dropping to early
+- *(archives)* Check windows encoding and normalize paths when using CompressTools
+
+## [0.8.11] - 2025-01-05
+
+### 🚀 Features
+
 - *(installer)* Hoolamike will now mimic the windows case-insensitive path lookup in case copying a local file (typically game directory) fails
 
 ## [0.8.10] - 2025-01-05
