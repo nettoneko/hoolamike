@@ -143,117 +143,106 @@ static_assertions::assert_impl_all!(self::bethesda_archive::BethesdaArchiveFile:
 static_assertions::assert_impl_all!(ArchiveFileHandle: Send, Sync);
 
 impl ArchiveHandle<'_> {
-    #[tracing::instrument(level = "INFO")]
-    pub fn guess(path: &Path, extension: Option<&OsStr>) -> anyhow::Result<Self> {
-        std::panic::catch_unwind(|| {
-            {
-                match extension
-                    .map(|ext| ext.to_string_lossy())
-                    .map(|b| b.to_lowercase())
-                    .as_deref()
-                {
-                    Some("bsa" | "ba2") => bethesda_archive::BethesdaArchive::open(path)
-                        .context("reading bsa")
-                        .map(Self::Bethesda)
-                        .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}")),
-                    Some("rar") => Err(())
-                        .or_else(|()| {
-                            unrar_rs::ArchiveHandle::new(path)
-                                .context("reading rar")
-                                .map(Self::Unrar)
-                                .tap_err(|message| tracing::trace!("could not open archive with unrar: {message:?}"))
-                        })
-                        .or_else(|reason| {
-                            self::zip::ZipArchive::new(path)
-                                .map(Self::Zip)
-                                .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
-                                .with_context(|| format!("trying because: {reason:?}"))
-                        })
-                        .or_else(|reason| {
-                            path.open_file_read()
-                                .and_then(|(_, file)| self::compress_tools::ArchiveHandle::new(file).map(Self::CompressTools))
-                                .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
-                                .with_context(|| format!("trying because: {reason:?}"))
-                        })
-                        .or_else(|reason| {
-                            WRAPPED_7ZIP
-                                .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
-                                .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
-                                .with_context(|| format!("trying because: {reason:?}"))
-                        }),
+    /// this is literally bruteforce approach
+    pub fn with_guessed<T, F: FnMut(Self) -> Result<T> + Send + Sync>(path: &Path, extension: Option<&OsStr>, mut with_guessed: F) -> anyhow::Result<T> {
+        match extension
+            .map(|ext| ext.to_string_lossy())
+            .map(|b| b.to_lowercase())
+            .as_deref()
+        {
+            Some("bsa" | "ba2") => bethesda_archive::BethesdaArchive::open(path)
+                .context("reading bsa")
+                .map(Self::Bethesda)
+                .tap_err(|message| tracing::trace!("could not open archive with compress-tools: {message:?}"))
+                .and_then(&mut with_guessed),
+            Some("rar") => Err(())
+                .or_else(|()| {
+                    unrar_rs::ArchiveHandle::new(path)
+                        .context("reading rar")
+                        .map(Self::Unrar)
+                        .tap_err(|message| tracing::trace!("could not open archive with unrar: {message:?}"))
+                        .and_then(&mut with_guessed)
+                })
+                .or_else(|reason| {
+                    self::zip::ZipArchive::new(path)
+                        .map(Self::Zip)
+                        .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                        .and_then(&mut with_guessed)
+                        .with_context(|| format!("trying because: {reason:?}"))
+                })
+                .or_else(|reason| {
+                    path.open_file_read()
+                        .and_then(|(_, file)| self::compress_tools::ArchiveHandle::new(file).map(Self::CompressTools))
+                        .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                        .and_then(&mut with_guessed)
+                        .with_context(|| format!("trying because: {reason:?}"))
+                })
+                .or_else(|reason| {
+                    WRAPPED_7ZIP
+                        .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                        .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                        .and_then(&mut with_guessed)
+                        .with_context(|| format!("trying because: {reason:?}"))
+                }),
 
-                    Some("zip" | "7z") => {
-                        let is_lzma_method_14 = path
-                            .open_file_read()
-                            .and_then(|(_, file)| detect_lzma_method_14::is_zip_lzma_method_14(&file).context("checking header"))
-                            .context("checking for non-standard 7zip archive format")?;
-                        match is_lzma_method_14 {
-                            true => {
-                                tracing::warn!("detected LZMA method 14 (7zip) non-standard archive");
-                                WRAPPED_7ZIP
-                                    .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
-                                    .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
-                                    .context("trying because: detected lzma method 14 file")
-                            }
-                            false => Err(())
-                                .or_else(|_| {
-                                    self::zip::ZipArchive::new(path)
-                                        .map(Self::Zip)
-                                        .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
-                                })
-                                .or_else(|reason| {
-                                    path.open_file_read()
-                                        .and_then(|(_, file)| self::compress_tools::ArchiveHandle::new(file).map(Self::CompressTools))
-                                        .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
-                                        .with_context(|| format!("trying because: {reason:?}"))
-                                })
-                                .or_else(|reason| {
-                                    WRAPPED_7ZIP
-                                        .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
-                                        .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
-                                        .with_context(|| format!("trying because: {reason:?}"))
-                                }),
-                        }
-                    }
-                    other => {
-                        warn!("weird extension: [{other:?}] - it's guesswork at this point");
-                        Err(())
-                            .or_else(|_| {
-                                bethesda_archive::BethesdaArchive::open(path)
-                                    .context("reading bsa")
-                                    .map(Self::Bethesda)
-                                    .tap_err(|message| tracing::trace!("could not open archive with bethesda archive extractor: {message:?}"))
-                            })
-                            .or_else(|err| {
-                                unrar_rs::ArchiveHandle::new(path)
-                                    .context("reading rar")
-                                    .map(Self::Unrar)
-                                    .tap_err(|message| tracing::trace!("could not open archive with unrar: {message:?}"))
-                                    .with_context(|| format!("because: {err:#?}"))
-                            })
-                            .or_else(|err| {
-                                path.open_file_read()
-                                    .and_then(|(_, file)| self::compress_tools::ArchiveHandle::new(file).map(Self::CompressTools))
-                                    .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
-                                    .with_context(|| format!("because: {err:#?}"))
-                            })
-                            .or_else(|err| {
-                                WRAPPED_7ZIP
-                                    .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
-                                    .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
-                                    .with_context(|| format!("because: {err:#?}"))
-                            })
-                            .tap_ok(|a| tracing::trace!("succesfully opened an archive: {a:?}"))
-                            .map_err(|_| anyhow::anyhow!("no defined archive handler could handle this file"))
-                            .context("because no defined extension matched [{other}]")
-                    }
-                }
+            Some("zip" | "7z") => Err(())
+                .or_else(|_| {
+                    self::zip::ZipArchive::new(path)
+                        .map(Self::Zip)
+                        .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                        .and_then(&mut with_guessed)
+                })
+                .or_else(|reason| {
+                    path.open_file_read()
+                        .and_then(|(_, file)| self::compress_tools::ArchiveHandle::new(file).map(Self::CompressTools))
+                        .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                        .and_then(&mut with_guessed)
+                        .with_context(|| format!("trying because: {reason:?}"))
+                })
+                .or_else(|reason| {
+                    WRAPPED_7ZIP
+                        .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                        .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                        .and_then(&mut with_guessed)
+                        .with_context(|| format!("trying because: {reason:?}"))
+                }),
+            other => {
+                warn!("weird extension: [{other:?}] - it's guesswork at this point");
+                Err(())
+                    .or_else(|_| {
+                        bethesda_archive::BethesdaArchive::open(path)
+                            .context("reading bsa")
+                            .map(Self::Bethesda)
+                            .and_then(&mut with_guessed)
+                            .tap_err(|message| tracing::trace!("could not open archive with bethesda archive extractor: {message:?}"))
+                    })
+                    .or_else(|err| {
+                        unrar_rs::ArchiveHandle::new(path)
+                            .context("reading rar")
+                            .map(Self::Unrar)
+                            .tap_err(|message| tracing::trace!("could not open archive with unrar: {message:?}"))
+                            .and_then(&mut with_guessed)
+                            .with_context(|| format!("because: {err:#?}"))
+                    })
+                    .or_else(|err| {
+                        path.open_file_read()
+                            .and_then(|(_, file)| self::compress_tools::ArchiveHandle::new(file).map(Self::CompressTools))
+                            .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                            .and_then(&mut with_guessed)
+                            .with_context(|| format!("because: {err:#?}"))
+                    })
+                    .or_else(|err| {
+                        WRAPPED_7ZIP
+                            .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                            .tap_err(|message| tracing::trace!("could not open archive with 7z: {message:?}"))
+                            .and_then(&mut with_guessed)
+                            .with_context(|| format!("because: {err:#?}"))
+                    })
+                    .map_err(|_| anyhow::anyhow!("no defined archive handler could handle this file"))
+                    .context("because no defined extension matched [{other}]")
             }
-            .context("no defined archive handler could handle this file")
-        })
-        .for_anyhow()
-        .context("unexpected panic")
-        .and_then(identity)
+        }
+        .context("no defined archive handler could handle this file")
     }
 }
 
