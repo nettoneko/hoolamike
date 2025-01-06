@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 🚀 Features
+
+- *(deps)* Remove openssl dependency to enable working on steam deck
+
+## [0.9.1] - 2025-01-06
+
 ### 🐛 Bug Fixes
 
 - *(installed)* ModOrganizer.ini and other remapped files will no longer be places at paths relative to CWD
