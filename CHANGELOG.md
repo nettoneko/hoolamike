@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 🐛 Bug Fixes
+
+- *(installed)* ModOrganizer.ini and other remapped files will no longer be places at paths relative to CWD
+
+## [0.9.0] - 2025-01-06
+
 ### 🚀 Features
 
 - *(archives)* More readable error messages for archive extraction failures
