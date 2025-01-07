@@ -1,10 +1,11 @@
 use {
-    crate::{compression::ProcessArchive, install_modlist::directives::WabbajackFileHandle, progress_bars_v2::IndicatifWrapIoExt, utils::PathReadWrite},
+    crate::{compression::ProcessArchive, install_modlist::directives::WabbajackFileHandle, utils::PathReadWrite},
     anyhow::{Context, Result},
     std::{
-        io::BufReader,
+        io::Read,
         path::{Path, PathBuf},
     },
+    tap::prelude::*,
 };
 
 #[derive(Debug)]
@@ -28,10 +29,12 @@ impl WabbajackFile {
                     archive
                         .get_handle(Path::new(MODLIST_JSON_FILENAME))
                         .context("looking up file by name")
-                        .and_then(|handle| {
-                            serde_json::from_reader::<_, serde_json::Value>(&mut tracing::Span::current().wrap_read(0, BufReader::new(handle)))
-                                .context("reading archive json contents")
+                        .and_then(|mut handle| {
+                            String::new()
+                                .pipe(|mut out| handle.read_to_string(&mut out).map(|_| out))
+                                .context("reading modlist json to string")
                         })
+                        .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).context("reading archive json contents"))
                         .and_then(|json| {
                             serde_json::to_string_pretty(&json)
                                 .context("serializing json")
