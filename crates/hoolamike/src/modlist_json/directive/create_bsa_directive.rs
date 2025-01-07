@@ -1,4 +1,4 @@
-use super::*;
+use {super::*, crate::serde_type_guard};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -34,16 +34,16 @@ pub struct CreateBSADirectiveKind<DirectiveState, FileState> {
 pub mod ba2;
 pub mod bsa;
 
-pub type Ba2 = create_bsa_directive::CreateBSADirectiveKind<ba2::DirectiveState, ba2::FileState>;
-pub type Bsa = create_bsa_directive::CreateBSADirectiveKind<bsa::DirectiveState, bsa::FileState>;
-
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
 pub enum CreateBSADirective {
-    Bsa(Bsa),
-    Ba2(Ba2),
+    Bsa(bsa::Bsa),
+    Ba2(ba2::Ba2),
 }
+
+// used only for testing pretty much
+serde_type_guard!(CreateBSADirectiveTypeGuard, "CreateBSA");
 
 impl CreateBSADirective {
     pub fn size(&self) -> u64 {

@@ -5,6 +5,7 @@ use {
 
 pub mod gamefile_source_downloader;
 pub mod google_drive;
+pub mod mega;
 pub mod http {
     pub struct HttpDownloader {}
 }

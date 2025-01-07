@@ -1,0 +1,3886 @@
+{
+  "$type": "CreateBSA",
+  "FileStates": [
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "seq\\ccbgssse025-advdsgs.seq"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "sound\\fx\\drs\\manhole\\drs_manhole_close_01.wav"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "sound\\fx\\drs\\manhole\\drs_manhole_close_02.wav"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "sound\\fx\\drs\\manhole\\drs_manhole_open_01.wav"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "sound\\fx\\drs\\manhole\\drs_manhole_open_02.wav"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse037\\clutter\\ingredients\\flamestalk_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse037\\clutter\\ingredients\\flamestalk_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\character\\eyes\\eyesaint.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\character\\eyes\\eyeseducer.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\loadscreenart\\loadscreendarkseducerbattleaxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\loadscreenart\\loadscreenfemalegoldensainthelmet.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducercuirassf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducercuirassf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducercuirassm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducercuirassm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\1stpersondarkseducercuirassf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\1stpersondarkseducercuirassf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\1stpersondarkseducercuirassm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\1stpersondarkseducercuirassm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmargf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmargm.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmorcf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmorcm.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducergauntlets_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducergauntletsf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducergauntletsf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducergauntletsm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducergauntletsm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmet_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmkhajf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmkhajm.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducershield.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 22,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmm.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 23,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducercuirassf_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 24,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducercuirassm_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 25,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerboots_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 26,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbootsf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 27,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbootsf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 28,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbootsm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 29,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbootsm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse037\\clutter\\ingredients\\flamestalk.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness claymore01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_dagger01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_mace01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_mace01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_bow01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness claymore01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_battleaxe01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_mace01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_warhammer01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_battleaxe01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_dagger01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_waraxe01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_bow01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_battleaxe01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_warhammer01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_longsword01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_waraxe01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_warhammer01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madnessarrow01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_longsword01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_bow01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_dagger01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 22,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_waraxe01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 23,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness_longsword01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 24,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madness claymore01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 25,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madnessarrow01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 26,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\madness\\madnessarrow01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\effects\\jyggalagbarriersmall.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnesshelmetm_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessshield01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessbody01m_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessbody02m_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessshield01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessshield01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessbody01m_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessbody01m_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessbody02m_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessbody02m_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessbootsm_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnesshelmetm_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnesshelmetm_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessbootsm_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessbootsm_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessglovesm_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessglovesm_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\madness\\madnessglovesm_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmkhajf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmkhajf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmkhajm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmkhajm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmargf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmargf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmargm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmargm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnessshield.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\1stpersonmadnesscuirassf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\1stpersonmadnesscuirassf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\1stpersonmadnesscuirassm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\1stpersonmadnesscuirassm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesscuirass_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesscuirassf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesscuirassf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesscuirassm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesscuirassm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 22,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmet_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 23,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnessgauntlets_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 24,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnessgauntletsf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 25,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnessgauntletsf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 26,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnessgauntletsm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 27,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnessgauntletsm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 28,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmorcf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 29,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmorcf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 30,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmorcm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 31,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnesshelmorcm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 32,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnessboots_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 33,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnessbootsf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 34,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnessbootsf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 35,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnessbootsm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 36,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\madness\\madnessbootsm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\swordofjyggalag\\swordofjyggalag_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\swordofjyggalag\\swordofjyggalag_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "scripts\\ccbgssse025_nerveshplayerscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "scripts\\ccbgssse025_manholecoversfxscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "scripts\\qf_ccbgssse025_miscquest_gsd_02000c4b.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "scripts\\qf_ccbgssse025_miscquest_ner_050010bf.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "scripts\\ccbgssse025_nerveshquestscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "scripts\\qf_ccbgssse025_questb_02000913.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "scripts\\ccbgssse025_nerveshoffertrigscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "scripts\\tif_ccbgssse025_staadafrag.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "scripts\\tif_ccbgssse025_staadafrgf.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "scripts\\ccbgssse025_wikillscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "scripts\\qf_ccbgssse025_darkrevfrag.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "scripts\\ccbgssse025_rcintegrationscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "scripts\\ccbgssse025_bosshitscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "scripts\\qf_ccbgssse025_questa_02000912.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "scripts\\ccbgssse025_setstageonpickup.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "scripts\\ccbgssse025_wikillthugscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "scripts\\qf_ccbgssse025_rarecuriosint_050010c1.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "scripts\\qf_ccbgssse025_goldenrevwifrg.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "scripts\\qf_ccbgssse025_elytrapetacqu_050010c0.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "scripts\\qf_ccbgssse025_elytrapetacqu_050010c3.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "scripts\\ccbgssse025_fakepickupactscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "scripts\\ccbgssse025_tif__05030923.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 22,
+      "Path": "scripts\\ccbgssse025_tif__05030938.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 23,
+      "Path": "scripts\\ccbgssse025_tif__0503093a.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 24,
+      "Path": "scripts\\ccbgssse025_tif__05035a4a.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 25,
+      "Path": "scripts\\ccbgssse025_tif__05035a50.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 26,
+      "Path": "scripts\\ccbgssse025_tif__05035a51.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 27,
+      "Path": "scripts\\qf_ccbgssse025_goldenrevfrag.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 28,
+      "Path": "scripts\\ccbgssse025_elytracagescript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 29,
+      "Path": "scripts\\ccbgssse025_staadaquestscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 30,
+      "Path": "scripts\\qf_ccbgssse025_staadaquest_05198277.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 31,
+      "Path": "scripts\\ccbgssse025_tif__050b9581.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 32,
+      "Path": "scripts\\ccbgssse025_tif__050b9584.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 33,
+      "Path": "scripts\\ccbgssse025_tif__050b9590.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 34,
+      "Path": "scripts\\ccbgssse025_tif__050b9591.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 35,
+      "Path": "scripts\\tif_ccbgssse025_staadafrag0.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 36,
+      "Path": "scripts\\tif_ccbgssse025_staadafrag2.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 37,
+      "Path": "scripts\\tif_ccbgssse025_staadafrag3.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 38,
+      "Path": "scripts\\tif_ccbgssse025_staadafraga.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 39,
+      "Path": "scripts\\ccbgssse025_saintsseducersfx.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 40,
+      "Path": "scripts\\ccbgssse025_disableonresetafterdone.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 41,
+      "Path": "scripts\\ccbgssse025_bosscontrollerscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 42,
+      "Path": "scripts\\sse_qf_ccbgssse025_miscquest__05000c4d.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 43,
+      "Path": "scripts\\ccbgssse025_tif__02000981.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 44,
+      "Path": "scripts\\ccbgssse025_tif__02000984.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 45,
+      "Path": "scripts\\ccbgssse025_courierscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 46,
+      "Path": "scripts\\qf_ccbgssse025_darkrevwifrg.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 47,
+      "Path": "scripts\\ccbgssse025_harvestableactivator.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 48,
+      "Path": "scripts\\qf_ccbgssse025_postquestcour_050819b5.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 49,
+      "Path": "scripts\\qf_ccbgssse025_staadacourierfrag.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 50,
+      "Path": "scripts\\ccbgssse025_tif__051e9358.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 51,
+      "Path": "scripts\\ccbgssse025_unlockcraftingonread.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 52,
+      "Path": "scripts\\ccbgssse025_elytracollectitemscript.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 53,
+      "Path": "scripts\\ccbgssse025_ondeathdisabledelete.pex"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_dagger01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_dagger01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_arrow01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_arrow01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_quiver01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_quiver01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_battleaxe01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_battleaxe01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_scabbard01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_scabbard01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_warhammer01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_warhammer01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_claymore01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_claymore01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_scabbardsmall01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_scabbardsmall01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_bow01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_bow01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_longsword01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_longsword01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_warmace01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_warmace01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 22,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_waraxe01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 23,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaint_waraxe01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "strings\\ccbgssse025-advdsgs_russian.ilstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "strings\\ccbgssse025-advdsgs_russian.strings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "strings\\ccbgssse025-advdsgs_polish.dlstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "strings\\ccbgssse025-advdsgs_english.dlstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "strings\\ccbgssse025-advdsgs_japanese.dlstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "strings\\ccbgssse025-advdsgs_spanish.dlstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "strings\\ccbgssse025-advdsgs_polish.ilstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "strings\\ccbgssse025-advdsgs_english.ilstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "strings\\ccbgssse025-advdsgs_italian.dlstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "strings\\ccbgssse025-advdsgs_japanese.ilstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "strings\\ccbgssse025-advdsgs_polish.strings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "strings\\ccbgssse025-advdsgs_french.dlstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "strings\\ccbgssse025-advdsgs_english.strings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "strings\\ccbgssse025-advdsgs_spanish.ilstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "strings\\ccbgssse025-advdsgs_japanese.strings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "strings\\ccbgssse025-advdsgs_spanish.strings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "strings\\ccbgssse025-advdsgs_italian.ilstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "strings\\ccbgssse025-advdsgs_french.ilstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "strings\\ccbgssse025-advdsgs_italian.strings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "strings\\ccbgssse025-advdsgs_german.dlstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "strings\\ccbgssse025-advdsgs_french.strings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "strings\\ccbgssse025-advdsgs_chinese.dlstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 22,
+      "Path": "strings\\ccbgssse025-advdsgs_german.ilstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 23,
+      "Path": "strings\\ccbgssse025-advdsgs_german.strings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 24,
+      "Path": "strings\\ccbgssse025-advdsgs_chinese.ilstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 25,
+      "Path": "strings\\ccbgssse025-advdsgs_chinese.strings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 26,
+      "Path": "strings\\ccbgssse025-advdsgs_russian.dlstrings"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "sound\\fx\\npc\\elytra\\npc_elytra_dialogue_01.wav"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "sound\\fx\\npc\\elytra\\npc_elytra_dialogue_02.wav"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "sound\\fx\\npc\\elytra\\npc_elytra_dialogue_03.wav"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaintarrowprojectile.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\3rdpersongoldensaintsword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\3rdpersongoldensaintdagger.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\1stpersongoldensaintmace.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\1stpersongoldensaintgreatsword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\3rdpersongoldensaintmace.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\1stpersongoldensaintwarhammer.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\1stpersongoldensaintdagger.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaintarrow.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\3rdpersongoldensaintwaraxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\1stpersongoldensaintbattleaxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\goldensaintbowskinned.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\3rdpersongoldensaintgreatsword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\1stpersongoldensaintsword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\3rdpersongoldensaintwarhammer.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\1stpersongoldensaintwaraxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\goldensaint\\3rdpersongoldensaintbattleaxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\3rdpersonmadnessbattleaxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\1stpersonmadnessdagger01.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\3rdpersonmadnessmace.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\1stpersonmadnessgreatsword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\1stpersonmadnesssword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\madnessbowskinned.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\3rdpersonmadnesssword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\1stpersonmadnessmace.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\1stpersonmadnesswarhammer.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\3rdpersonmadnessdagger.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\1stpersonmadnessbattleaxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\madnessarrow.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\madnessarrowprojectile.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\3rdpersonmadnessgreatsword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\1stpersonmadnesswaraxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\3rdpersonmadnesswarhammer.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\madness\\3rdpersonmadnesswaraxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\corruptedspriggan\\corruptedsprigganheadmania_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\corruptedspriggan\\corruptedsprigganheadmania_g.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\corruptedspriggan\\corruptedsprigganheadmania_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\corruptedspriggan\\corruptedsprigganheaddementia_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\corruptedspriggan\\corruptedsprigganheaddementia_g.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\corruptedspriggan\\corruptedsprigganheaddementia_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\corruptedspriggan\\corruptedsprigganbodydementia_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\corruptedspriggan\\corruptedsprigganbodydementia_g.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\corruptedspriggan\\corruptedsprigganbodydementia_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\corruptedspriggan\\corruptedsprigganbodymania_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\corruptedspriggan\\corruptedsprigganbodymania_g.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\corruptedspriggan\\corruptedsprigganbodymania_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_waraxe01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_warmace01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_dagger01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_warhammer01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_battleaxe01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_battleaxe01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_battleaxe01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_bow01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_bow01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_bow01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_dagger01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_dagger01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_waraxe01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_waraxe01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_longsword01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_warhammer01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_longsword01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_longsword01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_longsword01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_claymore01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_bow01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_waraxe01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 22,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_arrow01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 23,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_arrow01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 24,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_arrow01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 25,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_arrow01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 26,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_warmace01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 27,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_warmace01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 28,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_battleaxe01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 29,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_dagger01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 30,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_claymore01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 31,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_warmace01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 32,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_claymore01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 33,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_claymore01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 34,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_warhammer01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 35,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\amber\\amber_warhammer01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\ambershield.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\1stpersonambercuirassf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\1stpersonambercuirassf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\1stpersonambercuirassm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\1stpersonambercuirassm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberhelmargf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberhelmargm.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberhelmorcf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberhelmorcm.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberhelmet_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberhelmkhajf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberhelmkhajm.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\ambercuirass_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\ambercuirassf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\ambercuirassf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\ambercuirassm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\ambercuirassm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\ambergauntlets_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\ambergauntletsf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\ambergauntletsf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\ambergauntletsm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\ambergauntletsm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 22,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberboots_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 23,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberbootsf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 24,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberbootsf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 25,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberbootsm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 26,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberbootsm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 27,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberhelmf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 28,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\amber\\amberhelmm.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\1stpersonamberbattleaxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\3rdpersonambermace.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\3rdpersonamberdagger.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\amberbowskinned.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\1stpersonambersword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\3rdpersonamberwarhammer.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\amberarrowprojectile.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\3rdpersonamberbattleaxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\1stpersonambermace.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\3rdpersonamberwaraxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\3rdpersonambersword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\1stpersonamberwaraxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\1stpersonambergreatsword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\1stpersonamberwarhammer.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\1stpersonamberdagger01.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\3rdpersonambergreatsword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\amber\\amberarrow.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\critters\\purplebutterflyinjar.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\critters\\maniabug.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "meshes\\creationclub\\bgssse025\\critters\\greenbutterflyhinjar.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "meshes\\creationclub\\bgssse025\\critters\\maniabuginjar.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\nerveshatter\\1stpersonnerveshatter.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\nerveshatter\\3rdpersonnerveshatter.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_waraxe01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_waraxe01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_battleaxe01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_battleaxe01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_dagger01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_dagger01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_arrow01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_arrow01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_bow01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_bow01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_quiver01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_quiver01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_warhammer01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_warhammer01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_warmace01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_warmace01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_longsword01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_longsword01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_scabbard01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_scabbard01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_claymore01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducer_claymore01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbodyf_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbodyf_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbodyf_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbodym_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbodym_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbodym_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbootsf_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbootsf_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbootsf_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbootsm_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbootsm_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbootsm_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaint_shield_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaint_shield_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaint_shield_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmetf_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmetf_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmetf_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmetm_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmetm_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmetm_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintglovesf_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 22,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintglovesf_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 23,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintglovesf_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 24,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintglovesm_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 25,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintglovesm_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 26,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintglovesm_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\actors\\corruptedspriggans\\character assets\\corruptedspriggan_dementia.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\actors\\corruptedspriggans\\character assets\\corruptedspriggan_mania.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\3rdpersondarkseducermace01.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\1stpersondarkseducermace.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\1stpersondarkseducerwarhammer.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\3rdpersondarkseducergreatsword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\1stpersondarkseducerwaraxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\1stpersondarkseducerbattleaxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\1stpersondarkseducersword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\3rdpersondarkseducerdagger.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\3rdpersondarkseducerwarhammer.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducerarrow.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\3rdpersondarkseducerbattleaxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducerbowskinned.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\darkseducerarrowprojectile.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\1stpersondarkseducergreatsword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\1stpersondarkseducerdagger.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\3rdpersondarkseducersword.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\darkseducer\\3rdpersondarkseducerwaraxe.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amuletsandrings\\ringofdisrobing.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\critters\\fxdaedric.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\critters\\fxfireflymania_g.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\critters\\fxbutterflypurple.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\creationclub\\bgssse025\\critters\\fxfireflymania.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\creationclub\\bgssse025\\critters\\fxbutterflygreen.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\nerveshatter\\nerveshatter01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\nerveshatter\\nerveshatter01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\weapons\\nerveshatter\\nerveshatter01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\ambershield01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberbootsm_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberbootsm_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\ambershield01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberhelmetm_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberhelmetm_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberbodym_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberbodym_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberglovesm_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberglovesm_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\ambershield01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\ambershield01_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberglovesm_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberglovesm_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberbootsm_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberbootsm_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberbodym_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberbodym_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberhelmetm_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\amber\\amberhelmetm_em.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\ingotamber01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\amberoddity01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\madnessore01_g.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\madnessore01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\amber_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\sheogorathbust01_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\sheogorathbust01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\ingotamber01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\amber_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\amber.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\amberoddity01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\madnessore01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\ingotmadness01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\jyggalagrootcluster01_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\jyggalagrootcluster01.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "textures\\creationclub\\bgssse025\\clutter\\amberoddity01_bl.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\clutter\\amberoddity01.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\clutter\\refinedamber01.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "meshes\\creationclub\\bgssse025\\clutter\\amber01.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "meshes\\creationclub\\bgssse025\\clutter\\sheogorathbust01.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "meshes\\creationclub\\bgssse025\\clutter\\madnessore01.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "meshes\\creationclub\\bgssse025\\clutter\\jyggalagrootcluster01.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "meshes\\creationclub\\bgssse025\\clutter\\madnessingot01.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\elytra\\elytradementia_g.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\elytra\\elytra_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\elytra\\elytradementia.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\elytra\\elytramania_g.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\creationclub\\bgssse025\\actors\\elytra\\elytramania.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\00000880.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\00000999.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\0000099a.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\0000099b.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\0000099c.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\0000099d.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\0000099e.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\0000099f.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009a0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009a1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009a2.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009a3.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009a4.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009a5.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009a6.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009a7.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009ae.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009b0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009b5.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009b6.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009b7.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009b8.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 22,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009b9.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 23,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009ba.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 24,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009bb.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 25,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009bc.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 26,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009bd.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 27,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009be.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 28,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009bf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 29,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009c0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 30,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009c1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 31,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009c2.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 32,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009c3.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 33,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009c4.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 34,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009c5.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 35,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009c6.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 36,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009c7.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 37,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009c8.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 38,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009c9.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 39,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009ca.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 40,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009cb.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 41,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\000009cd.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 42,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\00000a06.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 43,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\00000a07.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 44,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\00000a84.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 45,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\00000cbf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 46,
+      "Path": "meshes\\actors\\character\\facegendata\\facegeom\\ccbgssse025-advdsgs.esm\\00198273.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\swordofjyggalag\\1stpersonswordofjyggalag.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\swordofjyggalag\\3rdpersonswordofjyggalag.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "meshes\\creationclub\\bgssse025\\weapons\\swordofjyggalag\\swordofjyggalagstatic01.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\actors\\elytra\\character assets\\elytra_nymph_body.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\actors\\elytra\\character assets\\elytra_nymph_body_pet.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintshield.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintboots_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbootsf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbootsf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbootsm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintbootsm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmetf_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmetm_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintgauntlets_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintgauntletsf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintgauntletsf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintgauntletsm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintgauntletsm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmm.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\1stpersongoldensaintcuirassf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\1stpersongoldensaintcuirassf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\1stpersongoldensaintcuirassm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\1stpersongoldensaintcuirassm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmargf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmargm.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmorcf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 22,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmorcm.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 23,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintcuirassf_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 24,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintcuirassm_go.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 25,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmkhajf.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 26,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensainthelmkhajm.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 27,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintcuirassf_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 28,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintcuirassf_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 29,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintcuirassm_0.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 30,
+      "Path": "meshes\\creationclub\\bgssse025\\armor\\goldensaint\\goldensaintcuirassm_1.nif"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerunderwearf_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducer_shield_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducer_shield_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmetf_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmetf_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmetf_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmetm_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmetm_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerhelmetm_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbodyf_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbodyf_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbodyf_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbodym_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbodym_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbodym_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerglovesm_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerglovesm_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerglovesm_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbootsm_d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbootsm_m.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "textures\\creationclub\\bgssse025\\armor\\darkseducer\\darkseducerbootsm_n.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 0,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\00000880.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 1,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\00000999.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 2,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\0000099a.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 3,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\0000099b.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 4,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\0000099c.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 5,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\0000099d.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 6,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\0000099e.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 7,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\0000099f.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 8,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009a0.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 9,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009a1.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 10,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009a2.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 11,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009a3.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 12,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009a4.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 13,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009a5.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 14,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009a6.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 15,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009a7.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 16,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009ae.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 17,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009b0.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 18,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009b5.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 19,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009b6.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 20,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009b7.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 21,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009b8.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 22,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009b9.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 23,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009ba.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 24,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009bb.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 25,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009bc.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 26,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009bd.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 27,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009be.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 28,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009bf.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 29,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009c0.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 30,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009c1.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 31,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009c2.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 32,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009c3.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 33,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009c4.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 34,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009c5.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 35,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009c6.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 36,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009c7.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 37,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009c8.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 38,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009c9.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 39,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009ca.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 40,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009cb.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 41,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\000009cd.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 42,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\00000a06.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 43,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\00000a07.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 44,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\00000a84.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 45,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\00000cbf.dds"
+    },
+    {
+      "$type": "BSAFileState, Compression.BSA",
+      "FlipCompression": false,
+      "Index": 46,
+      "Path": "textures\\actors\\character\\facegendata\\facetint\\ccbgssse025-advdsgs.esm\\00198273.dds"
+    }
+  ],
+  "Hash": "BlO1rc+2UDY=",
+  "Size": 0,
+  "State": {
+    "$type": "BSAState, Compression.BSA",
+    "ArchiveFlags": 131,
+    "FileFlags": 1544814592,
+    "Magic": "BSA\u0000",
+    "Version": 105
+  },
+  "TempID": "a2ce98ec-1e7c-48db-820f-29ec59d3af4a",
+  "To": "mods\\Creation Club - Saints & Seducers\\ccBGSSSE025-AdvDSGS.bsa"
+}

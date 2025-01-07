@@ -2,10 +2,7 @@ use {
     super::{count_progress_style, try_optimize_memory_mapping, PathReadWrite},
     crate::{
         modlist_json::{
-            directive::create_bsa_directive::{
-                ba2::{BA2DX10Entry, BA2FileEntry, DirectiveStateData, FileState},
-                Ba2,
-            },
+            directive::create_bsa_directive::ba2::{BA2DX10Entry, BA2FileEntry, Ba2, DirectiveStateData, FileState},
             type_guard::WithTypeGuard,
             BA2DX10EntryChunk,
         },

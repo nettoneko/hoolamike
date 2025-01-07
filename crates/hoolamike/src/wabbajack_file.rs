@@ -29,8 +29,13 @@ impl WabbajackFile {
                         .get_handle(Path::new(MODLIST_JSON_FILENAME))
                         .context("looking up file by name")
                         .and_then(|handle| {
-                            serde_json::from_reader::<_, crate::modlist_json::Modlist>(&mut tracing::Span::current().wrap_read(0, BufReader::new(handle)))
-                                .context("reading archive contents")
+                            serde_json::from_reader::<_, serde_json::Value>(&mut tracing::Span::current().wrap_read(0, BufReader::new(handle)))
+                                .context("reading archive json contents")
+                        })
+                        .and_then(|json| {
+                            serde_json::to_string_pretty(&json)
+                                .context("serializing json")
+                                .and_then(|output| serde_json::from_str(&output).context("output is a valid json but not a valid modlist file"))
                         })
                         .with_context(|| format!("reading [{MODLIST_JSON_FILENAME}]"))
                         .map(|modlist| Self {

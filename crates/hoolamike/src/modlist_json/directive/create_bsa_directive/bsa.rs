@@ -1,5 +1,12 @@
 use {super::*, crate::serde_type_guard, type_guard::WithTypeGuard};
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[serde(untagged)]
+pub enum Either<L, R> {
+    Left(L),
+    Right(R),
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
@@ -23,7 +30,7 @@ pub type FileState = WithTypeGuard<FileStateData, BSAFileStateTypeGuard>;
 #[serde(deny_unknown_fields)]
 pub struct DirectiveStateData {
     pub archive_flags: u32,
-    pub file_flags: u16,
+    pub file_flags: Either<u16, u32>,
     /// header_magic: String
     /// Description: Magic number or signature in the file header.
     /// Usage: Verify file format before processing.
@@ -36,6 +43,7 @@ pub struct DirectiveStateData {
 
 serde_type_guard!(BSADirectiveStateTypeGuard, "BSAState, Compression.BSA");
 pub type DirectiveState = WithTypeGuard<DirectiveStateData, BSADirectiveStateTypeGuard>;
+pub type Bsa = create_bsa_directive::CreateBSADirectiveKind<bsa::DirectiveState, bsa::FileState>;
 
 test_example!(
     r#"
@@ -50,3 +58,4 @@ test_example!(
     test_directive_state_1,
     DirectiveState
 );
+test_example!(include_str!("./bsa-example-1.json"), test_bsa_example_1, WithTypeGuard<Bsa, super::CreateBSADirectiveTypeGuard>);

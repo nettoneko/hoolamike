@@ -6,7 +6,7 @@ use {
 };
 
 macro_rules! test_example {
-    ($input:literal, $name:ident, $ty:ty) => {
+    ($input:expr, $name:ident, $ty:ty) => {
         #[test]
         fn $name() -> anyhow::Result<()> {
             use anyhow::Context;
@@ -141,6 +141,8 @@ pub enum State {
     Nexus(NexusState),
     #[serde(rename = "GameFileSourceDownloader, Wabbajack.Lib")]
     GameFileSource(GameFileSourceState),
+    #[serde(rename = "MegaDownloader, Wabbajack.Lib")]
+    Mega(MegaState),
     #[serde(rename = "GoogleDriveDownloader, Wabbajack.Lib")]
     GoogleDrive(GoogleDriveState),
     #[serde(rename = "MediaFireDownloader+State, Wabbajack.Lib")]
@@ -194,6 +196,13 @@ pub struct GoogleDriveState {
 #[serde(rename_all = "PascalCase")]
 #[serde(deny_unknown_fields)]
 pub struct MediaFireState {
+    pub url: HumanUrl,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "PascalCase")]
+#[serde(deny_unknown_fields)]
+pub struct MegaState {
     pub url: HumanUrl,
 }
 

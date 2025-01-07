@@ -138,3 +138,4 @@ pub struct DirectiveStateData {
 }
 
 pub type DirectiveState = WithTypeGuard<DirectiveStateData, BA2DirectiveStateGuard>;
+pub type Ba2 = create_bsa_directive::CreateBSADirectiveKind<ba2::DirectiveState, ba2::FileState>;

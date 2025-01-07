@@ -50,6 +50,7 @@
                 xdo
                 just
                 jless
+                jq
 
                 (rust-bin
                   .selectLatestNightlyWith (toolchain:

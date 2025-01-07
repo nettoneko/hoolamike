@@ -3,6 +3,7 @@ use std::{
     io::{self, BufReader, Read, Seek, SeekFrom},
 };
 
+#[allow(dead_code)]
 pub(crate) fn is_zip_lzma_method_14(file: &File) -> io::Result<bool> {
     let mut reader = BufReader::new(file);
 

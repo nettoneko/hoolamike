@@ -2,10 +2,7 @@ use {
     super::{count_progress_style, PathReadWrite},
     crate::{
         modlist_json::{
-            directive::create_bsa_directive::{
-                bsa::{DirectiveStateData, FileStateData},
-                Bsa,
-            },
+            directive::create_bsa_directive::bsa::{self, Bsa, DirectiveStateData, FileStateData},
             type_guard::WithTypeGuard,
         },
         utils::MaybeWindowsPath,
@@ -150,7 +147,16 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
         other => anyhow::bail!("unsuppored version: {other}"),
     };
     let archive_flags = ArchiveFlags::from_bits(archive_flags).context("invalid flags: {archive_flags:b}")?;
-    let archive_types = ArchiveTypes::from_bits(file_flags).context("invalid flags: {file_flags:b}")?;
+    let archive_types = {
+        let file_flags = match file_flags {
+            bsa::Either::Left(normal) => normal,
+            bsa::Either::Right(weird) => {
+                tracing::warn!("encountered a weird file_flags: should be 16 bit but got 32 bit. casting and hoping for the best ({weird:b})");
+                weird as u16
+            }
+        };
+        ArchiveTypes::from_bits(file_flags).context("invalid flags: {file_flags:b}")?
+    };
 
     let temp_id_dir = temp_bsa_dir.join(temp_id);
     let reading_bsa_entries = info_span!("creating_bsa_entries", count=%file_states.len())

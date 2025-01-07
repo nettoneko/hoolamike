@@ -15,7 +15,7 @@ use {
             WithArchiveDescriptor,
         },
         error::{MultiErrorCollectExt, TotalResult},
-        modlist_json::{Archive, GoogleDriveState, HttpState, HumanUrl, ManualState, MediaFireState, NexusGameName, NexusState, State},
+        modlist_json::{Archive, GoogleDriveState, HttpState, HumanUrl, ManualState, MediaFireState, MegaState, NexusGameName, NexusState, State},
         progress_bars_v2::IndicatifWrapIoExt,
     },
     anyhow::Result,
@@ -288,6 +288,9 @@ impl Synchronizers {
                 })
                 .map(SyncTask::from),
             State::Manual(ManualState { prompt, url }) => Err(anyhow::anyhow!("Manual action is required:\n\nURL: {url}\n{prompt}")),
+            State::Mega(MegaState { url }) => Err(anyhow::anyhow!(
+                "Manual action is required:\n\nURL: {url}\nMega is not supported (yet?), please download the file manually"
+            )),
             State::MediaFire(MediaFireState { url }) => {
                 // it cannot be done
                 MediaFireDownloader::download(url.clone())
