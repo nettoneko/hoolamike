@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
+- *(modlist-file)* Added more definitions (Mega downloader and BSAs with 32 bit FileFlags - which is very weird and should be investigated)
+- *(modlist-file)* Load modlist file in one go instead of buffering it - faster
+
+## [0.9.2] - 2025-01-06
+
+### 🚀 Features
+
 - *(deps)* Remove openssl dependency to enable working on steam deck
 
 ## [0.9.1] - 2025-01-06
