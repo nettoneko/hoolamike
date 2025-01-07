@@ -1,7 +1,8 @@
 use {
     super::*,
     crate::{modlist_json::directive::InlineFileDirective, progress_bars_v2::IndicatifWrapIoExt, utils::spawn_rayon},
-    std::{io::Write, path::Path},
+    std::io::Write,
+    wabbajack_file_handle::WabbajackFileHandle,
 };
 
 #[derive(Clone, Debug)]
@@ -28,12 +29,11 @@ impl InlineFileHandler {
 
             let archive = wabbajack_file;
             archive
-                .get_archive()
-                .and_then(|mut archive| archive.get_handle(Path::new(&source_data_id.as_hyphenated().to_string())))
-                .and_then(|file| {
+                .get_source_data(source_data_id)
+                .and_then(|mut file| {
                     let mut writer = std::io::BufWriter::new(output_file);
                     std::io::copy(
-                        &mut tracing::Span::current().wrap_read(size, file),
+                        &mut tracing::Span::current().wrap_read(size, &mut file),
                         // WARN: stuff that's inside modlist.wabbajack/modlist(.json) is incorrect
                         // .and_validate_size(size)
                         // .and_validate_hash(hash.pipe(to_u64_from_base_64).expect("come on")),

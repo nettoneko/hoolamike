@@ -1,5 +1,5 @@
 use {
-    crate::{compression::ProcessArchive, install_modlist::directives::WabbajackFileHandle, utils::PathReadWrite},
+    crate::{compression::ProcessArchive, install_modlist::directives::wabbajack_file_handle::WabbajackFileHandle, utils::PathReadWrite},
     anyhow::{Context, Result},
     std::{
         io::Read,
@@ -46,7 +46,7 @@ impl WabbajackFile {
                             wabbajack_entries: entries,
                             modlist,
                         })
-                        .map(|data| (WabbajackFileHandle::from_archive(at_path), data))
+                        .and_then(|data| WabbajackFileHandle::from_archive(at_path).map(|archive| (archive, data)))
                 })
             })
     }

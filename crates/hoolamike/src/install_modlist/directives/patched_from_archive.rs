@@ -12,6 +12,7 @@ use {
     queued_archive_task::QueuedArchiveService,
     std::io::{Read, Seek, Write},
     tracing::Instrument,
+    wabbajack_file_handle::WabbajackFileHandle,
 };
 
 #[derive(Clone, derivative::Derivative)]
@@ -78,8 +79,7 @@ impl PatchedFromArchiveHandler {
                 .map(|_| ())
             }
             let delta_file = wabbajack_file
-                .get_archive()
-                .and_then(|mut archive| archive.get_handle(Path::new(&patch_id.hyphenated().to_string())))
+                .get_source_data(patch_id)
                 .with_context(|| format!("patch {patch_id:?} does not exist"))?;
 
             source_file

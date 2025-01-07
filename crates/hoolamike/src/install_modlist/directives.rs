@@ -38,6 +38,7 @@ use {
     tempfile::TempPath,
     tracing::{info_span, instrument, Instrument},
     tracing_indicatif::span_ext::IndicatifSpanExt,
+    wabbajack_file_handle::WabbajackFileHandle,
 };
 
 pub(crate) fn create_file_all(path: &Path) -> Result<std::fs::File> {
@@ -61,24 +62,7 @@ use crate::modlist_json::Directive;
 
 // pub type WabbajackFileHandle = Arc<Mutex<crate::compression::compress_tools::ArchiveHandle>>;
 
-#[derive(Debug, Clone)]
-pub struct WabbajackFileHandle {
-    wabbajack_file_path: Arc<PathBuf>,
-}
-
-impl WabbajackFileHandle {
-    pub(crate) fn from_archive(archive: PathBuf) -> Self {
-        Self {
-            wabbajack_file_path: Arc::new(archive),
-        }
-    }
-    pub(crate) fn get_archive(&self) -> Result<crate::compression::zip::ZipArchive> {
-        self.wabbajack_file_path
-            .open_file_read()
-            .and_then(|(at_path, _file)| crate::compression::zip::ZipArchive::new(&at_path).with_context(|| format!("opening archive at path [{at_path:#?}]")))
-            .context("opening wabbajack file as archive")
-    }
-}
+pub mod wabbajack_file_handle;
 
 pub struct DirectivesHandler {
     pub config: DirectivesHandlerConfig,

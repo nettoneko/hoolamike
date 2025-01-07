@@ -7,6 +7,7 @@ use {
     },
     std::io::Read,
     tracing::instrument,
+    wabbajack_file_handle::WabbajackFileHandle,
 };
 
 #[allow(dead_code)]
@@ -124,8 +125,7 @@ impl RemappedInlineFileHandler {
         } = self;
         spawn_rayon(move || {
             wabbajack_file
-                .get_archive()
-                .and_then(|mut archive| archive.get_handle(Path::new(&source_data_id.hyphenated().to_string())))
+                .get_source_data(source_data_id)
                 .context("reading the file for remapping")
                 .and_then(|mut handle| {
                     String::new().pipe(|mut out| {
