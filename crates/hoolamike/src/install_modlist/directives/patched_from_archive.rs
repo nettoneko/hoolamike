@@ -70,8 +70,13 @@ impl PatchedFromArchiveHandler {
                 .and_then(|_| writer.flush().context("flushing"))
                 .map(|_| ())
             }
-            let delta_file = wabbajack_file
+            let (_guard, delta_file) = wabbajack_file
                 .get_source_data(patch_id)
+                .and_then(|source_data| {
+                    source_data
+                        .open_file_read()
+                        .map(|(_, file)| (source_data, file))
+                })
                 .with_context(|| format!("patch {patch_id:?} does not exist"))?;
 
             source_file

@@ -11,6 +11,8 @@ use {
         path::{Path, PathBuf},
         sync::Arc,
     },
+    tap::prelude::*,
+    tempfile::TempPath,
     tracing::instrument,
 };
 
@@ -19,12 +21,12 @@ use {
 pub struct WabbajackFileHandle {
     wabbajack_file_path: Arc<PathBuf>,
     #[derivative(Debug = "ignore")]
-    preloaded: Arc<Mutex<BTreeMap<PathBuf, ArchiveFileHandle>>>,
+    preloaded: Arc<Mutex<BTreeMap<PathBuf, TempPath>>>,
 }
 
 impl WabbajackFileHandle {
     #[instrument]
-    pub fn get_source_data(&self, source_data_id: uuid::Uuid) -> Result<ArchiveFileHandle> {
+    pub fn get_source_data(&self, source_data_id: uuid::Uuid) -> Result<TempPath> {
         let mut preloaded = self.preloaded.lock();
         preloaded
             .remove(Path::new(&source_data_id.as_hyphenated().to_string()))
@@ -50,7 +52,17 @@ impl WabbajackFileHandle {
                             .map(|chunk| {
                                 ZipArchive::new(&archive_path)
                                     .with_context(|| format!("opening archive at path [{archive_path:#?}]"))
-                                    .and_then(|mut archive| archive.get_many_handles(chunk))
+                                    .and_then(|mut archive| {
+                                        archive.get_many_handles(chunk).map(|handles| {
+                                            handles.into_iter().map(|(path, handle)| {
+                                                (match handle {
+                                                    ArchiveFileHandle::Zip(named_temp_file) => named_temp_file.into_temp_path(),
+                                                    _ => panic!("come on"),
+                                                })
+                                                .pipe(|temp_path| (path, temp_path))
+                                            })
+                                        })
+                                    })
                             })
                             .collect_vec_list()
                             .into_iter()

@@ -30,7 +30,12 @@ impl InlineFileHandler {
             let archive = wabbajack_file;
             archive
                 .get_source_data(source_data_id)
-                .and_then(|mut file| {
+                .and_then(|source_data| {
+                    source_data
+                        .open_file_read()
+                        .map(|(_, file)| (source_data, file))
+                })
+                .and_then(|(_guard, mut file)| {
                     let mut writer = std::io::BufWriter::new(output_file);
                     std::io::copy(
                         &mut tracing::Span::current().wrap_read(size, &mut file),

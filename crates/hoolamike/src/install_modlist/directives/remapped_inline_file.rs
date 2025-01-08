@@ -5,7 +5,7 @@ use {
         progress_bars_v2::IndicatifWrapIoExt,
         utils::{spawn_rayon, PathReadWrite},
     },
-    std::io::Read,
+    std::io::{Read, Seek},
     tracing::instrument,
     wabbajack_file_handle::WabbajackFileHandle,
 };
@@ -126,11 +126,16 @@ impl RemappedInlineFileHandler {
         spawn_rayon(move || {
             wabbajack_file
                 .get_source_data(source_data_id)
+                .and_then(|source_data| {
+                    source_data
+                        .open_file_read()
+                        .map(|(_, file)| (source_data, file))
+                })
                 .context("reading the file for remapping")
-                .and_then(|mut handle| {
+                .and_then(|(_guard, mut handle)| {
                     String::new().pipe(|mut out| {
                         tracing::Span::current()
-                            .wrap_read(handle.size().context("reading file size ")?, handle)
+                            .wrap_read(handle.stream_len().context("reading file size ")?, handle)
                             .read_to_string(&mut out)
                             .context("extracting file for remapping")
                             .map(|_| out)
