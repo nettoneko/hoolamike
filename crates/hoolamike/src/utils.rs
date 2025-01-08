@@ -3,7 +3,7 @@ use {
     futures::FutureExt,
     itertools::Itertools,
     serde::{Deserialize, Serialize},
-    std::{convert::identity, future::Future, path::PathBuf, sync::Arc},
+    std::{convert::identity, future::Future, iter::repeat, path::PathBuf, sync::Arc},
     tap::prelude::*,
     tracing::info_span,
 };
@@ -140,4 +140,23 @@ where
         })
     });
     rx.map(|res| res.context("task crashed?").and_then(identity))
+}
+
+pub fn chunk_while<T>(input: Vec<T>, mut chunk_while: impl FnMut(&[T]) -> bool) -> Vec<Vec<T>> {
+    let mut buf = vec![vec![]];
+    for element in input {
+        if chunk_while(buf.last().unwrap().as_slice()) {
+            buf.push(vec![]);
+        }
+        buf.last_mut().unwrap().push(element);
+    }
+    buf
+}
+
+#[test]
+fn test_chunk_while() {
+    assert_eq!(
+        chunk_while(repeat(1u8).take(6).collect(), |chunk| chunk.len() == 2),
+        vec![vec![1u8, 1], vec![1u8, 1], vec![1u8, 1]]
+    );
 }

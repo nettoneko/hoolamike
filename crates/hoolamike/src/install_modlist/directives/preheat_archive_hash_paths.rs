@@ -25,9 +25,19 @@ use {
 
 type PreheatedArchiveHashPathsInner = BTreeMap<NonEmpty<PathBuf>, Arc<SourceKind>>;
 
-pub struct PreheatedArchiveHashPaths(pub PreheatedArchiveHashPathsInner);
+pub struct PreheatedArchiveHashPaths(PreheatedArchiveHashPathsInner);
 
 impl PreheatedArchiveHashPaths {
+    pub fn get_archive(&self, path: NonEmpty<PathBuf>) -> Result<Arc<SourceKind>> {
+        match path.len() {
+            1 => Ok(Arc::new(SourceKind::JustPath(path.head))),
+            _ => self
+                .0
+                .get(&path)
+                .cloned()
+                .with_context(|| format!("{path:?} not found in [{:#?}]", self.0.keys().collect_vec())),
+        }
+    }
     #[tracing::instrument(skip(bottom_level_paths), fields(count=%bottom_level_paths.len()), level = "trace")]
     pub fn preheat_archive_hash_paths(bottom_level_paths: Vec<NonEmpty<PathBuf>>) -> Result<Self> {
         fn ancestors(path: NonEmpty<PathBuf>) -> impl Iterator<Item = (NonEmpty<PathBuf>, PathBuf)> {

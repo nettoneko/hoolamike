@@ -2,14 +2,13 @@ use {
     super::*,
     crate::{
         compression::forward_only_seek::ForwardOnlySeek,
-        downloaders::helpers::FutureAnyhowExt,
         install_modlist::download_cache::to_u64_from_base_64,
         modlist_json::directive::PatchedFromArchiveDirective,
         progress_bars_v2::IndicatifWrapIoExt,
         read_wrappers::ReadExt,
         utils::spawn_rayon,
     },
-    queued_archive_task::QueuedArchiveService,
+    preheat_archive_hash_paths::PreheatedArchiveHashPaths,
     std::io::{Read, Seek, Write},
     tracing::Instrument,
     wabbajack_file_handle::WabbajackFileHandle,
@@ -21,13 +20,11 @@ pub struct PatchedFromArchiveHandler {
     #[derivative(Debug = "ignore")]
     pub wabbajack_file: WabbajackFileHandle,
     pub output_directory: PathBuf,
-    #[derivative(Debug = "ignore")]
-    pub archive_extraction_queue: Arc<QueuedArchiveService>,
     pub download_summary: DownloadSummary,
 }
 
 impl PatchedFromArchiveHandler {
-    #[tracing::instrument(skip(self), level = "INFO")]
+    #[tracing::instrument(skip(self, preheated), level = "INFO")]
     pub async fn handle(
         self,
         PatchedFromArchiveDirective {
@@ -38,17 +35,12 @@ impl PatchedFromArchiveHandler {
             from_hash: _,
             patch_id,
         }: PatchedFromArchiveDirective,
+        preheated: Arc<PreheatedArchiveHashPaths>,
     ) -> Result<u64> {
         let source_file = self
             .download_summary
             .resolve_archive_path(&archive_hash_path)
-            .pipe(ready)
-            .and_then(|path| {
-                self.archive_extraction_queue
-                    .get_archive(path)
-                    .map_context("awaiting for archive from queue")
-            })
-            .await
+            .and_then(|path| preheated.get_archive(path))
             .with_context(|| format!("reading archive for [{archive_hash_path:?}]"))?;
 
         let output_path = self.output_directory.join(to.into_path());

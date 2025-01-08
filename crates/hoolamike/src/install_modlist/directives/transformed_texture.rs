@@ -1,12 +1,11 @@
 use {
     super::*,
     crate::{
-        downloaders::helpers::FutureAnyhowExt,
         modlist_json::{directive::TransformedTextureDirective, ImageState},
         progress_bars_v2::IndicatifWrapIoExt,
         utils::spawn_rayon,
     },
-    queued_archive_task::QueuedArchiveService,
+    preheat_archive_hash_paths::PreheatedArchiveHashPaths,
     std::io::{Read, Write},
 };
 
@@ -14,8 +13,6 @@ use {
 #[derivative(Debug)]
 pub struct TransformedTextureHandler {
     pub output_directory: PathBuf,
-    #[derivative(Debug = "ignore")]
-    pub archive_extraction_queue: Arc<QueuedArchiveService>,
     #[derivative(Debug = "ignore")]
     pub download_summary: DownloadSummary,
 }
@@ -36,7 +33,7 @@ mod dds_recompression;
 mod dds_recompression_v2;
 
 impl TransformedTextureHandler {
-    #[instrument(skip(self))]
+    #[instrument(skip(self, preheated))]
     pub async fn handle(
         self,
         TransformedTextureDirective {
@@ -53,6 +50,7 @@ impl TransformedTextureHandler {
             to,
             archive_hash_path,
         }: TransformedTextureDirective,
+        preheated: Arc<PreheatedArchiveHashPaths>,
     ) -> Result<u64> {
         let handle = tracing::Span::current();
         // let _image_dds_format = supported_image_format(format).context("checking for format support")?;
@@ -60,13 +58,7 @@ impl TransformedTextureHandler {
         let source_file = self
             .download_summary
             .resolve_archive_path(&archive_hash_path)
-            .pipe(ready)
-            .and_then(|path| {
-                self.archive_extraction_queue
-                    .get_archive(path)
-                    .map_context("awaiting for archive from queue")
-            })
-            .await
+            .and_then(|path| preheated.get_archive(path))
             .with_context(|| format!("reading archive for [{archive_hash_path:?}]"))?;
 
         spawn_rayon(move || -> Result<_> {

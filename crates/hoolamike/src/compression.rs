@@ -197,8 +197,14 @@ impl ArchiveHandle<'_> {
                         .with_context(|| format!("trying because: {reason:?}"))
                         .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
                 }),
-
-            Some("zip" | "7z") => Err(())
+            Some("7z") => Err(()).or_else(|reason| {
+                WRAPPED_7ZIP
+                    .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                    .and_then(&mut with_guessed)
+                    .with_context(|| format!("trying because: {reason:?}"))
+                    .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
+            }),
+            Some("zip") => Err(())
                 .or_else(|_| {
                     self::zip::ZipArchive::new(path)
                         .map(Self::Zip)

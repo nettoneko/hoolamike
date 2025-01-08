@@ -1,14 +1,13 @@
 use {
     super::*,
     crate::{
-        downloaders::helpers::FutureAnyhowExt,
         install_modlist::download_cache::{to_u64_from_base_64, validate_file_size, validate_hash},
         modlist_json::directive::FromArchiveDirective,
         progress_bars_v2::IndicatifWrapIoExt,
         read_wrappers::ReadExt,
         utils::spawn_rayon,
     },
-    queued_archive_task::QueuedArchiveService,
+    preheat_archive_hash_paths::PreheatedArchiveHashPaths,
     std::{
         io::{Read, Write},
         path::Path,
@@ -20,8 +19,6 @@ use {
 #[derivative(Debug)]
 pub struct FromArchiveHandler {
     pub output_directory: PathBuf,
-    #[derivative(Debug = "ignore")]
-    pub archive_extraction_queue: Arc<QueuedArchiveService>,
     #[derivative(Debug = "ignore")]
     pub download_summary: DownloadSummary,
 }
@@ -49,7 +46,7 @@ pub async fn validate_hash_with_overrides(path: PathBuf, hash: String, size: u64
 }
 
 impl FromArchiveHandler {
-    #[tracing::instrument(skip(self), level = "INFO")]
+    #[tracing::instrument(skip(self, preheated), level = "INFO")]
     pub async fn handle(
         self,
         FromArchiveDirective {
@@ -58,17 +55,12 @@ impl FromArchiveHandler {
             to,
             archive_hash_path,
         }: FromArchiveDirective,
+        preheated: Arc<PreheatedArchiveHashPaths>,
     ) -> Result<u64> {
         let source_file = self
             .download_summary
             .resolve_archive_path(&archive_hash_path)
-            .pipe(ready)
-            .and_then(|path| {
-                self.archive_extraction_queue
-                    .get_archive(path)
-                    .map_context("awaiting for archive from queue")
-            })
-            .await
+            .and_then(|path| preheated.get_archive(path))
             .with_context(|| format!("reading archive for [{archive_hash_path:?}]"))?;
         let output_path = self.output_directory.join(to.into_path());
 
