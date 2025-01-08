@@ -43,7 +43,7 @@ impl WabbajackFileHandle {
                     .context("reading archive contents")
                     .and_then(|paths| {
                         drop(archive);
-                        let chunk_size = paths.len().div(num_cpus::get()).max(1);
+                        let chunk_size = paths.len().div(num_cpus::get()).clamp(1, 64);
                         paths
                             .iter()
                             .map(|p| p.as_path())
