@@ -1874,6 +1874,7 @@ dependencies = [
 [[package]]
 name = "indicatif"
 version = "0.17.9"
+source = "git+https://github.com/Niedzwiedzw/indicatif?branch=main#d98924248a8ae5e0739ff1ae27c5840840419238"
 dependencies = [
  "console",
  "number_prefix",
@@ -2692,7 +2693,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

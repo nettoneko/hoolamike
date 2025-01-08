@@ -84,4 +84,4 @@ xxhash-rust = { version = "0.8.12", features = ["xxh64", "std"] }
 zip = { version = "2.2.1", features = ["lzma-rs", "flate2"] }
 
 [patch.crates-io]
-indicatif = { path = "/home/niedzwiedz/Programming/indicatif" }
+indicatif = { git = "https://github.com/Niedzwiedzw/indicatif", branch = "main" }
