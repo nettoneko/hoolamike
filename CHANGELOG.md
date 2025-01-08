@@ -6,6 +6,25 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
+- *(modlist-file)* Modlist file is preloaded at start, sacrificing some disk space but speeding up applying binary patches
+- *(archives)* Preheat archives in chunks of 30GB so that no more than (hopefully) that is taken up by hoolamike while installing
+- *(archives)* Preheat archives in chunks, but also prioritize things other than 7z which is absurdly slow
+
+### 🐛 Bug Fixes
+
+- Point to hosted version of indicatif fork
+- Drop file handles for preextracted wabbajack files
+- Limit max open files when extracting wabbajack file
+
+### 🚜 Refactor
+
+- Refactor archive preloading logic
+- Refactor nested archive directives
+
+## [0.10.0] - 2025-01-07
+
+### 🚀 Features
+
 - *(modlist-file)* Added more definitions (Mega downloader and BSAs with 32 bit FileFlags - which is very weird and should be investigated)
 - *(modlist-file)* Load modlist file in one go instead of buffering it - faster
 
@@ -17,12 +36,6 @@ All notable changes to this project will be documented in this file.
 
 ## [0.9.1] - 2025-01-06
 
-### 🐛 Bug Fixes
-
-- *(installed)* ModOrganizer.ini and other remapped files will no longer be places at paths relative to CWD
-
-## [0.9.0] - 2025-01-06
-
 ### 🚀 Features
 
 - *(archives)* More readable error messages for archive extraction failures
@@ -33,6 +46,7 @@ All notable changes to this project will be documented in this file.
 - Detect lzma method 14 archives to offload them to 7z binary
 - *(install)* Fix paths dropping to early
 - *(archives)* Check windows encoding and normalize paths when using CompressTools
+- *(installed)* ModOrganizer.ini and other remapped files will no longer be places at paths relative to CWD
 
 ## [0.8.11] - 2025-01-05
 
