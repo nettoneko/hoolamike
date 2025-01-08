@@ -433,7 +433,7 @@ impl DirectivesHandler {
                             )
                             .collect_vec()
                             .pipe(|directives| {
-                                const DIRECTIVE_CHUNK_SIZE: u64 = 32 * 1024 * 1024 * 1024;
+                                const DIRECTIVE_CHUNK_SIZE: u64 = 6 * 1024 * 1024 * 1024;
                                 let download_summary = self.download_summary.clone();
                                 info_span!("handling nested archive directives", total_size=%directives.len(), estimated_chunk_size_bytes=%DIRECTIVE_CHUNK_SIZE)
                                     .in_scope(|| {

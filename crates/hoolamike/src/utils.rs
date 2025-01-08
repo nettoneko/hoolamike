@@ -3,7 +3,7 @@ use {
     futures::FutureExt,
     itertools::Itertools,
     serde::{Deserialize, Serialize},
-    std::{convert::identity, future::Future, iter::repeat, path::PathBuf, sync::Arc},
+    std::{convert::identity, future::Future, path::PathBuf, sync::Arc},
     tap::prelude::*,
     tracing::info_span,
 };
@@ -155,6 +155,7 @@ pub fn chunk_while<T>(input: Vec<T>, mut chunk_while: impl FnMut(&[T]) -> bool) 
 
 #[test]
 fn test_chunk_while() {
+    use std::iter::repeat;
     assert_eq!(
         chunk_while(repeat(1u8).take(6).collect(), |chunk| chunk.len() == 2),
         vec![vec![1u8, 1], vec![1u8, 1], vec![1u8, 1]]

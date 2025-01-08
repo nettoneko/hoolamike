@@ -4,23 +4,24 @@ pub use which;
 use {
     anyhow::{anyhow, Context, Result},
     list_output::{ListOutput, ListOutputEntry},
-    parking_lot::Mutex,
     std::{
-        io::{BufReader, Read},
+        collections::BTreeSet,
         iter::once,
         path::{Path, PathBuf},
-        process::{Child, ChildStdout, Command, Output, Stdio},
+        process::{Command, Output, Stdio},
         str::FromStr,
-        sync::{
-            mpsc::{self, Receiver, Sender},
-            Arc,
-        },
+        sync::Arc,
     },
     tap::prelude::*,
+    tempfile::TempPath,
+    tracing::instrument,
 };
 
 #[derive(Clone, Debug)]
-pub struct Wrapped7Zip(Arc<Path>);
+pub struct Wrapped7Zip {
+    bin: Arc<Path>,
+    temp_files_dir: Arc<Path>,
+}
 
 fn check_exists(file: &Path) -> Result<&Path> {
     file.try_exists()
@@ -30,12 +31,15 @@ fn check_exists(file: &Path) -> Result<&Path> {
 }
 
 impl Wrapped7Zip {
-    pub fn new(path: &Path) -> Result<Self> {
-        check_exists(path)
+    pub fn new(bin: &Path, temp_files_dir: &Path) -> Result<Self> {
+        check_exists(bin)
             .context("checking if binary exists")
             .map(Arc::from)
-            .map(Self)
-            .with_context(|| format!("instantiating wrapper at [{}]", path.display()))
+            .map(|bin| Self {
+                bin,
+                temp_files_dir: Arc::from(temp_files_dir),
+            })
+            .with_context(|| format!("instantiating wrapper at [{}]", bin.display()))
     }
 }
 
@@ -54,10 +58,11 @@ impl Command {
             .pipe(|args| once(command).chain(args).collect::<Vec<_>>())
             .join(" ")
     }
-
     fn read_stdout_ok(mut self) -> Result<String> {
         let dbg = self.command_debug();
-        self.output()
+        self.stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
             .context("spawning command")
             .and_then(|Output { status, stdout, stderr }| {
                 status
@@ -78,7 +83,7 @@ impl Command {
 
 impl Wrapped7Zip {
     fn command<F: FnMut(&mut Command) -> &mut Command>(&self, mut build_command: F) -> Command {
-        let mut command = Command::new(self.0.as_ref());
+        let mut command = Command::new(self.bin.as_ref());
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
         // command.kill_on_drop(true);
@@ -104,99 +109,23 @@ impl Wrapped7Zip {
     }
 }
 
-fn run_watcher(error_callback: Sender<anyhow::Error>, mut child: Child) {
-    loop {
-        let status = match child.try_wait() {
-            Ok(status_code) => match status_code {
-                Some(status_code) => match status_code.success() {
-                    true => Some(Ok(())),
-                    false => match child.stderr.take() {
-                        Some(mut stderr) => Vec::new().pipe(|mut stderr_output| {
-                            stderr
-                                .read_to_end(&mut stderr_output)
-                                .context("could not read stderr")
-                                .map(|_| String::from_utf8_lossy(&stderr_output).to_string())
-                                .pipe(|res| match res {
-                                    Ok(error) => Err(anyhow!("source: {error}")),
-                                    Err(message) => Err(message),
-                                })
-                        }),
-                        None => Err(anyhow!("process exited without stderr")),
-                    }
-                    .pipe(Some),
-                },
-                None => None,
-            },
-            Err(e) => Some(Err(anyhow::Error::from(e).context("checking for status of process"))),
-        };
-        match status {
-            Some(result) => match result {
-                Ok(_) => break,
-                Err(error) => {
-                    error_callback.send(error).ok();
-                    break;
-                }
-            },
-            None => continue,
-        }
-    }
-}
-
-#[allow(dead_code)]
-fn spawn_watcher_rayon(error_callback: Sender<anyhow::Error>, child: Child) {
-    rayon::spawn(move || {
-        run_watcher(error_callback, child);
-    });
-}
-
-#[allow(dead_code)]
-fn spawn_watcher_tokio(error_callback: Sender<anyhow::Error>, child: Child) {
-    tokio::task::spawn_blocking(move || {
-        run_watcher(error_callback, child);
-    });
-}
-
 impl Wrapped7Zip {
-    pub fn find_bin() -> Result<Self> {
+    pub fn find_bin(temp_files_dir: &Path) -> Result<Self> {
         ["7z", "7z.exe"]
             .into_iter()
             .find_map(|bin| which::which(bin).ok())
             .context("no 7z binary")
-            .and_then(|path| Self::new(&path))
+            .and_then(|bin| Self::new(&bin, temp_files_dir))
     }
 }
 
-thread_local! {
-    pub static WRAPPED_7ZIP: Arc<Wrapped7Zip> = Arc::new(Wrapped7Zip::find_bin().expect("no 7z found, fix your dependencies"));
-}
+// thread_local! {
+//     pub static WRAPPED_7ZIP: Arc<Wrapped7Zip> = Arc::new(Wrapped7Zip::find_bin().expect("no 7z found, fix your dependencies"));
+// }
 
 pub struct ArchiveFileHandle {
-    error_callback: Arc<Mutex<Receiver<anyhow::Error>>>,
-    reader: BufReader<ChildStdout>,
-    finished: bool,
-}
-
-impl Read for ArchiveFileHandle {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if self.finished {
-            return Ok(0);
-        }
-
-        let n = self
-            .reader
-            .read(buf)
-            .tap_err(|error| tracing::warn!(?error, "reading from 7zip stopped"))?;
-
-        if n == 0 {
-            // EOF reached. Check for errors
-            self.finished = true;
-            if let Ok(error) = self.error_callback.lock().try_recv() {
-                return Err(std::io::Error::other(error));
-            }
-        }
-
-        Ok(n)
-    }
+    pub path: TempPath,
+    pub file: std::fs::File,
 }
 
 pub mod list_output;
@@ -220,6 +149,7 @@ impl MaybeWindowsPath {
 }
 
 impl ArchiveHandle {
+    #[instrument]
     pub fn list_files(&self) -> Result<Vec<ListOutputEntry>> {
         self.binary
             .command(|c| {
@@ -232,80 +162,60 @@ impl ArchiveHandle {
             .and_then(|o| list_output::ListOutput::from_str(&o).with_context(|| format!("unexpected output from list command:\n{o}")))
             .map(|ListOutput { entries }| entries)
     }
-    // pub fn get_files(&self, files: &[&Path]) -> Result<Vec<(ListOutputEntry, tempfile::TempPath)>> {
-    //     self.list_files().and_then(|listing| {
-    //         listing
-    //             .into_iter()
-    //             .map(|file| (file.path.as_path(), file))
-    //             .collect::<BTreeMap<_, _>>()
-    //             .pipe(|lookup| {
-    //                 files.iter().map(|file| {
-    //                     lookup
-    //                         .remove(file)
-    //                         .with_context(|| format!("file [{file}] not in archive"))
-    //                 })
-    //             })
-    //             .collect::<Result<Vec<_>>>()
-    //             .context("not all files found")
-    //     }).and_then(|files| {
 
-    //         })
-    // }
+    #[instrument]
+    pub fn get_many_handles(&self, paths: &[&Path]) -> Result<Vec<(ListOutputEntry, ArchiveFileHandle)>> {
+        let mut lookup = paths.iter().copied().collect::<BTreeSet<_>>();
+        tempfile::tempdir_in(&self.binary.temp_files_dir)
+            .context("creating temporary directory")
+            .map(|temp_dir| temp_dir.into_path())
+            .and_then(|temp_dir| {
+                self.list_files()
+                    .map(|files| {
+                        files
+                            .into_iter()
+                            .filter(|entry| lookup.remove(entry.path.as_path()))
+                            .collect::<Vec<_>>()
+                    })
+                    .and_then(|entries| {
+                        lookup
+                            .is_empty()
+                            .then_some(entries)
+                            .with_context(|| format!("some paths were not found: {lookup:#?}"))
+                    })
+                    .and_then(|entries| {
+                        self.binary
+                            .command(|c| c.arg("x").arg(&self.archive))
+                            .pipe(|c| {
+                                let mut c = entries.iter().fold(c, |c, entry| {
+                                    c.tap_mut(|c| {
+                                        c.arg(&entry.original_path);
+                                    })
+                                });
+                                c.arg(format!("-o{}", temp_dir.display()));
+                                c.arg(&temp_dir);
+                                c
+                            })
+                            .read_stdout_ok()
+                            .tap_ok(|res| tracing::debug!(%res))
+                            .and_then(|_| {
+                                entries
+                                    .into_iter()
+                                    .map(|e| {
+                                        let path = temp_dir.join(&e.path).pipe(TempPath::from_path);
+                                        let file = std::fs::File::open(&path).context("no file was created for entry");
+                                        file.map(|file| (e, ArchiveFileHandle { path, file }))
+                                    })
+                                    .collect::<Result<Vec<_>>>()
+                                    .context("some files were not created")
+                            })
+                    })
+            })
+    }
+    #[instrument]
     pub fn get_file(&self, file: &Path) -> Result<(ListOutputEntry, ArchiveFileHandle)> {
-        self.list_files()
-            .and_then(|files| {
-                files
-                    .iter()
-                    .find(
-                        |ListOutputEntry {
-                             modified: _,
-                             original_path: _,
-                             created: _,
-                             size: _,
-                             path,
-                         }| { path.as_path().eq(file) },
-                    )
-                    .cloned()
-                    .with_context(|| format!("file not found in {:#?}", files.into_iter().map(|file| file.path).collect::<Vec<_>>()))
-            })
-            .and_then(|file| {
-                self.binary
-                    .command(|c| {
-                        c
-                            // extract
-                            .arg("x")
-                            .arg(&self.archive)
-                            .arg(&file.original_path)
-                            // write data to stdout
-                            .arg("-so")
-                    })
-                    .spawn()
-                    .context("spawning extract command")
-                    .and_then(|mut child| {
-                        child
-                            .stdout
-                            .take()
-                            .context("no stdout")
-                            .map(|stdout| (stdout, child))
-                    })
-                    .map(|(stdout, child)| {
-                        #[allow(dead_code)]
-                        {
-                            let (tx, rx) = mpsc::channel();
-                            #[cfg(feature = "rayon")]
-                            spawn_watcher_rayon(tx, child);
-                            #[cfg(feature = "tokio")]
-                            spawn_watcher_tokio(tx, child);
-                            ArchiveFileHandle {
-                                error_callback: rx.pipe(Mutex::new).pipe(Arc::new),
-                                reader: stdout.pipe(BufReader::new),
-                                finished: false,
-                            }
-                        }
-                    })
-                    .with_context(|| format!("when initializing read from archive file [{}]", file.path.display()))
-                    .map(|handle| (file, handle))
-            })
+        self.get_many_handles(&[file])
+            .and_then(|file| file.into_iter().next().context("empty output"))
     }
 }
 

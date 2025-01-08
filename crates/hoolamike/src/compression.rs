@@ -4,7 +4,6 @@ use {
         progress_bars_v2::IndicatifWrapIoExt,
         utils::{boxed_iter, PathReadWrite},
     },
-    ::wrapped_7zip::WRAPPED_7ZIP,
     anyhow::{Context, Result},
     std::{
         ffi::OsStr,
@@ -15,6 +14,7 @@ use {
     tap::prelude::*,
     tokio::sync::OwnedSemaphorePermit,
     tracing::{info_span, instrument, warn, Instrument},
+    wrapped_7zip::WRAPPED_7ZIP,
 };
 
 pub mod bethesda_archive;
@@ -197,13 +197,21 @@ impl ArchiveHandle<'_> {
                         .with_context(|| format!("trying because: {reason:?}"))
                         .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
                 }),
-            Some("7z") => Err(()).or_else(|reason| {
-                WRAPPED_7ZIP
-                    .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
-                    .and_then(&mut with_guessed)
-                    .with_context(|| format!("trying because: {reason:?}"))
-                    .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
-            }),
+            Some("7z") => Err(())
+                .or_else(|reason| {
+                    path.open_file_read()
+                        .and_then(|(_, file)| self::compress_tools::ArchiveHandle::new(file).map(Self::CompressTools))
+                        .and_then(&mut with_guessed)
+                        .with_context(|| format!("trying because: {reason:?}"))
+                        .tap_err(|message| tracing::warn!("could not open archive with CompressTools: {message:?}"))
+                })
+                .or_else(|reason| {
+                    WRAPPED_7ZIP
+                        .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                        .and_then(&mut with_guessed)
+                        .with_context(|| format!("trying because: {reason:?}"))
+                        .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
+                }),
             Some("zip") => Err(())
                 .or_else(|_| {
                     self::zip::ZipArchive::new(path)
@@ -269,7 +277,7 @@ impl std::io::Read for ArchiveFileHandle {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self {
             // ArchiveFileHandle::CompressTools(compress_tools_seek) => compress_tools_seek.read(buf),
-            ArchiveFileHandle::Wrapped7Zip(wrapped_7zip) => wrapped_7zip.1.read(buf),
+            ArchiveFileHandle::Wrapped7Zip(wrapped_7zip) => wrapped_7zip.1.file.read(buf),
             ArchiveFileHandle::Bethesda(bethesda_archive_file) => bethesda_archive_file.read(buf),
             ArchiveFileHandle::CompressTools(compress_tools_file) => compress_tools_file.read(buf),
             ArchiveFileHandle::Unrar(temp_path) => temp_path.read(buf),
