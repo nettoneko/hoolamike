@@ -5,7 +5,7 @@
 Hoolamike is here to ease the process of installing **Wabbajack modlists** on Linux without the hassle of virtual machines or Wine. This project ports the functionality on a **per-modlist basis**, enabling seamless integration with your favorite games. 🌟
 ## 🎮 Games currently confirmed to work
 - [**Stardew Valley**](https://store.steampowered.com/app/413150/Stardew_Valley/) 🥕  
-- [**Skyrim**](https://store.steampowered.com/app/489830/The_Elder_Scrolls_V_Skyrim_Special_Edition/) ☢️ 
+- [**Skyrim**](https://store.steampowered.com/app/489830/The_Elder_Scrolls_V_Skyrim_Special_Edition/) 🐉 
 - [**Fallout 4**](https://store.steampowered.com/app/377160/Fallout_4/) ☢️  
 - [**Fallout: New Vegas**](https://store.steampowered.com/app/22380/Fallout_New_Vegas/) ☢️  
 - [**Fallout 3**](https://store.steampowered.com/app/22300/Fallout_3/) ☢️  
