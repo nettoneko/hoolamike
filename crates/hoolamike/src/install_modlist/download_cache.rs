@@ -6,7 +6,7 @@ use {
     },
     anyhow::{Context, Result},
     futures::{FutureExt, TryFutureExt},
-    std::{future::ready, hash::Hasher, os::unix::fs::MetadataExt, path::PathBuf, sync::Arc},
+    std::{future::ready, hash::Hasher, path::PathBuf, sync::Arc},
     tap::prelude::*,
     tokio::io::AsyncReadExt,
     tracing_indicatif::span_ext::IndicatifSpanExt,
@@ -39,7 +39,7 @@ async fn calculate_hash(path: PathBuf) -> Result<u64> {
     let size = tokio::fs::metadata(&path)
         .await
         .context("no such file")?
-        .size();
+        .len();
 
     let file_name = path
         .file_name()
