@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 🐛 Bug Fixes
+
+- *(windows)* Switch to platform-agnostic file size reading
+- *(archives)* 7z extraction for windows-encoded paths no longer fails on linux
+
+### 📚 Documentation
+
+- *(readme)* Update the installation instructions
+- *(readme)* Add the remaining supported games to readme
+- *(readme)* Fix emoji
+- *(readme)* Notes about support
+
+## [0.11.0] - 2025-01-08
+
 ### 🚀 Features
 
 - *(modlist-file)* Modlist file is preloaded at start, sacrificing some disk space but speeding up applying binary patches
