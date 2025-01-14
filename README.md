@@ -10,8 +10,7 @@ Hoolamike is here to ease the process of installing **Wabbajack modlists** on Li
 - [**Fallout: New Vegas**](https://store.steampowered.com/app/22380/Fallout_New_Vegas/) ☢️  
 - [**Fallout 3**](https://store.steampowered.com/app/22300/Fallout_3/) ☢️  
 
-## 🚀 Lists currently confirmed to work
-
+## 🚀 Lists currently confirmed to work (all lists for above games SHOULD work, but we cannot test them all without your help)
 - [**Tuxborn**](https://github.com/Omni-guides/Tuxborn): A Wabbajack Modlist for Skyrim SE designed with the Steam Deck in mind 🐉  
 - [**Wasteland Reborn**](https://github.com/Camora0/Wasteland-Reborn): modlist that aims to create a fully featured, lore friendly rebuild of Fallout 4 from the ground up.  ☢️  
 - [**Magnum Opus**](https://github.com/LivelyDismay/magnum-opus): what one would describe as a "kitchen sink list." ☢️  
