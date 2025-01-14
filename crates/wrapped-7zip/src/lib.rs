@@ -202,8 +202,13 @@ impl ArchiveHandle {
                                 entries
                                     .into_iter()
                                     .map(|e| {
-                                        let path = temp_dir.join(&e.path).pipe(TempPath::from_path);
-                                        let file = std::fs::File::open(&path).context("no file was created for entry");
+                                        let path = temp_dir.join(&e.original_path).pipe(TempPath::from_path);
+                                        let file = std::fs::File::open(&path).with_context(|| {
+                                            format!(
+                                                "no file was created for entry [{path:?}]\n(found paths: [{:#?}])",
+                                                std::fs::read_dir(&temp_dir).unwrap().collect::<Vec<_>>()
+                                            )
+                                        });
                                         file.map(|file| (e, ArchiveFileHandle { path, file }))
                                     })
                                     .collect::<Result<Vec<_>>>()
