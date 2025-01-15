@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 🚀 Features
+
+- *(archives)* Bethesda archives now extract a bit more optimally, extracting archives through cli
+
+## [0.11.2] - 2025-01-14
+
 ### 🐛 Bug Fixes
 
 - *(windows)* Switch to platform-agnostic file size reading
