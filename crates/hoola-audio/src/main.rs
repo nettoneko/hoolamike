@@ -290,8 +290,18 @@ impl<T> std::result::Result<T, mp3lame_encoder::BuildError> {
 
 const SAMPLE_RATE: u32 = 44_100;
 
+fn setup_logging() {
+    use tracing_subscriber::{prelude::*, EnvFilter};
+    let subscriber = tracing_subscriber::registry()
+        .with(EnvFilter::try_from_default_env().unwrap_or(EnvFilter::from("info")))
+        .with(tracing_subscriber::fmt::Layer::new().with_writer(std::io::stderr));
+    if let Err(message) = tracing::subscriber::set_global_default(subscriber) {
+        eprintln!("logging setup failed: {message:?}");
+    }
+}
+
 fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    setup_logging();
     let Cli { command } = Cli::parse();
 
     debug!("debug logging on");

@@ -52,12 +52,17 @@
                 jless
                 jq
 
+                # cross-compiling wip
+                cargo-cross
+                rustup
+
                 (rust-bin
                   .selectLatestNightlyWith (toolchain:
                     toolchain
                     .default
                     .override {
                       extensions = ["rust-src" "rust-analyzer" "clippy"];
+                      targets = ["x86_64-pc-windows-gnu"];
                     }))
               ]
               ++ pkgs.lib.optionals pkg.stdenv.isDarwin [
