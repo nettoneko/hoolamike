@@ -20,19 +20,7 @@ pub struct Tag {
     pub back_color: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "PascalCase")]
-pub struct Check {
-    #[serde(rename = "Type")]
-    pub kind: u8,
-    pub inverted: bool,
-    pub loc: u8,
-    pub file: String,
-    pub custom_message: String,
-    pub checksums: Option<String>,
-    pub free_size: Option<u64>,
-}
+pub mod check;
 
 /// this one is super weird but ok
 pub mod asset;
@@ -89,7 +77,7 @@ pub struct Manifest {
     pub variables: DebugAndRelease<variable::Variable>,
     pub locations: DebugAndRelease<location::Location>,
     pub tags: Vec<Tag>,
-    pub checks: Vec<Check>,
+    pub checks: Vec<check::Check>,
     pub file_attrs: Vec<FileAttr>,
     pub post_commands: Vec<PostCommand>,
     pub assets: Vec<asset::Asset>,
