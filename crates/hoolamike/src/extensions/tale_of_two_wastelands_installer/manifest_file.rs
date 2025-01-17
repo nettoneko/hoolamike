@@ -4,21 +4,10 @@ use {
     serde::{Deserialize, Serialize},
 };
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "PascalCase")]
-pub struct Variable {
-    pub name: String,
-    #[serde(rename = "Type")]
-    pub kind: u8,
-    #[serde(default)]
-    pub exclude_delimiter: bool,
-    pub value: Option<String>,
-}
-
 pub mod kind_guard;
 
 pub mod location;
+pub mod variable;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -97,7 +86,7 @@ pub struct Package {
 #[serde(rename_all = "PascalCase")]
 pub struct Manifest {
     pub package: Package,
-    pub variables: DebugAndRelease<Variable>,
+    pub variables: DebugAndRelease<variable::Variable>,
     pub locations: DebugAndRelease<location::Location>,
     pub tags: Vec<Tag>,
     pub checks: Vec<Check>,
