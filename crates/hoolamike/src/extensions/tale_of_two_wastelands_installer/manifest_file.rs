@@ -16,21 +16,9 @@ pub struct Variable {
     pub value: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "PascalCase")]
-pub struct Location {
-    pub name: String,
-    #[serde(rename = "Type")]
-    pub kind: u8,
-    pub value: String,
-    #[serde(default)]
-    pub create_folder: bool,
-    pub archive_type: Option<u16>,
-    pub archive_flags: Option<u16>,
-    pub files_flags: Option<u16>,
-    pub archive_compressed: Option<bool>,
-}
+pub mod kind_guard;
+
+pub mod location;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -110,7 +98,7 @@ pub struct Package {
 pub struct Manifest {
     pub package: Package,
     pub variables: DebugAndRelease<Variable>,
-    pub locations: DebugAndRelease<Location>,
+    pub locations: DebugAndRelease<location::Location>,
     pub tags: Vec<Tag>,
     pub checks: Vec<Check>,
     pub file_attrs: Vec<FileAttr>,
