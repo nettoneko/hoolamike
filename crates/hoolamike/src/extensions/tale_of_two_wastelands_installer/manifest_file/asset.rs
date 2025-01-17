@@ -1,5 +1,5 @@
 use {
-    anyhow::{Context, Result},
+    anyhow::Result,
     serde::{Deserialize, Serialize},
     tap::prelude::*,
 };
@@ -16,7 +16,7 @@ enum AssetRawKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct Params(String);
+pub struct Params(String);
 
 impl Params {
     pub const fn empty() -> Self {
@@ -34,7 +34,7 @@ pub struct Tags(u16);
 pub struct LocationIndex(u8);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, derive_more::Display, Default)]
-struct FileName(String);
+pub struct FileName(String);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -45,9 +45,15 @@ enum AssetRaw {
 }
 
 #[derive(Clone, Hash, PartialEq, Eq, Debug)]
-struct FullLocation {
+pub struct FullLocation {
     pub location: LocationIndex,
     pub path: FileName,
+}
+
+#[derive(Clone, Hash, PartialEq, Eq, Debug)]
+pub struct MaybeFullLocation {
+    pub location: LocationIndex,
+    pub path: Option<FileName>,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -55,31 +61,44 @@ pub struct CopyAsset {
     pub tags: Tags,
     pub status: Status,
     pub source: FullLocation,
-    pub target: FullLocation,
+    pub target: MaybeFullLocation,
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct NewAsset {
-    tags: u16,
+    pub tags: Tags,
+    pub status: Status,
+    pub source: FullLocation,
+    pub target: MaybeFullLocation,
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct PatchAsset {
-    tags: u16,
+    pub tags: Tags,
+    pub status: Status,
+    pub source: FullLocation,
+    pub target: MaybeFullLocation,
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct XwmaFuzAsset {
     tags: u16,
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct OggEnc2Asset {
-    tags: u16,
+    pub tags: Tags,
+    pub status: Status,
+    pub source: FullLocation,
+    pub target: MaybeFullLocation,
+    pub params: Params,
 }
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct AudioEncAsset {
-    tags: u16,
+    pub tags: Tags,
+    pub status: Status,
+    pub source: FullLocation,
+    pub target: MaybeFullLocation,
 }
 
 #[derive(derive_more::From, Clone, Debug, PartialEq, Eq, Hash)]
@@ -105,18 +124,73 @@ impl From<&Asset> for AssetRawKind {
     }
 }
 
-impl Into<AssetRaw> for Asset {
-    fn into(self) -> AssetRaw {
-        let kind = AssetRawKind::from(&self);
-        match self {
-            Asset::Copy(CopyAsset { tags, status, source, target }) => {
-                AssetRaw::B(tags, kind, Params::empty(), status, source.location, target.location, source.path, target.path)
-            }
-            Asset::New(new_asset) => todo!(),
-            Asset::Patch(patch_asset) => todo!(),
-            Asset::XwmaFuz(xwma_fuz_asset) => todo!(),
-            Asset::OggEnc2(ogg_enc2_asset) => todo!(),
-            Asset::AudioEnc(audio_enc_asset) => todo!(),
+impl From<Asset> for AssetRaw {
+    fn from(val: Asset) -> Self {
+        let kind = AssetRawKind::from(&val);
+        match val {
+            Asset::Copy(CopyAsset { tags, status, source, target }) => match target.path {
+                Some(target_file_name) => AssetRaw::B(
+                    tags,
+                    kind,
+                    Params::empty(),
+                    status,
+                    source.location,
+                    target.location,
+                    source.path,
+                    target_file_name,
+                ),
+                None => AssetRaw::A(tags, kind, Params::empty(), status, source.location, target.location, source.path),
+            },
+            Asset::New(NewAsset { tags, status, source, target }) => match target.path {
+                Some(target_file_name) => AssetRaw::B(
+                    tags,
+                    kind,
+                    Params::empty(),
+                    status,
+                    source.location,
+                    target.location,
+                    source.path,
+                    target_file_name,
+                ),
+                None => AssetRaw::A(tags, kind, Params::empty(), status, source.location, target.location, source.path),
+            },
+            Asset::Patch(PatchAsset { tags, status, source, target }) => match target.path {
+                Some(target_file_name) => AssetRaw::B(
+                    tags,
+                    kind,
+                    Params::empty(),
+                    status,
+                    source.location,
+                    target.location,
+                    source.path,
+                    target_file_name,
+                ),
+                None => AssetRaw::A(tags, kind, Params::empty(), status, source.location, target.location, source.path),
+            },
+            Asset::OggEnc2(OggEnc2Asset {
+                tags,
+                status,
+                source,
+                target,
+                params,
+            }) => match target.path {
+                Some(target_path) => AssetRaw::B(tags, kind, params, status, source.location, target.location, source.path, target_path),
+                None => AssetRaw::A(tags, kind, params, status, source.location, target.location, source.path),
+            },
+            Asset::AudioEnc(AudioEncAsset { tags, status, source, target }) => match target.path {
+                Some(target_file_name) => AssetRaw::B(
+                    tags,
+                    kind,
+                    Params::empty(),
+                    status,
+                    source.location,
+                    target.location,
+                    source.path,
+                    target_file_name,
+                ),
+                None => AssetRaw::A(tags, kind, Params::empty(), status, source.location, target.location, source.path),
+            },
+            Asset::XwmaFuz(_xwma_fuz_asset) => unimplemented!("Asset::XwmaFuz"),
         }
     }
 }
@@ -127,7 +201,7 @@ impl TryFrom<AssetRaw> for Asset {
     fn try_from(value: AssetRaw) -> Result<Self, Self::Error> {
         let tags;
         let operation;
-        let parameters;
+        let params;
         let status;
         let location_location_index;
         let dest_location_location_index;
@@ -146,7 +220,7 @@ impl TryFrom<AssetRaw> for Asset {
             ) => {
                 tags = f_flags;
                 operation = f_asset_raw_kind;
-                parameters = f_params;
+                params = f_params;
                 status = f_status;
                 location_location_index = f_location_index;
                 dest_location_location_index = f_location_index1;
@@ -166,7 +240,7 @@ impl TryFrom<AssetRaw> for Asset {
             ) => {
                 tags = f_flags;
                 operation = f_asset_raw_kind;
-                parameters = f_params;
+                params = f_params;
                 status = f_status;
                 location_location_index = f_location_index;
                 dest_location_location_index = f_location_index1;
@@ -183,17 +257,66 @@ impl TryFrom<AssetRaw> for Asset {
                     location: location_location_index,
                     path: name,
                 },
-                target: FullLocation {
+                target: MaybeFullLocation {
                     location: dest_location_location_index,
-                    path: dest_name.context("no dest name for copy")?,
+                    path: dest_name,
                 },
             }
             .pipe(Self::from),
-            AssetRawKind::New => anyhow::bail!("AssetRawKind::New"),
-            AssetRawKind::Patch => anyhow::bail!("AssetRawKind::Patch"),
+            AssetRawKind::New => NewAsset {
+                tags,
+                status,
+                source: FullLocation {
+                    location: location_location_index,
+                    path: name,
+                },
+                target: MaybeFullLocation {
+                    location: dest_location_location_index,
+                    path: dest_name,
+                },
+            }
+            .pipe(Self::from),
+            AssetRawKind::Patch => PatchAsset {
+                tags,
+                status,
+                source: FullLocation {
+                    location: location_location_index,
+                    path: name,
+                },
+                target: MaybeFullLocation {
+                    location: dest_location_location_index,
+                    path: dest_name,
+                },
+            }
+            .pipe(Self::from),
+            AssetRawKind::OggEnc2 => OggEnc2Asset {
+                tags,
+                status,
+                params,
+                source: FullLocation {
+                    location: location_location_index,
+                    path: name,
+                },
+                target: MaybeFullLocation {
+                    location: dest_location_location_index,
+                    path: dest_name,
+                },
+            }
+            .pipe(Self::from),
+            AssetRawKind::AudioEnc => AudioEncAsset {
+                tags,
+                status,
+                source: FullLocation {
+                    location: location_location_index,
+                    path: name,
+                },
+                target: MaybeFullLocation {
+                    location: dest_location_location_index,
+                    path: dest_name,
+                },
+            }
+            .pipe(Self::from),
             AssetRawKind::XwmaFuz => anyhow::bail!("AssetRawKind::XwmaFuz"),
-            AssetRawKind::OggEnc2 => anyhow::bail!("AssetRawKind::OggEnc2"),
-            AssetRawKind::AudioEnc => anyhow::bail!("AssetRawKind::AudioEnc"),
         }
         .pipe(anyhow::Ok)
     }
