@@ -161,3 +161,24 @@ fn test_chunk_while() {
         vec![vec![1u8, 1], vec![1u8, 1], vec![1u8, 1]]
     );
 }
+
+pub fn deserialize_json_with_error_location<T: serde::de::DeserializeOwned>(text: &str) -> anyhow::Result<T> {
+    serde_json::from_str(text)
+        .pipe(|res| {
+            if let Some((line, column)) = res.as_ref().err().map(|err| (err.line(), err.column())) {
+                res.with_context(|| format!("error occurred at [{}:{}]", line, column))
+                    .with_context(|| {
+                        text.lines()
+                            .enumerate()
+                            .skip(line.saturating_sub(10))
+                            .take(20)
+                            .map(|(idx, line)| format!("{idx}.\t{line}"))
+                            .join("\n")
+                    })
+            } else {
+                res.context("oops")
+            }
+        })
+        .context("parsing text")
+        .with_context(|| format!("could not parse as {}", std::any::type_name::<T>()))
+}

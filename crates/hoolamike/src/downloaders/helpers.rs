@@ -29,23 +29,8 @@ where
     }
 }
 
-pub fn deserialize_json_with_error_location<T: serde::de::DeserializeOwned>(text: &str) -> Result<T> {
-    serde_json::from_str(text)
-        .context("parsing text")
-        .with_context(|| {
-            format!(
-                "could not parse\n{}\nas{}",
-                text.lines()
-                    .enumerate()
-                    .map(|(index, line)| format!("{index}. {line}"))
-                    .join("\n"),
-                std::any::type_name::<T>()
-            )
-        })
-}
-
 async fn json_response<T: serde::de::DeserializeOwned>(text: String) -> Result<T> {
-    deserialize_json_with_error_location(&text).tap_err(|_message| {
+    crate::utils::deserialize_json_with_error_location(&text).tap_err(|_message| {
         #[cfg(test)]
         {
             tracing::error!("dumping to 'failed-response.json': {_message}");

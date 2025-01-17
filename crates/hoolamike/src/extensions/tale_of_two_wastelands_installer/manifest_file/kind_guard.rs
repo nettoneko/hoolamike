@@ -16,6 +16,7 @@ mod serde_impl {
     use {
         super::KindGuard,
         serde::{Deserialize, Serialize},
+        tap::TapFallible,
     };
 
     impl<const VALUE: u8> Serialize for KindGuard<VALUE> {
@@ -36,7 +37,7 @@ mod serde_impl {
             if value == VALUE {
                 Ok(KindGuard)
             } else {
-                Err(serde::de::Error::custom(format!("Expected \"{}\", but found \"{}\"", VALUE, value)))
+                Err(serde::de::Error::custom(format!("Expected \"{}\", but found \"{}\"", VALUE, value))).tap_err(|message| tracing::debug!(?message))
             }
         }
     }
