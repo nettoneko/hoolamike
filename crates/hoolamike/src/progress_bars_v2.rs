@@ -3,6 +3,7 @@ pub use hooks::{read::ReadHookExt, write::WriteHookExt};
 use {hooks::IoHook, indicatif::ProgressStyle, tracing_indicatif::span_ext::IndicatifSpanExt};
 
 pub(crate) fn io_progress_style() -> ProgressStyle {
+    #[allow(clippy::literal_string_with_formatting_args)]
     ProgressStyle::with_template(
         "{span_child_prefix:.bold}▕{bar:.blue}▏({bytes}/{total_bytes} {bytes_per_sec} ETA {eta:.grey} ELAPSED {elapsed:.yellow}) \
          {span_name:.blue}({span_fields:.yellow})",
@@ -12,6 +13,7 @@ pub(crate) fn io_progress_style() -> ProgressStyle {
 }
 
 pub(crate) fn count_progress_style() -> ProgressStyle {
+    #[allow(clippy::literal_string_with_formatting_args)]
     ProgressStyle::with_template(
         "{span_child_prefix:.bold}▕{bar:.green}▏({pos}/{len} ETA {eta:.grey} ELAPSED {elapsed:.yellow}) {span_name:.green}({span_fields:.yellow})",
     )

@@ -146,6 +146,7 @@ fn setup_logging(logging_mode: LoggingMode) -> Option<impl Drop> {
                 .pipe(|half_height| {
                     IndicatifLayer::new()
                         .with_progress_style(
+                            #[allow(clippy::literal_string_with_formatting_args)]
                             indicatif::ProgressStyle::with_template("{span_child_prefix:.bold}▕({elapsed:.yellow}) {span_name:.blue}({span_fields:.yellow})")
                                 .expect("bad progress style"),
                         )

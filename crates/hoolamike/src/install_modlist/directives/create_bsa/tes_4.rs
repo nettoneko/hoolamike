@@ -146,7 +146,7 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
         105 => Version::v105,
         other => anyhow::bail!("unsuppored version: {other}"),
     };
-    let archive_flags = ArchiveFlags::from_bits(archive_flags).context("invalid flags: {archive_flags:b}")?;
+    let archive_flags = ArchiveFlags::from_bits(archive_flags).with_context(|| format!("invalid flags: {archive_flags:b}"))?;
     let archive_types = {
         let file_flags = match file_flags {
             bsa::Either::Left(normal) => normal,
@@ -155,7 +155,7 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
                 weird as u16
             }
         };
-        ArchiveTypes::from_bits(file_flags).context("invalid flags: {file_flags:b}")?
+        ArchiveTypes::from_bits(file_flags).with_context(|| format!("invalid file flags: {file_flags:b}"))?
     };
 
     let temp_id_dir = temp_bsa_dir.join(temp_id);

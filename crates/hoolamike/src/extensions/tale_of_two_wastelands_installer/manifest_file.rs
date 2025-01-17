@@ -1,6 +1,5 @@
 use {
-    crate::{modlist_json::HumanUrl, utils::deserialize_json_with_error_location},
-    anyhow::{Context, Result},
+    crate::modlist_json::HumanUrl,
     serde::{Deserialize, Serialize},
 };
 
@@ -83,22 +82,27 @@ pub struct Manifest {
     pub assets: Vec<asset::Asset>,
 }
 
-#[test_log::test]
-fn test_ad_hoc_example_manifest_file() -> Result<()> {
-    let example = include_str!("../../../../../playground/begin-again/ttw-installer/ttw-mpi-extracted/_package/index.json");
-    serde_json::from_str::<serde_json::Value>(example)
-        .context("deserializing json")
-        .and_then(|v| serde_json::to_string_pretty(&v).context("reserializing raw json"))
-        .and_then(|example| deserialize_json_with_error_location::<Manifest>(&example).context("deserializing manifest"))
-        .and_then(|manifest| {
-            serde_json::to_string(&manifest)
-                .context("reserializing")
-                .and_then(|reserialized| deserialize_json_with_error_location::<Manifest>(&reserialized).context("deserializing reserialized json"))
-                .and_then(|from_reserialized| {
-                    manifest
-                        .eq(&from_reserialized)
-                        .then_some(())
-                        .context("reserialization should not be lossy")
-                })
-        })
+#[cfg(test)]
+mod tests {
+    use {super::*, crate::utils::deserialize_json_with_error_location, anyhow::Context};
+
+    #[test_log::test]
+    fn test_ad_hoc_example_manifest_file() -> anyhow::Result<()> {
+        let example = include_str!("../../../../../playground/begin-again/ttw-installer/ttw-mpi-extracted/_package/index.json");
+        serde_json::from_str::<serde_json::Value>(example)
+            .context("deserializing json")
+            .and_then(|v| serde_json::to_string_pretty(&v).context("reserializing raw json"))
+            .and_then(|example| deserialize_json_with_error_location::<Manifest>(&example).context("deserializing manifest"))
+            .and_then(|manifest| {
+                serde_json::to_string(&manifest)
+                    .context("reserializing")
+                    .and_then(|reserialized| deserialize_json_with_error_location::<Manifest>(&reserialized).context("deserializing reserialized json"))
+                    .and_then(|from_reserialized| {
+                        manifest
+                            .eq(&from_reserialized)
+                            .then_some(())
+                            .context("reserialization should not be lossy")
+                    })
+            })
+    }
 }

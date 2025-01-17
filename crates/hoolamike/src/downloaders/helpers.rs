@@ -1,7 +1,6 @@
 use {
     anyhow::{Context, Result},
     futures::{FutureExt, TryFuture, TryFutureExt},
-    itertools::Itertools,
     std::future::{ready, Future},
     tap::prelude::*,
     tracing::trace,

@@ -266,7 +266,7 @@ impl ArchiveHandle<'_> {
                             .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
                     })
                     .map_err(|_| anyhow::anyhow!("no defined archive handler could handle this file"))
-                    .context("because no defined extension matched [{other}]")
+                    .with_context(|| format!("because no defined extension matched [{other:?}]"))
             }
         }
         .context("no defined archive handler could handle this file")
