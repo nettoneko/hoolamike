@@ -7,6 +7,7 @@ use {
     anyhow::{Context, Result},
     ba2::{BStr, ByteSlice, Reader},
     itertools::Itertools,
+    normalize_path::NormalizePath,
     std::{
         borrow::Cow,
         collections::BTreeSet,
@@ -79,7 +80,7 @@ impl Tes4Archive<'_> {
                             filename
                         })
                     })
-                    .pipe(|path| (path, (archive_key, directory_key)))
+                    .pipe(|path| (path.normalize(), (archive_key, directory_key)))
             })
             .collect::<Vec<_>>()
     }
@@ -154,11 +155,18 @@ impl super::ProcessArchive for Tes4Archive<'_> {
         paths
             .iter()
             .copied()
+            .map(|path| path.normalize())
             .collect::<BTreeSet<_>>()
             .pipe_ref_mut(move |paths| {
                 self.list_paths_with_originals()
                     .into_iter()
-                    .filter(|(path, _)| paths.remove(path.as_path()))
+                    .filter(|(path, _)| {
+                        paths.remove(path.as_path()).tap(|exists_in_archive| {
+                            if !*exists_in_archive {
+                                tracing::trace!(?path, "ignoring path")
+                            }
+                        })
+                    })
                     .collect_vec()
                     .pipe(|filtered| {
                         filtered

@@ -7,7 +7,7 @@ use {
 
 #[derive(Debug, serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
-enum AssetRawKind {
+pub(crate) enum AssetRawKind {
     Copy = 0,
     New = 1,
     Patch = 2,
@@ -35,7 +35,7 @@ pub struct Tags(u16);
 pub struct LocationIndex(pub u8);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, derive_more::Display)]
-pub struct FileName(MaybeWindowsPath);
+pub struct FileName(pub MaybeWindowsPath);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]

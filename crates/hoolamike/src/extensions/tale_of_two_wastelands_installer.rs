@@ -1,18 +1,19 @@
 use {
     crate::{
-        compression::ProcessArchive,
+        compression::{bethesda_archive::BethesdaArchive, ProcessArchive},
         config_file::{ExtrasConfig, HoolamikeConfig, InstallationConfig},
         modlist_json::GameName,
         progress_bars_v2::IndicatifWrapIoExt,
-        utils::MaybeWindowsPath,
+        utils::{MaybeWindowsPath, PathReadWrite},
     },
     anyhow::{bail, Context, Result},
     manifest_file::{
-        asset::{Asset, FullLocation, LocationIndex, NewAsset},
+        asset::{Asset, FullLocation, LocationIndex, MaybeFullLocation, NewAsset},
         kind_guard::WithKindGuard,
         location::Location,
         variable::{LocalAppDataVariable, PersonalFolderVariable, RegistryVariable, StringVariable, Variable},
     },
+    normalize_path::NormalizePath,
     num::ToPrimitive,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     serde::{Deserialize, Serialize},
@@ -132,18 +133,65 @@ impl VariablesContext {
     }
 }
 
-impl ResolverContext {
-    fn resolve_full_location(&self, location: FullLocation) -> Result<ResolvedLocation> {
-        self.locations
-            .get(&location.location)
-            .with_context(|| format!("no [{location:?}] in locations"))
-            .and_then(|base| anyhow::bail!("{base:#?}"))
+impl MaybeFullLocation {
+    fn lookup_from_both_source_and_target(self, source: &FullLocation) -> FullLocation {
+        match self.path {
+            Some(path) => FullLocation { location: self.location, path },
+            None => FullLocation {
+                location: self.location,
+                path: source.path.clone(),
+            },
+        }
     }
 }
 
-#[derive(Debug)]
-struct ResolvedLocation {
-    base: PathBuf,
+impl FullLocation {
+    #[instrument(level = "DEBUG", skip(from_reader, locations))]
+    fn insert_into(self, locations: &LocationsLookup, from_reader: &mut impl Read) -> Result<()> {
+        locations
+            .get(&self.location)
+            .with_context(|| format!("no location for {self:#?}"))
+            .inspect(|location| tracing::debug!("{location:#?}"))
+            .and_then(|location| match location {
+                Location::Folder(folder) => folder
+                    .inner
+                    .value
+                    .clone()
+                    .pipe(MaybeWindowsPath)
+                    .pipe(MaybeWindowsPath::into_path)
+                    .pipe(|folder| folder.join(self.path.0.into_path()).normalize())
+                    .open_file_write()
+                    .and_then(|(target_path, mut target_file)| {
+                        std::io::copy(from_reader, &mut target_file)
+                            .with_context(|| format!("copying into [{target_path:#?}]"))
+                            .map(|wrote| tracing::info!(?target_path, "wrote [{wrote}bytes]"))
+                    }),
+                Location::ReadArchive(read_archive) => anyhow::bail!("cannot insert into Location::ReadArchive({read_archive:#?})"),
+                Location::WriteArchive(write_archive) => anyhow::bail!("Location::WriteArchive({write_archive:#?})"),
+            })
+    }
+    fn into_reader(self, locations: &LocationsLookup) -> Result<Box<dyn Read>> {
+        locations
+            .get(&self.location)
+            .with_context(|| format!("no location for {self:#?}"))
+            .inspect(|location| tracing::debug!("{location:#?}"))
+            .and_then(|location| match location {
+                Location::Folder(folder) => folder
+                    .inner
+                    .value
+                    .clone()
+                    .pipe(MaybeWindowsPath)
+                    .pipe(MaybeWindowsPath::into_path)
+                    .pipe(|path| path.join(self.path.0.into_path()).normalize())
+                    .pipe(|source| {
+                        source
+                            .open_file_read()
+                            .map(|(_, file)| Box::new(file) as Box<dyn Read>)
+                    }),
+                Location::ReadArchive(read_archive) => anyhow::bail!("Location::ReadArchive({read_archive:#?})"),
+                Location::WriteArchive(write_archive) => anyhow::bail!("Location::WriteArchive({write_archive:#?})"),
+            })
+    }
 }
 
 #[instrument(skip_all)]
@@ -204,7 +252,7 @@ pub fn install(cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Resu
     let variables_context = VariablesContext {
         variables,
         ttw_config_variables: ttw_config_variables.clone(),
-        hoolamike_installation_config: hoolamike_config,
+        hoolamike_installation_config: hoolamike_config.clone(),
     };
     let locations = locations
         .release()
@@ -226,15 +274,26 @@ pub fn install(cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Resu
     assets
         .into_iter()
         .try_for_each(move |asset| {
-            match asset.clone() {
-                Asset::New(new_asset) => Err(anyhow::anyhow!("Asset::New({new_asset:#?})")),
-                Asset::Copy(copy_asset) => Err(anyhow::anyhow!("Asset::Copy({copy_asset:#?}) not implemented")),
-                Asset::Patch(patch_asset) => Err(anyhow::anyhow!("Asset::Patch({patch_asset:#?}) not implemented")),
-                Asset::XwmaFuz(xwma_fuz_asset) => Err(anyhow::anyhow!("Asset::XwmaFuz({xwma_fuz_asset:#?}) not implemented")),
-                Asset::OggEnc2(ogg_enc2_asset) => Err(anyhow::anyhow!("Asset::OggEnc2({ogg_enc2_asset:#?}) not implemented")),
-                Asset::AudioEnc(audio_enc_asset) => Err(anyhow::anyhow!("Asset::AudioEnc({audio_enc_asset:#?}) not implemented")),
-            }
-            .with_context(|| format!("handling [{asset:#?}]"))
+            info_span!("handling_asset", kind=?manifest_file::asset::AssetRawKind::from(&asset)).in_scope(|| {
+                match asset.clone() {
+                    Asset::New(NewAsset { tags, status, source, target }) => {
+                        let target = target.lookup_from_both_source_and_target(&source);
+                        BethesdaArchive::open(&path_to_ttw_mpi_file)
+                            .context("opening mpi file")
+                            .and_then(|mut archive| {
+                                archive
+                                    .get_handle(&source.path.0.into_path())
+                                    .and_then(|mut handle| target.insert_into(&locations, &mut handle))
+                            })
+                    }
+                    Asset::Copy(copy_asset) => Err(anyhow::anyhow!("Asset::Copy({copy_asset:#?}) not implemented")),
+                    Asset::Patch(patch_asset) => Err(anyhow::anyhow!("Asset::Patch({patch_asset:#?}) not implemented")),
+                    Asset::XwmaFuz(xwma_fuz_asset) => Err(anyhow::anyhow!("Asset::XwmaFuz({xwma_fuz_asset:#?}) not implemented")),
+                    Asset::OggEnc2(ogg_enc2_asset) => Err(anyhow::anyhow!("Asset::OggEnc2({ogg_enc2_asset:#?}) not implemented")),
+                    Asset::AudioEnc(audio_enc_asset) => Err(anyhow::anyhow!("Asset::AudioEnc({audio_enc_asset:#?}) not implemented")),
+                }
+                .with_context(|| format!("handling [{asset:#?}]"))
+            })
         })
         .context("executing asset operations")
 }
