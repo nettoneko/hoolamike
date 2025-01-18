@@ -158,6 +158,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
+name = "assert-json-diff"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47e4f2b81832e72834d7518d8487a0396a28cc408186a2e8854c0f98011faf12"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "async-recursion"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1487,6 +1497,7 @@ name = "hoolamike"
 version = "0.11.3"
 dependencies = [
  "anyhow",
+ "assert-json-diff",
  "async-recursion",
  "ba2 3.0.1",
  "base64 0.22.1",
@@ -1527,6 +1538,7 @@ dependencies = [
  "once_cell",
  "os_pipe",
  "parking_lot",
+ "pretty_assertions",
  "rand",
  "rayon",
  "regex",
@@ -1561,6 +1573,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "wrapped-7zip",
+ "xdelta",
  "xxhash-rust",
  "zip",
 ]
@@ -2134,6 +2147,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5baab2bbbd7d75a144d671e9ff79270e903957d92fb7386fd39034c709bd2661"
 dependencies = [
  "byteorder",
+]
+
+[[package]]
+name = "lzma-sys"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fda04ab3764e6cde78b9974eec4f779acaba7c4e84b36eca3cf77c581b85d27"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
 ]
 
 [[package]]
@@ -3149,6 +3173,7 @@ version = "1.0.133"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7fceb2473b9166b2294ef05efcb65a3db80803f0b03ef86a5fc88a2b85ee377"
 dependencies = [
+ "indexmap 2.7.0",
  "itoa",
  "memchr",
  "ryu",
@@ -4644,6 +4669,14 @@ name = "writeable"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e9df38ee2d2c3c5948ea468a8406ff0db0b29ae1ffde1bcf20ef305bcc95c51"
+
+[[package]]
+name = "xdelta"
+version = "0.1.1"
+source = "git+https://github.com/SonnyX/xdelta-decoder-rust?rev=4ee8d64a77659267d3e39cd05f61a6ee369492fc#4ee8d64a77659267d3e39cd05f61a6ee369492fc"
+dependencies = [
+ "lzma-sys",
+]
 
 [[package]]
 name = "xxhash-rust"

@@ -77,7 +77,7 @@ reqwest.workspace = true
 ringbuffer = "0.15.0"
 scraper.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
 serde_repr = "0.1.19"
 serde_urlencoded.workspace = true
 serde_with = "3.12.0"
@@ -105,3 +105,8 @@ uuid.workspace = true
 walkdir = "2.5.0"
 xxhash-rust.workspace = true
 zip.workspace = true
+pretty_assertions = "1.4.1"
+xdelta = { git = "https://github.com/SonnyX/xdelta-decoder-rust", rev = "4ee8d64a77659267d3e39cd05f61a6ee369492fc" }
+
+[dev-dependencies]
+assert-json-diff = "2.0.2"

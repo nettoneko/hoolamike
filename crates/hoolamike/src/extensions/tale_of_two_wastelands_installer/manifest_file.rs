@@ -90,7 +90,11 @@ pub struct Manifest {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::utils::deserialize_json_with_error_location, anyhow::Context};
+    use {
+        super::*,
+        crate::{post_install_fixup::diffing::PrettyDiff, utils::deserialize_json_with_error_location},
+        anyhow::Context,
+    };
 
     #[test_log::test]
     fn test_ad_hoc_example_manifest_file() -> anyhow::Result<()> {
@@ -98,16 +102,18 @@ mod tests {
         serde_json::from_str::<serde_json::Value>(example)
             .context("deserializing json")
             .and_then(|v| serde_json::to_string_pretty(&v).context("reserializing raw json"))
-            .and_then(|example| deserialize_json_with_error_location::<Manifest>(&example).context("deserializing manifest"))
-            .and_then(|manifest| {
-                serde_json::to_string(&manifest)
-                    .context("reserializing")
-                    .and_then(|reserialized| deserialize_json_with_error_location::<Manifest>(&reserialized).context("deserializing reserialized json"))
-                    .and_then(|from_reserialized| {
-                        manifest
-                            .eq(&from_reserialized)
-                            .then_some(())
-                            .context("reserialization should not be lossy")
+            .and_then(|pretty_example| {
+                deserialize_json_with_error_location::<Manifest>(&pretty_example)
+                    .context("deserializing manifest")
+                    .and_then(|manifest| {
+                        serde_json::to_string_pretty(&manifest)
+                            .context("reserializing")
+                            .map(|reserialized| {
+                                assert_json_diff::assert_json_eq!(
+                                    serde_json::from_str::<serde_json::Value>(&pretty_example).unwrap(),
+                                    serde_json::from_str::<serde_json::Value>(&reserialized).unwrap(),
+                                )
+                            })
                     })
             })
     }

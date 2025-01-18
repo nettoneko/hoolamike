@@ -120,6 +120,7 @@ pub struct AudioEncAsset {
     pub tags: Tags,
     pub status: Status,
     pub source: FullLocation,
+    pub params: Params,
     pub target: MaybeFullLocation,
 }
 
@@ -199,18 +200,15 @@ impl From<Asset> for AssetRaw {
                 Some(target_path) => AssetRaw::B(tags, kind, params, status, source.location, target.location, source.path, target_path),
                 None => AssetRaw::A(tags, kind, params, status, source.location, target.location, source.path),
             },
-            Asset::AudioEnc(AudioEncAsset { tags, status, source, target }) => match target.path {
-                Some(target_file_name) => AssetRaw::B(
-                    tags,
-                    kind,
-                    Params::empty(),
-                    status,
-                    source.location,
-                    target.location,
-                    source.path,
-                    target_file_name,
-                ),
-                None => AssetRaw::A(tags, kind, Params::empty(), status, source.location, target.location, source.path),
+            Asset::AudioEnc(AudioEncAsset {
+                tags,
+                status,
+                source,
+                target,
+                params,
+            }) => match target.path {
+                Some(target_file_name) => AssetRaw::B(tags, kind, params, status, source.location, target.location, source.path, target_file_name),
+                None => AssetRaw::A(tags, kind, params, status, source.location, target.location, source.path),
             },
             Asset::XwmaFuz(_xwma_fuz_asset) => unimplemented!("Asset::XwmaFuz"),
         }
@@ -328,6 +326,7 @@ impl TryFrom<AssetRaw> for Asset {
             AssetRawKind::AudioEnc => AudioEncAsset {
                 tags,
                 status,
+                params,
                 source: FullLocation {
                     location: location_location_index,
                     path: name,
@@ -341,6 +340,50 @@ impl TryFrom<AssetRaw> for Asset {
             AssetRawKind::XwmaFuz => anyhow::bail!("AssetRawKind::XwmaFuz"),
         }
         .pipe(anyhow::Ok)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn test_deserialization_example_asset_1() -> anyhow::Result<()> {
+        use anyhow::Context;
+        serde_json::from_str::<Asset>(
+            r#"[
+  3073,
+  0,
+  "-f:24000 -q:5",
+  5,
+  9,
+  25,
+  "sound\\voice\\fallout3.esm\\maleuniquemisterburke\\ms11_ms11burkedisarmedchoi_00014f80_1.ogg",
+  "sound\\voice\\fallout3.esm\\maleuniquemisterburke\\MS11_MS11BurkeDisarmedChoi_00014F80_1.ogg"
+]"#,
+        )
+        .with_context(|| {
+            format!(
+                "{}\ncould not be parsed as {}",
+                r#"[
+  3073,
+  0,
+  "-f:24000 -q:5",
+  5,
+  9,
+  25,
+  "sound\\voice\\fallout3.esm\\maleuniquemisterburke\\ms11_ms11burkedisarmedchoi_00014f80_1.ogg",
+  "sound\\voice\\fallout3.esm\\maleuniquemisterburke\\MS11_MS11BurkeDisarmedChoi_00014F80_1.ogg"
+]"#,
+                std::any::type_name::<self::Asset>()
+            )
+        })
+        .and_then(|parsed| {
+            serde_json::to_string_pretty(&parsed)
+                .context("reserializing")
+                .map(|asset| assert!(asset.contains("-f:24000"), "no -f:24000 in reserialized [{parsed:#?}]"))
+                .with_context(|| format!("when reserializing [{parsed:#?}]"))
+        })
     }
 }
 

@@ -5,6 +5,7 @@ use {
     tap::prelude::*,
 };
 
+#[macro_export]
 macro_rules! test_example {
     ($input:expr, $name:ident, $ty:ty) => {
         #[test]

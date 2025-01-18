@@ -18,8 +18,8 @@ impl fmt::Display for Line {
 
 #[derive(Clone, Copy)]
 pub struct PrettyDiff<'a> {
-    old: &'a str,
-    new: &'a str,
+    pub old: &'a str,
+    pub new: &'a str,
 }
 
 impl<'a> PrettyDiff<'a> {

@@ -6,7 +6,7 @@ use {
     serde::{Deserialize, Serialize},
     std::{convert::identity, future::Future, path::PathBuf, sync::Arc},
     tap::prelude::*,
-    tempfile::TempPath,
+    tempfile::{NamedTempFile, TempPath},
     tracing::info_span,
 };
 
@@ -164,10 +164,17 @@ fn test_chunk_while() {
     );
 }
 
+pub fn scoped_temp_file() -> anyhow::Result<NamedTempFile> {
+    tempfile::NamedTempFile::new_in(*TEMP_FILE_DIR).context("creating temp file")
+}
+
+pub fn scoped_temp_path() -> anyhow::Result<TempPath> {
+    self::scoped_temp_file()
+        .map(|p| p.into_temp_path())
+        .context("creating temp path")
+}
 pub fn with_scoped_temp_path<T, F: FnOnce(&TempPath) -> anyhow::Result<T>>(with: F) -> anyhow::Result<T> {
-    tempfile::NamedTempFile::new_in(*TEMP_FILE_DIR)
-        .context("creating temp file")
-        .map(|file| file.into_temp_path())
+    self::scoped_temp_path()
         .and_then(|path| with(&path))
         .context("performing operation on a scoped temp file")
 }

@@ -52,7 +52,8 @@
                 jless
                 jq
 
-                # cross-compiling wip
+                # xdelta3 bindings
+                llvmPackages_latest.libclang.lib
 
                 (rust-bin
                   .selectLatestNightlyWith (toolchain:
@@ -67,6 +68,7 @@
               ];
 
             shellHook = ''
+              export LIBCLANG_PATH=${pkgs.lib.makeLibraryPath [pkgs.llvmPackages_latest.libclang.lib]};
             '';
           };
         }

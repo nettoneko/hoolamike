@@ -1,6 +1,8 @@
 #![allow(clippy::unit_arg)]
 #![feature(seek_stream_len)]
 #![feature(slice_take)]
+#![feature(path_add_extension)]
+
 use {
     anyhow::{Context, Result},
     clap::{Args, Parser, Subcommand, ValueEnum},

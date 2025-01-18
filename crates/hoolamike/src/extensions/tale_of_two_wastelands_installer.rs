@@ -4,27 +4,30 @@ use {
         config_file::{ExtrasConfig, HoolamikeConfig, InstallationConfig},
         modlist_json::GameName,
         progress_bars_v2::IndicatifWrapIoExt,
-        utils::{with_scoped_temp_path, MaybeWindowsPath, PathReadWrite},
+        utils::{scoped_temp_file, with_scoped_temp_path, MaybeWindowsPath, PathReadWrite, ReadableCatchUnwindExt},
     },
     anyhow::{bail, Context, Result},
     manifest_file::{
-        asset::{Asset, CopyAsset, FullLocation, LocationIndex, MaybeFullLocation, NewAsset, OggEnc2Asset},
+        asset::{Asset, AudioEncAsset, CopyAsset, FullLocation, LocationIndex, MaybeFullLocation, NewAsset, OggEnc2Asset, PatchAsset},
         kind_guard::WithKindGuard,
-        location::{Location, ReadArchiveLocation},
+        location::{Location, ReadArchiveLocation, WriteArchiveLocation},
         variable::{LocalAppDataVariable, PersonalFolderVariable, RegistryVariable, StringVariable, Variable},
     },
     normalize_path::NormalizePath,
     num::ToPrimitive,
+    parking_lot::Mutex,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     serde::{Deserialize, Serialize},
     std::{
         borrow::Cow,
         collections::BTreeMap,
+        convert::identity,
         io::{BufReader, Read},
         path::{Path, PathBuf},
         sync::Arc,
     },
     tap::prelude::*,
+    tempfile::TempPath,
     tracing::{debug, info, info_span, instrument},
 };
 
@@ -53,10 +56,42 @@ const MANIFEST_PATH: &str = "_package/index.json";
 
 type LocationsLookup = BTreeMap<LocationIndex, Location>;
 
-struct ResolverContext {
-    locations: LocationsLookup,
-    installation: InstallationConfig,
-    variables: VariablesContext,
+#[derive(Clone)]
+struct RepackingContext {
+    queued_archives: Arc<Mutex<BTreeMap<PathBuf, LazyArchive>>>,
+    locations: Arc<LocationsLookup>,
+}
+
+#[derive(Debug)]
+struct LazyArchive {
+    files: Vec<(PathBuf, TempPath)>,
+    archive_metadata: WriteArchiveLocation,
+}
+
+impl LazyArchive {
+    #[instrument]
+    fn new(metadata: &WriteArchiveLocation) -> Self {
+        debug!("scheduling new archive");
+        Self {
+            files: Vec::new(),
+            archive_metadata: metadata.clone(),
+        }
+    }
+
+    #[instrument]
+    fn insert(&mut self, archive_path: PathBuf, file: TempPath) {
+        debug!("scheduling file into archive");
+        self.files.push((archive_path, file))
+    }
+}
+
+impl RepackingContext {
+    pub fn new(locations: Arc<LocationsLookup>) -> Self {
+        Self {
+            queued_archives: Default::default(),
+            locations,
+        }
+    }
 }
 
 struct VariablesContext {
@@ -147,9 +182,10 @@ impl MaybeFullLocation {
 }
 
 impl FullLocation {
-    #[instrument(level = "DEBUG", skip(from_reader, locations))]
-    fn insert_into(self, locations: &LocationsLookup, from_reader: &mut impl Read) -> Result<()> {
-        locations
+    #[instrument(level = "DEBUG", skip(from_reader, repacking_context))]
+    fn insert_into(self, repacking_context: RepackingContext, from_reader: &mut impl Read) -> Result<()> {
+        repacking_context
+            .locations
             .get(&self.location)
             .with_context(|| format!("no location for {self:#?}"))
             .inspect(|location| tracing::debug!("{location:#?}"))
@@ -168,11 +204,35 @@ impl FullLocation {
                             .map(|wrote| tracing::info!(?target_path, "wrote [{wrote}bytes]"))
                     }),
                 Location::ReadArchive(read_archive) => anyhow::bail!("cannot insert into Location::ReadArchive({read_archive:#?})"),
-                Location::WriteArchive(write_archive) => anyhow::bail!("Location::WriteArchive({write_archive:#?})"),
+                Location::WriteArchive(write_archive) => write_archive
+                    .inner
+                    .value
+                    .clone()
+                    .pipe(MaybeWindowsPath)
+                    .pipe(MaybeWindowsPath::into_path)
+                    .pipe(|output_archive_path| {
+                        let archive_path = self.path.0.into_path().normalize();
+                        scoped_temp_file()
+                            .and_then(|mut buffer| {
+                                std::io::copy(from_reader, &mut buffer)
+                                    .context("copying into buffer")
+                                    .map(|_| buffer)
+                            })
+                            .map(|buffer| buffer.into_temp_path())
+                            .map(|buffer| {
+                                repacking_context
+                                    .queued_archives
+                                    .lock()
+                                    .entry(output_archive_path)
+                                    .or_insert_with(|| LazyArchive::new(&write_archive.inner))
+                                    .insert(archive_path, buffer);
+                            })
+                    }),
             })
     }
-    fn into_reader(self, locations: &LocationsLookup) -> Result<Box<dyn Read>> {
-        locations
+    fn into_reader(self, context: RepackingContext) -> Result<Box<dyn Read>> {
+        context
+            .locations
             .get(&self.location)
             .with_context(|| format!("no location for {self:#?}"))
             .inspect(|location| tracing::debug!("{location:#?}"))
@@ -284,6 +344,8 @@ pub fn install(cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Resu
         .collect::<Result<BTreeMap<LocationIndex, Location>>>()
         .context("collecting locations")?;
 
+    let mut bsa_packing_queue = BTreeMap::<PathBuf, Vec<(TempPath, PathBuf)>>::new();
+    let repacking_context = RepackingContext::new(locations.pipe(Arc::new));
     assets
         .into_iter()
         .try_for_each(move |asset| {
@@ -291,54 +353,180 @@ pub fn install(cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Resu
                 match asset.clone() {
                     Asset::New(NewAsset { tags, status, source, target }) => {
                         let target = target.lookup_from_both_source_and_target(&source);
-                        BethesdaArchive::open(&path_to_ttw_mpi_file)
+                        BethesdaArchive::open(path_to_ttw_mpi_file)
                             .context("opening mpi file")
                             .and_then(|mut archive| {
                                 archive
-                                    .get_handle(&source.path.0.into_path())
-                                    .and_then(|mut handle| target.insert_into(&locations, &mut handle))
+                                    .get_handle(
+                                        &source
+                                            .path
+                                            .0
+                                            .tap_mut(|path| path.0 = path.0.to_lowercase())
+                                            .into_path(),
+                                    )
+                                    .and_then(|mut handle| target.insert_into(repacking_context.clone(), &mut handle))
                             })
                     }
                     Asset::Copy(CopyAsset { tags, status, source, target }) => {
                         let target = target.lookup_from_both_source_and_target(&source);
                         source
-                            .into_reader(&locations)
+                            .into_reader(repacking_context.clone())
                             .context("building source")
                             .and_then(|mut source| {
                                 target
-                                    .insert_into(&locations, &mut source)
+                                    .insert_into(repacking_context.clone(), &mut source)
                                     .context("performing move")
                             })
                     }
-                    Asset::Patch(patch_asset) => Err(anyhow::anyhow!(" not implemented")),
+                    Asset::Patch(PatchAsset { tags, status, source, target }) => {
+                        let target = target.lookup_from_both_source_and_target(&source);
+                        BethesdaArchive::open(path_to_ttw_mpi_file)
+                            .context("opening mpi file")
+                            .and_then(|mut archive| {
+                                archive.get_handle(
+                                    &target
+                                        .path
+                                        .0
+                                        .clone()
+                                        .tap_mut(|patch| patch.0 = patch.0.to_lowercase())
+                                        .into_path()
+                                        .normalize()
+                                        .tap_mut(|p| {
+                                            p.add_extension("xd3");
+                                        }),
+                                )
+                            })
+                            .and_then(|patch| {
+                                patch
+                                    .seek_with_temp_file_blocking_raw(0)
+                                    .map(|(_, path)| path)
+                            })
+                            .context("reading patch file")
+                            .and_then(|patch_file| {
+                                source
+                                    .into_reader(repacking_context.clone())
+                                    .and_then(|reader| reader.seek_with_temp_file_blocking_raw(0))
+                                    .map(|(_, file)| file)
+                                    .context("reading source file")
+                                    .and_then(|source_file| {
+                                        with_scoped_temp_path(|output_buffer| {
+                                            std::panic::catch_unwind(|| xdelta::decode_file(Some(&source_file), &patch_file, output_buffer))
+                                                .for_anyhow()
+                                                .context("decoding xdelta patch")
+                                                .map(|_| output_buffer)
+                                                .and_then(|patched_file| {
+                                                    patched_file
+                                                        .open_file_read()
+                                                        .and_then(|(_, mut file)| target.insert_into(repacking_context.clone(), &mut file))
+                                                })
+                                        })
+                                    })
+                            })
+                    }
                     Asset::XwmaFuz(xwma_fuz_asset) => Err(anyhow::anyhow!(" not implemented")),
                     Asset::OggEnc2(ogg_enc_asset) => {
                         let target = ogg_enc_asset
                             .target
                             .clone()
                             .lookup_from_both_source_and_target(&ogg_enc_asset.source);
-                        let target_frequency = ogg_enc_asset
+                        ogg_enc_asset
                             .params
                             .parse()
                             .context("bad params")
-                            .and_then(|params| params.get("f").copied().context("no 'f' param (frequency)"))
-                            .context("frequency reading ogg encoder params")
-                            .and_then(|f| {
-                                f.parse::<u32>()
-                                    .with_context(|| format!("'{f}' is not a valid frequency"))
-                            })?;
-                        ogg_enc_asset
-                            .source
-                            .into_reader(&locations)
-                            .and_then(|source| {
-                                source
-                                    .seek_with_temp_file_blocking_raw(0)
-                                    .and_then(|(_, source)| with_scoped_temp_path(|buffer| hoola_audio::resample_ogg(&source, buffer, target_frequency)))
+                            .and_then(|mut params| {
+                                let target_frequency = params
+                                    .remove("f")
+                                    .context("no 'f' param (frequency)")
+                                    .context("frequency reading ogg encoder params")
+                                    .and_then(|f| {
+                                        f.parse::<u32>()
+                                            .with_context(|| format!("'{f}' is not a valid frequency"))
+                                    })?;
+                                if let Some(quality) = params.remove("q") {
+                                    tracing::warn!(%quality, "found quality param, byt it cannot currently be parametrized");
+                                }
+
+                                if !params.is_empty() {
+                                    anyhow::bail!("leftover params: {params:#?}");
+                                }
+                                ogg_enc_asset
+                                    .source
+                                    .into_reader(repacking_context.clone())
+                                    .and_then(|source| {
+                                        source
+                                            .seek_with_temp_file_blocking_raw(0)
+                                            .and_then(|(_, source)| {
+                                                with_scoped_temp_path(|buffer| {
+                                                    hoola_audio::resample_ogg(&source, buffer, target_frequency).and_then(|_| {
+                                                        buffer
+                                                            .open_file_read()
+                                                            .and_then(|(_, mut buffer)| target.insert_into(repacking_context.clone(), &mut buffer))
+                                                    })
+                                                })
+                                            })
+                                    })
                             })
                     }
-                    Asset::AudioEnc(audio_enc_asset) => Err(anyhow::anyhow!(" not implemented")),
+                    Asset::AudioEnc(audio_enc) => {
+                        let target = audio_enc
+                            .target
+                            .clone()
+                            .lookup_from_both_source_and_target(&audio_enc.source);
+                        let target_path = target.path.0.clone().into_path();
+                        audio_enc
+                            .params
+                            .parse()
+                            .context("bad params")
+                            .and_then(|mut params| {
+                                // let target_frequency = params
+                                //     .remove("f")
+                                //     .context("no 'f' param (frequency)")
+                                //     .context("frequency reading ogg encoder params")
+                                //     .and_then(|f| {
+                                //         f.parse::<u32>()
+                                //             .with_context(|| format!("'{f}' is not a valid frequency"))
+                                //     })?;
+                                // if let Some(quality) = params.remove("q") {
+                                //     tracing::warn!(%quality, "found quality param, byt it cannot currently be parametrized");
+                                // }
+
+                                if !params.is_empty() {
+                                    anyhow::bail!("leftover params: {params:#?}");
+                                }
+
+                                let target_extension = target_path
+                                    .extension()
+                                    .context("target file has no extension")
+                                    .map(|e| e.to_string_lossy().to_string())?
+                                    .to_lowercase();
+
+                                audio_enc
+                                    .source
+                                    .into_reader(repacking_context.clone())
+                                    .and_then(|source| {
+                                        source
+                                            .seek_with_temp_file_blocking_raw(0)
+                                            .and_then(|(_, source)| {
+                                                with_scoped_temp_path(|buffer| {
+                                                    (match target_extension.as_str() {
+                                                        "wav" => hoola_audio::convert_to_wav(&source, buffer)
+                                                            .context("converting to wav")
+                                                            .map(|_| buffer),
+                                                        other => Err(anyhow::anyhow!("extension [.{other}] is not supported by hoolamike, file an issue")),
+                                                    })
+                                                    .and_then(|buffer| {
+                                                        buffer
+                                                            .open_file_read()
+                                                            .and_then(|(_, mut file)| target.insert_into(repacking_context.clone(), &mut file))
+                                                    })
+                                                })
+                                            })
+                                    })
+                            })
+                    }
                 }
                 .with_context(|| format!("handling [{asset:#?}]"))
+                .inspect(|_| info!("[OK]"))
             })
         })
         .context("executing asset operations")

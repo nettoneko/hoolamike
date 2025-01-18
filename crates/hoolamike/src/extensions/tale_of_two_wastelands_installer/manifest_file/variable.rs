@@ -10,6 +10,7 @@ use {
 pub struct StringVariable {
     pub name: String,
     pub value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub exclude_delimiter: Option<bool>,
 }
 
@@ -59,7 +60,7 @@ impl Variable {
 
     pub fn value(&self) -> Option<&str> {
         match self {
-            Variable::String(v) => v.inner.value.as_ref().map(|v| v.as_str()),
+            Variable::String(v) => v.inner.value.as_deref(),
             Variable::PersonalFolder(_) => None,
             Variable::LocalAppData(_) => None,
             Variable::Registry(v) => v.inner.value.as_str().pipe(Some),

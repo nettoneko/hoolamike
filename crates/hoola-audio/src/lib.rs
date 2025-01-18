@@ -23,7 +23,7 @@ use {
         probe::{Hint, ProbeResult},
     },
     tap::prelude::*,
-    tracing::{debug, info, info_span, instrument, warn},
+    tracing::{debug, info, info_span, instrument, trace, warn},
     vorbis_rs::VorbisEncoderBuilder,
 };
 
@@ -107,7 +107,7 @@ impl FormatReaderIterator {
     }
 }
 
-#[instrument(skip_all, ret, level = "DEBUG")]
+#[instrument(skip_all, ret, level = "TRACE")]
 fn skip_metadata(format: &mut Box<dyn FormatReader>) {
     // Consume any new metadata that has been read since the last packet.
     while !format.metadata().is_latest() {
@@ -117,7 +117,7 @@ fn skip_metadata(format: &mut Box<dyn FormatReader>) {
 }
 
 impl FormatReaderIterator {
-    #[instrument(level = "DEBUG")]
+    #[instrument(level = "TRACE")]
     fn next_packet(&mut self) -> Result<Option<Packet>> {
         loop {
             skip_metadata(&mut self.probe_result.format);
@@ -128,7 +128,7 @@ impl FormatReaderIterator {
                 .tap_err(|message| tracing::debug!(?message, "interpreting error"))
             {
                 Ok(packet) => {
-                    debug!(
+                    trace!(
                         packet_dur=%packet.dur,
                         packet_ts=%packet.ts,
                         packet_track_id=%packet.track_id(),
@@ -244,23 +244,23 @@ impl DecodedChunk {
 
 impl Iterator for FormatReaderIterator {
     type Item = Result<self::DecodedChunk>;
-    #[instrument(level = "DEBUG", ret)]
+    #[instrument(level = "trace", ret)]
     fn next(&mut self) -> Option<Self::Item> {
         self.next_packet()
             .context("reading next packet")
             .transpose()
             .map(|packet| {
                 packet.and_then(|packet| {
-                    debug!("decoding packet");
+                    trace!("decoding packet");
                     self.decoder
                         .decode(&packet)
                         .context("decoding packet for track")
                         .map(|decoded| {
                             let spec = *decoded.spec();
-                            debug!(?spec, "packet decode success");
+                            trace!(?spec, "packet decode success");
 
                             SampleBuffer::<f32>::new(decoded.capacity() as u64, *decoded.spec()).pipe(|mut sample_buf| {
-                                debug!("copying decoded data into a buffer");
+                                trace!("copying decoded data into a buffer");
                                 sample_buf
                                     .copy_interleaved_ref(decoded)
                                     .pipe(|_| DecodedChunk {
@@ -300,8 +300,50 @@ fn setup_logging() {
     }
 }
 
+pub fn convert_to_wav(from: &Path, to: &Path) -> Result<()> {
+    FormatReaderIterator::from_file(&from).and_then(|reader| {
+        let mut reader = reader.peekable();
+        let (source_sample_rate, channel_count) = reader
+            .peek()
+            .map(|chunk| {
+                chunk
+                    .as_ref()
+                    .map_err(|e| anyhow::anyhow!("{e:#?}"))
+                    .map(|c| (c.spec.rate, c.spec.channels.count()))
+            })
+            .context("input is empty")
+            .and_then(identity)
+            .context("deducing source spec")?;
+        let mut writer = hound::WavWriter::create(
+            to,
+            hound::WavSpec {
+                channels: channel_count as _,
+                sample_rate: source_sample_rate,
+                bits_per_sample: 32,
+                sample_format: hound::SampleFormat::Float,
+            }
+            .tap(|spec| tracing::trace!(?spec, "creating wav writer with spec")),
+        )
+        .context("creating WAV writer")?;
+        reader
+            .try_for_each(|chunk| {
+                chunk.and_then(|chunk| {
+                    chunk
+                        .sample_buffer
+                        .samples()
+                        .iter()
+                        .try_for_each(|s| writer.write_sample(*s).context("wrtigin sample"))
+                })
+            })
+            .context("writing reencoded wav data")
+            .and_then(|_| writer.finalize().context("finalizing the writer"))?;
+        info!("[DONE]");
+        Ok(())
+    })
+}
+
 pub fn resample_ogg(from: &Path, to: &Path, target_frequency: u32) -> Result<()> {
-    let mut reader = FormatReaderIterator::from_file(&from)
+    let mut reader = FormatReaderIterator::from_file(from)
         .context("opening source file")?
         .peekable();
     let (original_rate, original_channel_count) = reader
@@ -368,7 +410,7 @@ pub fn resample_ogg(from: &Path, to: &Path, target_frequency: u32) -> Result<()>
                     })
                 })
                 .and_then(|_| {
-                    tracing::debug!(
+                    tracing::trace!(
                         samples = buffers
                             .first()
                             .as_ref()
@@ -472,45 +514,7 @@ fn main() -> Result<()> {
                         .tap_ok(|_| info!("[DONE]"))
                 })
         }),
-        Commands::ConvertOGGToWAV(FromTo { from, to }) => FormatReaderIterator::from_file(&from).and_then(|reader| {
-            let mut reader = reader.peekable();
-            let (source_sample_rate, channel_count) = reader
-                .peek()
-                .map(|chunk| {
-                    chunk
-                        .as_ref()
-                        .map_err(|e| anyhow::anyhow!("{e:#?}"))
-                        .map(|c| (c.spec.rate, c.spec.channels.count()))
-                })
-                .context("input is empty")
-                .and_then(identity)
-                .context("deducing source spec")?;
-            let mut writer = hound::WavWriter::create(
-                &to,
-                hound::WavSpec {
-                    channels: channel_count as _,
-                    sample_rate: source_sample_rate,
-                    bits_per_sample: 32,
-                    sample_format: hound::SampleFormat::Float,
-                }
-                .tap(|spec| tracing::debug!(?spec, "creating wav writer with spec")),
-            )
-            .context("creating WAV writer")?;
-            reader
-                .try_for_each(|chunk| {
-                    chunk.and_then(|chunk| {
-                        chunk
-                            .sample_buffer
-                            .samples()
-                            .iter()
-                            .try_for_each(|s| writer.write_sample(*s).context("wrtigin sample"))
-                    })
-                })
-                .context("writing reencoded wav data")
-                .and_then(|_| writer.finalize().context("finalizing the writer"))?;
-            info!("[DONE]");
-            Ok(())
-        }),
+        Commands::ConvertOGGToWAV(FromTo { from, to }) => convert_to_wav(&from, &to),
         Commands::ResampleOGG {
             context: FromTo { from, to },
             target_frequency,

@@ -18,6 +18,7 @@ pub struct FileExistsCheck {
     pub loc: LocationIndex,
     pub file: FileName,
     pub custom_message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub checksums: Option<Checksums>,
 }
 
