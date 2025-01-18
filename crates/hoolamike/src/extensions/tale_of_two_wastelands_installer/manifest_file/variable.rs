@@ -1,6 +1,7 @@
 use {
     super::kind_guard::WithKindGuard,
     serde::{Deserialize, Serialize},
+    tap::prelude::*,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -44,4 +45,24 @@ pub enum Variable {
     PersonalFolder(WithKindGuard<1, PersonalFolderVariable>),
     LocalAppData(WithKindGuard<2, LocalAppDataVariable>),
     Registry(WithKindGuard<4, RegistryVariable>),
+}
+
+impl Variable {
+    pub fn name(&self) -> &str {
+        match self {
+            Variable::String(v) => v.inner.name.as_str(),
+            Variable::PersonalFolder(v) => v.inner.name.as_str(),
+            Variable::LocalAppData(v) => v.inner.name.as_str(),
+            Variable::Registry(v) => v.inner.name.as_str(),
+        }
+    }
+
+    pub fn value(&self) -> Option<&str> {
+        match self {
+            Variable::String(v) => v.inner.value.as_ref().map(|v| v.as_str()),
+            Variable::PersonalFolder(_) => None,
+            Variable::LocalAppData(_) => None,
+            Variable::Registry(v) => v.inner.value.as_str().pipe(Some),
+        }
+    }
 }

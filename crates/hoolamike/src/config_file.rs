@@ -69,6 +69,11 @@ pub struct FixupConfig {
     pub game_resolution: Resolution,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ExtrasConfig {
+    pub tale_of_two_wastelands: Option<crate::extensions::tale_of_two_wastelands_installer::ExtensionConfig>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, derivative::Derivative)]
 #[derivative(Default)]
 pub struct HoolamikeConfig {
@@ -77,6 +82,8 @@ pub struct HoolamikeConfig {
     #[derivative(Default(value = "default_games_config()"))]
     pub games: GamesConfig,
     pub fixup: FixupConfig,
+    #[serde(default)]
+    pub extras: ExtrasConfig,
 }
 
 pub static CONFIG_FILE_NAME: &str = "hoolamike.yaml";

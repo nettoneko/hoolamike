@@ -42,7 +42,13 @@ pub struct PostCommand {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct DebugAndRelease<T>((Vec<T>, Vec<T>));
+pub struct DebugAndRelease<T>(Vec<T>, Vec<T>);
+
+impl<T> DebugAndRelease<T> {
+    pub fn release(self) -> Vec<T> {
+        self.1
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]

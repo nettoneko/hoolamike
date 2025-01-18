@@ -1,4 +1,5 @@
 use {
+    crate::utils::MaybeWindowsPath,
     anyhow::Result,
     serde::{Deserialize, Serialize},
     tap::prelude::*,
@@ -31,10 +32,10 @@ pub struct Status(u8);
 pub struct Tags(u16);
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct LocationIndex(u8);
+pub struct LocationIndex(pub u8);
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, derive_more::Display, Default)]
-pub struct FileName(String);
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, derive_more::Display)]
+pub struct FileName(MaybeWindowsPath);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]

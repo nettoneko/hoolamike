@@ -58,6 +58,7 @@ struct HoolamikeDebug {
 
 #[derive(Subcommand)]
 enum Commands {
+    TaleOfTwoWastelands(crate::extensions::tale_of_two_wastelands_installer::CliConfig),
     HoolamikeDebug(HoolamikeDebug),
     /// tests the modlist parser
     ValidateModlist {
@@ -241,6 +242,10 @@ async fn async_main() -> Result<()> {
                 .map(|directives| println!("{directives}")),
         },
         Commands::Archive(archive_cli_command) => archive_cli_command.run(),
+        Commands::TaleOfTwoWastelands(cli_config) => {
+            let (_config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
+            crate::extensions::tale_of_two_wastelands_installer::install(cli_config, config)
+        }
     }
     .with_context(|| {
         format!(

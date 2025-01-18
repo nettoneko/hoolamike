@@ -35,6 +35,7 @@ pub async fn install_modlist(
         },
         games,
         fixup: _,
+        extras: _,
     }: HoolamikeConfig,
     DebugHelpers {
         skip_verify_and_downloads,

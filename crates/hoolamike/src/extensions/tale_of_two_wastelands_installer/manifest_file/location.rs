@@ -39,3 +39,34 @@ pub enum Location {
     ReadArchive(WithKindGuard<1, ReadArchiveLocation>),
     WriteArchive(WithKindGuard<2, WriteArchiveLocation>),
 }
+
+impl Location {
+    pub fn value_mut(&mut self) -> &mut String {
+        match self {
+            Location::Folder(WithKindGuard {
+                inner: FolderLocation {
+                    name: _,
+                    value,
+                    create_folder: _,
+                },
+                ..
+            }) => value,
+            Location::ReadArchive(WithKindGuard {
+                inner: ReadArchiveLocation { name: _, value },
+                ..
+            }) => value,
+            Location::WriteArchive(WithKindGuard {
+                inner:
+                    WriteArchiveLocation {
+                        value,
+                        name: _,
+                        archive_type: _,
+                        archive_flags: _,
+                        files_flags: _,
+                        archive_compressed: _,
+                    },
+                ..
+            }) => value,
+        }
+    }
+}
