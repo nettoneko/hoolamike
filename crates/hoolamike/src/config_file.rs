@@ -12,12 +12,14 @@ use {
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct NexusConfig {
     pub api_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, derivative::Derivative)]
 #[derivative(Default)]
+#[serde(deny_unknown_fields)]
 pub struct DownloadersConfig {
     #[derivative(Default(value = "std::env::current_dir().unwrap().join(\"downloads\")"))]
     pub downloads_directory: PathBuf,
@@ -25,6 +27,7 @@ pub struct DownloadersConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, derivative::Derivative)]
+#[serde(deny_unknown_fields)]
 pub struct GameConfig {
     pub root_directory: PathBuf,
 }
@@ -38,6 +41,7 @@ fn join_default_path(segments: impl IntoIterator<Item = &'static str>) -> PathBu
 
 #[derive(Debug, Clone, Serialize, Deserialize, derivative::Derivative)]
 #[derivative(Default)]
+#[serde(deny_unknown_fields)]
 pub struct InstallationConfig {
     #[derivative(Default(value = "join_default_path([\"path\",\"to\",\"file.wabbajack\" ])"))]
     pub wabbajack_file_path: PathBuf,
@@ -63,6 +67,7 @@ fn default_games_config() -> GamesConfig {
 #[serde_with::serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, derivative::Derivative)]
 #[derivative(Default)]
+#[serde(deny_unknown_fields)]
 pub struct FixupConfig {
     #[derivative(Default(value = "Resolution {x: 1280, y: 800}"))]
     #[serde_as(as = "serde_with::DisplayFromStr")]
@@ -70,20 +75,21 @@ pub struct FixupConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct ExtrasConfig {
     pub tale_of_two_wastelands: Option<crate::extensions::tale_of_two_wastelands_installer::ExtensionConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, derivative::Derivative)]
 #[derivative(Default)]
+#[serde(deny_unknown_fields)]
 pub struct HoolamikeConfig {
     pub downloaders: DownloadersConfig,
     pub installation: InstallationConfig,
     #[derivative(Default(value = "default_games_config()"))]
     pub games: GamesConfig,
     pub fixup: FixupConfig,
-    #[serde(default)]
-    pub extras: ExtrasConfig,
+    pub extras: Option<ExtrasConfig>,
 }
 
 pub static CONFIG_FILE_NAME: &str = "hoolamike.yaml";

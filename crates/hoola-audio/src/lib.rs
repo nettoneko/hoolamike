@@ -23,7 +23,7 @@ use {
         probe::{Hint, ProbeResult},
     },
     tap::prelude::*,
-    tracing::{debug, info, info_span, instrument, trace, warn},
+    tracing::{debug, info_span, instrument, trace, warn},
     vorbis_rs::VorbisEncoderBuilder,
 };
 
@@ -80,7 +80,7 @@ impl FormatReaderIterator {
             .context("probing format")?;
         Self::new(probe_result).context("instantiating the decoder iterator")
     }
-    #[instrument(skip(probe_result), ret)]
+    #[instrument(skip(probe_result), ret, level = "DEBUG")]
     fn new(probe_result: ProbeResult) -> Result<Self> {
         let track = probe_result
             .format
@@ -88,7 +88,7 @@ impl FormatReaderIterator {
             .iter()
             .find(|track| track.codec_params.codec != CODEC_TYPE_NULL)
             .context("no track could be decoded")?;
-        info!(
+        debug!(
             "selected track [{}]",
             format!("{track:#?}")
                 .chars()
@@ -135,7 +135,7 @@ impl FormatReaderIterator {
                         "next packet",
                     );
                     if packet.dur() == 0 {
-                        tracing::warn!("skipping empty chunk");
+                        tracing::debug!("skipping empty chunk");
                         continue;
                     }
                     if packet.track_id() == self.selected_track {
@@ -151,7 +151,7 @@ impl FormatReaderIterator {
                             continue;
                         }
                         std::io::ErrorKind::UnexpectedEof if e.to_string() == "end of stream" => {
-                            tracing::info!("stream finished");
+                            tracing::debug!("stream finished");
                             return Ok(None);
                         }
 
@@ -414,7 +414,7 @@ pub fn convert_to_mp3(
                     .context("building lame encoder")
             })
             .tap_ok(|encoder| {
-                tracing::info!(
+                tracing::debug!(
                     encoder_sample_rate = encoder.sample_rate(),
                     encoder_num_channels = encoder.num_channels(),
                     "created mp3 lame encoder"
@@ -465,7 +465,7 @@ pub fn convert_to_mp3(
                                     .tap_ok(|_| debug!("wrote [{size}]"))
                             })
                     })
-                    .tap_ok(|_| info!("[DONE]"))
+                    .tap_ok(|_| debug!("[DONE]"))
             })
     })
 }
@@ -510,7 +510,7 @@ pub fn convert_to_wav(from: &Path, to: &Path, target_frequency: Option<u32>) -> 
             })
             .context("writing reencoded wav data")
             .and_then(|_| writer.finalize().context("finalizing the writer"))?;
-        info!("[DONE]");
+        debug!("[DONE]");
         Ok(())
     })
 }
@@ -538,13 +538,13 @@ pub fn resample_ogg(from: &Path, to: &Path, target_frequency: u32) -> Result<()>
             target_frequency
                 .pipe(NonZeroU32::new)
                 .context("zero sampling frequency?")
-                .tap_ok(|target_frequency| info!(%target_frequency))?,
+                .tap_ok(|target_frequency| debug!(%target_frequency))?,
             original_channel_count
                 .to_u8()
                 .context("too many channels (max is 255)")
                 .and_then(|channels| NonZeroU8::new(channels).context("no channels"))
                 .context("validating input channels")
-                .tap_ok(|target_channel_count| info!(%target_channel_count))?,
+                .tap_ok(|target_channel_count| debug!(%target_channel_count))?,
             &mut output,
         )
         .context("crating vorbis encoder builder")

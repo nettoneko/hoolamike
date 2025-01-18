@@ -22,7 +22,7 @@ use {
 };
 
 #[derive(Debug)]
-pub(super) struct LazyArchiveFile<Directive> {
+pub struct LazyArchiveFile<Directive> {
     file: memmap2::Mmap,
     directive: Directive,
 }
@@ -67,7 +67,7 @@ impl LazyArchiveFile<FileStateData> {
 }
 
 #[instrument]
-pub(super) fn create_key<'a>(path: MaybeWindowsPath) -> Result<(ArchiveKey<'a>, DirectoryKey<'a>)> {
+pub fn create_key<'a>(path: MaybeWindowsPath) -> Result<(ArchiveKey<'a>, DirectoryKey<'a>)> {
     // path.0
     //     .into_bytes()
     //     .conv::<BString>()

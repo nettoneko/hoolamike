@@ -90,11 +90,7 @@ pub struct Manifest {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{post_install_fixup::diffing::PrettyDiff, utils::deserialize_json_with_error_location},
-        anyhow::Context,
-    };
+    use {super::*, crate::utils::deserialize_json_with_error_location, anyhow::Context};
 
     #[test_log::test]
     fn test_ad_hoc_example_manifest_file() -> anyhow::Result<()> {

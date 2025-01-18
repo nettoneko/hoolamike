@@ -134,6 +134,19 @@ pub enum Asset {
     AudioEnc(AudioEncAsset),
 }
 
+impl Asset {
+    pub fn name(&self) -> &str {
+        match self {
+            Asset::Copy(copy_asset) => copy_asset.source.path.0 .0.as_str(),
+            Asset::New(new_asset) => new_asset.source.path.0 .0.as_str(),
+            Asset::Patch(patch_asset) => patch_asset.source.path.0 .0.as_str(),
+            Asset::XwmaFuz(_) => "Asset::XwmaFuz IS NOT IMPLEMENTED",
+            Asset::OggEnc2(ogg_enc2_asset) => ogg_enc2_asset.source.path.0 .0.as_str(),
+            Asset::AudioEnc(audio_enc_asset) => audio_enc_asset.source.path.0 .0.as_str(),
+        }
+    }
+}
+
 impl From<&Asset> for AssetRawKind {
     fn from(value: &Asset) -> Self {
         match value {
