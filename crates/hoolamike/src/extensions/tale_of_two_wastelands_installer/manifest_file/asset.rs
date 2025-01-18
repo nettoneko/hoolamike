@@ -1,7 +1,8 @@
 use {
     crate::utils::MaybeWindowsPath,
-    anyhow::Result,
+    anyhow::{Context, Result},
     serde::{Deserialize, Serialize},
+    std::collections::BTreeMap,
     tap::prelude::*,
 };
 
@@ -18,6 +19,26 @@ pub(crate) enum AssetRawKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Params(String);
+
+impl Params {
+    pub fn parse(&self) -> anyhow::Result<BTreeMap<&str, &str>> {
+        self.0
+            .split_whitespace()
+            .map(|param| {
+                param
+                    .split_once(":")
+                    .context("param did not contain ':'")
+                    .and_then(|(key, value)| {
+                        key.split_once('-')
+                            .with_context(|| format!("key [{key}] did not contain -"))
+                            .map(|(_, key)| (key, value))
+                    })
+                    .with_context(|| format!("bad param: '{param}'"))
+            })
+            .collect::<Result<BTreeMap<_, _>>>()
+            .with_context(|| format!("parsing params: '{}'", self.0))
+    }
+}
 
 impl Params {
     pub const fn empty() -> Self {

@@ -1,16 +1,16 @@
 use {
     crate::{
-        compression::{bethesda_archive::BethesdaArchive, ProcessArchive},
+        compression::{bethesda_archive::BethesdaArchive, ProcessArchive, SeekWithTempFileExt},
         config_file::{ExtrasConfig, HoolamikeConfig, InstallationConfig},
         modlist_json::GameName,
         progress_bars_v2::IndicatifWrapIoExt,
-        utils::{MaybeWindowsPath, PathReadWrite},
+        utils::{with_scoped_temp_path, MaybeWindowsPath, PathReadWrite},
     },
     anyhow::{bail, Context, Result},
     manifest_file::{
-        asset::{Asset, FullLocation, LocationIndex, MaybeFullLocation, NewAsset},
+        asset::{Asset, CopyAsset, FullLocation, LocationIndex, MaybeFullLocation, NewAsset, OggEnc2Asset},
         kind_guard::WithKindGuard,
-        location::Location,
+        location::{Location, ReadArchiveLocation},
         variable::{LocalAppDataVariable, PersonalFolderVariable, RegistryVariable, StringVariable, Variable},
     },
     normalize_path::NormalizePath,
@@ -69,61 +69,62 @@ impl VariablesContext {
     #[instrument(skip(self))]
     fn resolve_variable(&self, maybe_with_variable: &str) -> Result<Cow<str>> {
         match self::templating::find_template_marker(maybe_with_variable) {
-            Some((left, variable_name, right)) => info_span!("variable_found", %variable_name).in_scope(|| match variable_name {
-                "DESTINATION" => self
-                    .hoolamike_installation_config
-                    .installation
-                    .installation_path
-                    .display()
-                    .to_string()
-                    .pipe(Cow::<str>::Owned)
-                    .tap(|value| info!(%variable_name, %value, "⭐⭐⭐ MAGICALLY ⭐⭐⭐ filling the variable using hoolamike derived context"))
-                    .pipe(Ok),
-                "FO3ROOT" => self
-                    .hoolamike_installation_config
-                    .games
-                    .get(&GameName::new("Fallout3".to_string()))
-                    .context("'Fallout3' is not found in hoolamike defined games")
-                    .map(|p| p.root_directory.display().to_string().pipe(Cow::Owned))
-                    .tap_ok(|value| info!(%variable_name, %value, "⭐⭐⭐ MAGICALLY ⭐⭐⭐ filling the variable using hoolamike derived context")),
+            Some((left, variable_name, right)) => info_span!("variable_found", %variable_name)
+                .in_scope(|| match variable_name {
+                    "DESTINATION" => self
+                        .hoolamike_installation_config
+                        .installation
+                        .installation_path
+                        .display()
+                        .to_string()
+                        .pipe(Cow::<str>::Owned)
+                        .tap(|value| info!(%variable_name, %value, "⭐⭐⭐ MAGICALLY ⭐⭐⭐ filling the variable using hoolamike derived context"))
+                        .pipe(Ok),
+                    "FO3ROOT" => self
+                        .hoolamike_installation_config
+                        .games
+                        .get(&GameName::new("Fallout3".to_string()))
+                        .context("'Fallout3' is not found in hoolamike defined games")
+                        .map(|p| p.root_directory.display().to_string().pipe(Cow::Owned))
+                        .tap_ok(|value| info!(%variable_name, %value, "⭐⭐⭐ MAGICALLY ⭐⭐⭐ filling the variable using hoolamike derived context")),
 
-                "FNVROOT" => self
-                    .hoolamike_installation_config
-                    .games
-                    .get(&GameName::new("FalloutNewVegas".to_string()))
-                    .context("'FalloutNewVegas' is not found in hoolamike defined games")
-                    .map(|p| p.root_directory.display().to_string().pipe(Cow::Owned))
-                    .tap_ok(|value| info!(%variable_name, %value, "⭐⭐⭐ MAGICALLY ⭐⭐⭐ filling the variable using hoolamike derived context")),
+                    "FNVROOT" => self
+                        .hoolamike_installation_config
+                        .games
+                        .get(&GameName::new("FalloutNewVegas".to_string()))
+                        .context("'FalloutNewVegas' is not found in hoolamike defined games")
+                        .map(|p| p.root_directory.display().to_string().pipe(Cow::Owned))
+                        .tap_ok(|value| info!(%variable_name, %value, "⭐⭐⭐ MAGICALLY ⭐⭐⭐ filling the variable using hoolamike derived context")),
 
-                variable_name => match self.variables.get(variable_name) {
-                    Some(variable) => Err(())
-                        .or_else(|_| {
-                            self.ttw_config_variables
-                                .get(variable_name)
-                                .map(|v| v.as_str().pipe(Cow::Borrowed))
-                                .with_context(|| format!("no variable defined in hoolamike config: '{variable_name}'"))
-                        })
-                        .or_else(|reason| {
-                            variable
-                                .value()
-                                .filter(|v| {
-                                    !v.is_empty().tap(|is_empty| {
-                                        if *is_empty {
-                                            tracing::warn!("variable [{variable_name}] is empty which means it should be filled by the user");
-                                        }
+                    variable_name => match self.variables.get(variable_name) {
+                        Some(variable) => Err(())
+                            .or_else(|_| {
+                                self.ttw_config_variables
+                                    .get(variable_name)
+                                    .map(|v| v.as_str().pipe(Cow::Borrowed))
+                                    .with_context(|| format!("no variable defined in hoolamike config: '{variable_name}'"))
+                            })
+                            .or_else(|reason| {
+                                variable
+                                    .value()
+                                    .filter(|v| {
+                                        !v.is_empty().tap(|is_empty| {
+                                            if *is_empty {
+                                                tracing::warn!("variable [{variable_name}] is empty which means it should be filled by the user");
+                                            }
+                                        })
                                     })
-                                })
-                                .map(Cow::Borrowed)
-                                .context("variable not found in installer variable definition section")
-                                .with_context(|| format!("HINT: you can override the variables in hoolamike config\n({reason:?})"))
-                        }),
-                    None => Err(anyhow::anyhow!("ttw installer does not define this variable: '{variable_name}'")),
-                }
+                                    .map(Cow::Borrowed)
+                                    .context("variable not found in installer variable definition section")
+                                    .with_context(|| format!("HINT: you can override the variables in hoolamike config\n({reason:?})"))
+                            }),
+                        None => Err(anyhow::anyhow!("ttw installer does not define this variable: '{variable_name}'")),
+                    },
+                })
+                .and_then(|updated| self.resolve_variable(&updated))
                 .map(|variable| format!("{left}{variable}{right}"))
                 .map(Cow::Owned)
-                .inspect(|updated_value| tracing::info!(%updated_value, "updated templated value"))
-                .and_then(|updated| self.resolve_variable(&updated)),
-            }),
+                .inspect(|updated_value| tracing::info!(%updated_value, "updated templated value")),
             None => Ok(Cow::Owned(
                 maybe_with_variable
                     .to_string()
@@ -175,21 +176,33 @@ impl FullLocation {
             .get(&self.location)
             .with_context(|| format!("no location for {self:#?}"))
             .inspect(|location| tracing::debug!("{location:#?}"))
-            .and_then(|location| match location {
-                Location::Folder(folder) => folder
-                    .inner
-                    .value
-                    .clone()
-                    .pipe(MaybeWindowsPath)
-                    .pipe(MaybeWindowsPath::into_path)
-                    .pipe(|path| path.join(self.path.0.into_path()).normalize())
-                    .pipe(|source| {
-                        source
-                            .open_file_read()
-                            .map(|(_, file)| Box::new(file) as Box<dyn Read>)
-                    }),
-                Location::ReadArchive(read_archive) => anyhow::bail!("Location::ReadArchive({read_archive:#?})"),
-                Location::WriteArchive(write_archive) => anyhow::bail!("Location::WriteArchive({write_archive:#?})"),
+            .and_then(|location| {
+                (match location {
+                    Location::Folder(folder) => folder
+                        .inner
+                        .value
+                        .clone()
+                        .pipe(MaybeWindowsPath)
+                        .pipe(MaybeWindowsPath::into_path)
+                        .pipe(|path| path.join(self.path.0.into_path()).normalize())
+                        .pipe(|source| {
+                            source
+                                .open_file_read()
+                                .map(|(_, file)| Box::new(file) as Box<dyn Read>)
+                        }),
+                    Location::ReadArchive(WithKindGuard {
+                        inner: ReadArchiveLocation { name, value },
+                        ..
+                    }) => {
+                        let value = MaybeWindowsPath(value.clone()).into_path().normalize();
+                        crate::compression::ArchiveHandle::with_guessed(value.as_path(), value.extension(), |mut archive| {
+                            archive.get_handle(&self.path.clone().0.into_path())
+                        })
+                        .map(|handle| Box::new(handle) as Box<dyn Read>)
+                    }
+                    Location::WriteArchive(write_archive) => anyhow::bail!("cannot write into this, right? => Location::WriteArchive({write_archive:#?})"),
+                })
+                .with_context(|| format!("when converting location into reader:\n[{location:#?}]"))
             })
     }
 }
@@ -286,11 +299,44 @@ pub fn install(cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Resu
                                     .and_then(|mut handle| target.insert_into(&locations, &mut handle))
                             })
                     }
-                    Asset::Copy(copy_asset) => Err(anyhow::anyhow!("Asset::Copy({copy_asset:#?}) not implemented")),
-                    Asset::Patch(patch_asset) => Err(anyhow::anyhow!("Asset::Patch({patch_asset:#?}) not implemented")),
-                    Asset::XwmaFuz(xwma_fuz_asset) => Err(anyhow::anyhow!("Asset::XwmaFuz({xwma_fuz_asset:#?}) not implemented")),
-                    Asset::OggEnc2(ogg_enc2_asset) => Err(anyhow::anyhow!("Asset::OggEnc2({ogg_enc2_asset:#?}) not implemented")),
-                    Asset::AudioEnc(audio_enc_asset) => Err(anyhow::anyhow!("Asset::AudioEnc({audio_enc_asset:#?}) not implemented")),
+                    Asset::Copy(CopyAsset { tags, status, source, target }) => {
+                        let target = target.lookup_from_both_source_and_target(&source);
+                        source
+                            .into_reader(&locations)
+                            .context("building source")
+                            .and_then(|mut source| {
+                                target
+                                    .insert_into(&locations, &mut source)
+                                    .context("performing move")
+                            })
+                    }
+                    Asset::Patch(patch_asset) => Err(anyhow::anyhow!(" not implemented")),
+                    Asset::XwmaFuz(xwma_fuz_asset) => Err(anyhow::anyhow!(" not implemented")),
+                    Asset::OggEnc2(ogg_enc_asset) => {
+                        let target = ogg_enc_asset
+                            .target
+                            .clone()
+                            .lookup_from_both_source_and_target(&ogg_enc_asset.source);
+                        let target_frequency = ogg_enc_asset
+                            .params
+                            .parse()
+                            .context("bad params")
+                            .and_then(|params| params.get("f").copied().context("no 'f' param (frequency)"))
+                            .context("frequency reading ogg encoder params")
+                            .and_then(|f| {
+                                f.parse::<u32>()
+                                    .with_context(|| format!("'{f}' is not a valid frequency"))
+                            })?;
+                        ogg_enc_asset
+                            .source
+                            .into_reader(&locations)
+                            .and_then(|source| {
+                                source
+                                    .seek_with_temp_file_blocking_raw(0)
+                                    .and_then(|(_, source)| with_scoped_temp_path(|buffer| hoola_audio::resample_ogg(&source, buffer, target_frequency)))
+                            })
+                    }
+                    Asset::AudioEnc(audio_enc_asset) => Err(anyhow::anyhow!(" not implemented")),
                 }
                 .with_context(|| format!("handling [{asset:#?}]"))
             })

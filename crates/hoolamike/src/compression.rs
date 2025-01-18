@@ -265,11 +265,11 @@ impl ArchiveHandle<'_> {
                             .with_context(|| format!("because: {err:#?}"))
                             .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
                     })
-                    .map_err(|_| anyhow::anyhow!("no defined archive handler could handle this file"))
+                    .map_err(|error| anyhow::anyhow!("no defined archive handler could handle this file\n\n[{error:?}]"))
                     .with_context(|| format!("because no defined extension matched [{other:?}]"))
             }
         }
-        .context("no defined archive handler could handle this file")
+        .with_context(|| format!("no defined archive handler could handle this file: [{path:?}]"))
     }
 }
 
@@ -303,9 +303,9 @@ pub enum ArchiveHandle<'a> {
 pub mod wrapped_7zip;
 
 #[extension_traits::extension(pub(crate) trait SeekWithTempFileExt)]
-impl<T: std::io::Read + Sync + 'static> T
+impl<T: std::io::Read + 'static> T
 where
-    Self: Sized + Sync + Send + 'static,
+    Self: Sized,
 {
     fn seek_with_temp_file_blocking_raw(mut self, expected_size: u64) -> Result<(u64, tempfile::TempPath)> {
         let _span = tracing::info_span!("seek_with_temp_file_blocking_raw").entered();
@@ -366,7 +366,10 @@ where
             })
             .map(|file| WithPermit { permit, inner: file })
     }
-    async fn seek_with_temp_file(self, expected_size: u64) -> Result<WithPermit<tempfile::TempPath>> {
+    async fn seek_with_temp_file(self, expected_size: u64) -> Result<WithPermit<tempfile::TempPath>>
+    where
+        T: Sync + Send + 'static,
+    {
         let span = tracing::info_span!(
             "seek_with_temp_file",
             acquired_file_permits=%(max_open_files() - OPEN_FILE_PERMITS.available_permits()),

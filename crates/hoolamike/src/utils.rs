@@ -1,10 +1,12 @@
 use {
+    crate::consts::TEMP_FILE_DIR,
     anyhow::Context,
     futures::FutureExt,
     itertools::Itertools,
     serde::{Deserialize, Serialize},
     std::{convert::identity, future::Future, path::PathBuf, sync::Arc},
     tap::prelude::*,
+    tempfile::TempPath,
     tracing::info_span,
 };
 
@@ -160,6 +162,14 @@ fn test_chunk_while() {
         chunk_while(repeat(1u8).take(6).collect(), |chunk| chunk.len() == 2),
         vec![vec![1u8, 1], vec![1u8, 1], vec![1u8, 1]]
     );
+}
+
+pub fn with_scoped_temp_path<T, F: FnOnce(&TempPath) -> anyhow::Result<T>>(with: F) -> anyhow::Result<T> {
+    tempfile::NamedTempFile::new_in(*TEMP_FILE_DIR)
+        .context("creating temp file")
+        .map(|file| file.into_temp_path())
+        .and_then(|path| with(&path))
+        .context("performing operation on a scoped temp file")
 }
 
 pub fn deserialize_json_with_error_location<T: serde::de::DeserializeOwned>(text: &str) -> anyhow::Result<T> {

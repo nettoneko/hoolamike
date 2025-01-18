@@ -1,7 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/bsa-cli", "crates/hoola-audio",
+  "crates/bsa-cli",
+  "crates/hoola-audio",
   "crates/hoolamike",
   "crates/tokio-cached-future",
   "crates/wrapped-7zip",
@@ -22,6 +23,7 @@ edition = "2021"
 # internal
 wrapped-7zip.path = "crates/wrapped-7zip"
 tokio-cached-future.path = "crates/tokio-cached-future"
+hoola-audio.path = "crates/hoola-audio"
 
 # external
 anyhow = "1.0.93"
