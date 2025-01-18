@@ -300,6 +300,92 @@ fn setup_logging() {
     }
 }
 
+pub fn resample_ogg(from: &Path, to: &Path, target_frequency: u32) -> Result<()> {
+    let mut reader = FormatReaderIterator::from_file(&from)
+        .context("opening source file")?
+        .peekable();
+    let (original_rate, original_channel_count) = reader
+        .peek()
+        .map(|r| {
+            r.as_ref()
+                .map_err(|e| anyhow::anyhow!("{e:#?}"))
+                .map(|r| (r.spec.rate, r.spec.channels.count()))
+        })
+        .context("input is empty?")
+        .and_then(identity)
+        .context("deducing original metadata")?;
+    let _source_span = info_span!("with_source_info", %original_rate, %original_channel_count).entered();
+    let mut output = std::fs::File::create(&to)
+        .context("opening output file for writing")?
+        .pipe(BufWriter::new);
+    let mut encoder = info_span!("building_vobis_encoder").in_scope(|| -> Result<_> {
+        VorbisEncoderBuilder::new(
+            target_frequency
+                .pipe(NonZeroU32::new)
+                .context("zero sampling frequency?")
+                .tap_ok(|target_frequency| info!(%target_frequency))?,
+            original_channel_count
+                .to_u8()
+                .context("too many channels (max is 255)")
+                .and_then(|channels| NonZeroU8::new(channels).context("no channels"))
+                .context("validating input channels")
+                .tap_ok(|target_channel_count| info!(%target_channel_count))?,
+            &mut output,
+        )
+        .context("crating vorbis encoder builder")
+        .and_then(|mut e| e.build().context("finalizing vorbis encoder"))
+        .context("creating vorbis encoder")
+    })?;
+    let mut buffers = (0..original_channel_count)
+        .map(|_| Vec::new())
+        .collect_vec();
+    const REASONABLE_OGG_BLOCK_SIZE: usize = 2048;
+    reader
+        .chunk_while(|chunk| {
+            chunk
+                .iter()
+                .map(|c| {
+                    c.as_ref()
+                        .map(|c| c.single_channel_length())
+                        .unwrap_or_default()
+                })
+                .sum::<usize>()
+                < REASONABLE_OGG_BLOCK_SIZE
+        })
+        .try_for_each(|chunk| {
+            buffers.iter_mut().for_each(|b| b.clear());
+            chunk
+                .into_iter()
+                .collect::<Result<Vec<_>>>()
+                .map(|chunk| {
+                    chunk.into_iter().for_each(|chunk| {
+                        chunk
+                            .split_channels()
+                            .zip(buffers.iter_mut())
+                            .for_each(|(channel, buffer)| {
+                                buffer.extend(channel.copied());
+                            });
+                    })
+                })
+                .and_then(|_| {
+                    tracing::debug!(
+                        samples = buffers
+                            .first()
+                            .as_ref()
+                            .map(|b| b.len())
+                            .unwrap_or_default(),
+                        "wrote to buffer"
+                    );
+                    encoder
+                        .encode_audio_block(&buffers)
+                        .context("encoding sample")
+                })
+        })
+        .and_then(|_| encoder.finish().context("finalizing encoder"))
+        .and_then(|w| w.flush().context("flushing the output"))
+        .with_context(|| format!("resampling [from:?] -> [{to:?}]"))
+}
+
 fn main() -> Result<()> {
     setup_logging();
     let Cli { command } = Cli::parse();
@@ -428,90 +514,6 @@ fn main() -> Result<()> {
         Commands::ResampleOGG {
             context: FromTo { from, to },
             target_frequency,
-        } => {
-            let mut reader = FormatReaderIterator::from_file(&from)
-                .context("opening source file")?
-                .peekable();
-            let (original_rate, original_channel_count) = reader
-                .peek()
-                .map(|r| {
-                    r.as_ref()
-                        .map_err(|e| anyhow::anyhow!("{e:#?}"))
-                        .map(|r| (r.spec.rate, r.spec.channels.count()))
-                })
-                .context("input is empty?")
-                .and_then(identity)
-                .context("deducing original metadata")?;
-            let _source_span = info_span!("with_source_info", %original_rate, %original_channel_count).entered();
-            let mut output = std::fs::File::create(&to)
-                .context("opening output file for writing")?
-                .pipe(BufWriter::new);
-            let mut encoder = info_span!("building_vobis_encoder").in_scope(|| -> Result<_> {
-                VorbisEncoderBuilder::new(
-                    target_frequency
-                        .pipe(NonZeroU32::new)
-                        .context("zero sampling frequency?")
-                        .tap_ok(|target_frequency| info!(%target_frequency))?,
-                    original_channel_count
-                        .to_u8()
-                        .context("too many channels (max is 255)")
-                        .and_then(|channels| NonZeroU8::new(channels).context("no channels"))
-                        .context("validating input channels")
-                        .tap_ok(|target_channel_count| info!(%target_channel_count))?,
-                    &mut output,
-                )
-                .context("crating vorbis encoder builder")
-                .and_then(|mut e| e.build().context("finalizing vorbis encoder"))
-                .context("creating vorbis encoder")
-            })?;
-            let mut buffers = (0..original_channel_count)
-                .map(|_| Vec::new())
-                .collect_vec();
-            const REASONABLE_OGG_BLOCK_SIZE: usize = 2048;
-            reader
-                .chunk_while(|chunk| {
-                    chunk
-                        .iter()
-                        .map(|c| {
-                            c.as_ref()
-                                .map(|c| c.single_channel_length())
-                                .unwrap_or_default()
-                        })
-                        .sum::<usize>()
-                        < REASONABLE_OGG_BLOCK_SIZE
-                })
-                .try_for_each(|chunk| {
-                    buffers.iter_mut().for_each(|b| b.clear());
-                    chunk
-                        .into_iter()
-                        .collect::<Result<Vec<_>>>()
-                        .map(|chunk| {
-                            chunk.into_iter().for_each(|chunk| {
-                                chunk
-                                    .split_channels()
-                                    .zip(buffers.iter_mut())
-                                    .for_each(|(channel, buffer)| {
-                                        buffer.extend(channel.copied());
-                                    });
-                            })
-                        })
-                        .and_then(|_| {
-                            tracing::debug!(
-                                samples = buffers
-                                    .first()
-                                    .as_ref()
-                                    .map(|b| b.len())
-                                    .unwrap_or_default(),
-                                "wrote to buffer"
-                            );
-                            encoder
-                                .encode_audio_block(&buffers)
-                                .context("encoding sample")
-                        })
-                })
-                .and_then(|_| encoder.finish().context("finalizing encoder"))
-                .and_then(|w| w.flush().context("flushing the output"))
-                .with_context(|| format!("resampling [from:?] -> [{to:?}]"))
-        }
+        } => resample_ogg(&from, &to, target_frequency),
     }
 }
