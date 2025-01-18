@@ -1,27 +1,25 @@
 use {
     crate::{
         compression::{bethesda_archive::BethesdaArchive, ProcessArchive, SeekWithTempFileExt},
-        config_file::{ExtrasConfig, HoolamikeConfig, InstallationConfig},
+        config_file::HoolamikeConfig,
         modlist_json::GameName,
         progress_bars_v2::IndicatifWrapIoExt,
         utils::{scoped_temp_file, with_scoped_temp_path, MaybeWindowsPath, PathReadWrite, ReadableCatchUnwindExt},
     },
-    anyhow::{bail, Context, Result},
+    anyhow::{Context, Result},
     manifest_file::{
-        asset::{Asset, AudioEncAsset, CopyAsset, FullLocation, LocationIndex, MaybeFullLocation, NewAsset, OggEnc2Asset, PatchAsset},
+        asset::{Asset, CopyAsset, FullLocation, LocationIndex, MaybeFullLocation, NewAsset, PatchAsset},
         kind_guard::WithKindGuard,
         location::{Location, ReadArchiveLocation, WriteArchiveLocation},
-        variable::{LocalAppDataVariable, PersonalFolderVariable, RegistryVariable, StringVariable, Variable},
+        variable::Variable,
     },
     normalize_path::NormalizePath,
     num::ToPrimitive,
     parking_lot::Mutex,
-    rayon::iter::{IntoParallelIterator, ParallelIterator},
     serde::{Deserialize, Serialize},
     std::{
         borrow::Cow,
         collections::BTreeMap,
-        convert::identity,
         io::{BufReader, Read},
         path::{Path, PathBuf},
         sync::Arc,
@@ -65,6 +63,7 @@ struct RepackingContext {
 #[derive(Debug)]
 struct LazyArchive {
     files: Vec<(PathBuf, TempPath)>,
+    #[allow(dead_code)]
     archive_metadata: WriteArchiveLocation,
 }
 
@@ -251,7 +250,7 @@ impl FullLocation {
                                 .map(|(_, file)| Box::new(file) as Box<dyn Read>)
                         }),
                     Location::ReadArchive(WithKindGuard {
-                        inner: ReadArchiveLocation { name, value },
+                        inner: ReadArchiveLocation { name: _, value },
                         ..
                     }) => {
                         let value = MaybeWindowsPath(value.clone()).into_path().normalize();
@@ -268,7 +267,7 @@ impl FullLocation {
 }
 
 #[instrument(skip_all)]
-pub fn install(cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Result<()> {
+pub fn install(_cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Result<()> {
     let ExtensionConfig {
         path_to_ttw_mpi_file,
         variables: ttw_config_variables,
@@ -282,10 +281,10 @@ pub fn install(cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Resu
         package,
         variables,
         locations,
-        tags,
-        checks,
-        file_attrs,
-        post_commands,
+        tags: _,
+        checks: _,
+        file_attrs: _,
+        post_commands: _,
         assets,
     } = crate::compression::bethesda_archive::BethesdaArchive::open(path_to_ttw_mpi_file)
         .and_then(|mut archive| {
@@ -344,14 +343,18 @@ pub fn install(cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Resu
         .collect::<Result<BTreeMap<LocationIndex, Location>>>()
         .context("collecting locations")?;
 
-    let mut bsa_packing_queue = BTreeMap::<PathBuf, Vec<(TempPath, PathBuf)>>::new();
     let repacking_context = RepackingContext::new(locations.pipe(Arc::new));
     assets
         .into_iter()
         .try_for_each(move |asset| {
             info_span!("handling_asset", kind=?manifest_file::asset::AssetRawKind::from(&asset)).in_scope(|| {
                 match asset.clone() {
-                    Asset::New(NewAsset { tags, status, source, target }) => {
+                    Asset::New(NewAsset {
+                        tags: _,
+                        status: _,
+                        source,
+                        target,
+                    }) => {
                         let target = target.lookup_from_both_source_and_target(&source);
                         BethesdaArchive::open(path_to_ttw_mpi_file)
                             .context("opening mpi file")
@@ -367,7 +370,12 @@ pub fn install(cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Resu
                                     .and_then(|mut handle| target.insert_into(repacking_context.clone(), &mut handle))
                             })
                     }
-                    Asset::Copy(CopyAsset { tags, status, source, target }) => {
+                    Asset::Copy(CopyAsset {
+                        tags: _,
+                        status: _,
+                        source,
+                        target,
+                    }) => {
                         let target = target.lookup_from_both_source_and_target(&source);
                         source
                             .into_reader(repacking_context.clone())
@@ -378,7 +386,12 @@ pub fn install(cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Resu
                                     .context("performing move")
                             })
                     }
-                    Asset::Patch(PatchAsset { tags, status, source, target }) => {
+                    Asset::Patch(PatchAsset {
+                        tags: _,
+                        status: _,
+                        source,
+                        target,
+                    }) => {
                         let target = target.lookup_from_both_source_and_target(&source);
                         BethesdaArchive::open(path_to_ttw_mpi_file)
                             .context("opening mpi file")
@@ -423,7 +436,7 @@ pub fn install(cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Resu
                                     })
                             })
                     }
-                    Asset::XwmaFuz(xwma_fuz_asset) => Err(anyhow::anyhow!(" not implemented")),
+                    Asset::XwmaFuz(_xwma_fuz_asset) => Err(anyhow::anyhow!(" not implemented")),
                     Asset::OggEnc2(ogg_enc_asset) => {
                         let target = ogg_enc_asset
                             .target
@@ -477,7 +490,7 @@ pub fn install(cli_config: CliConfig, hoolamike_config: HoolamikeConfig) -> Resu
                             .params
                             .parse()
                             .context("bad params")
-                            .and_then(|mut params| {
+                            .and_then(|params| {
                                 // let target_frequency = params
                                 //     .remove("f")
                                 //     .context("no 'f' param (frequency)")
