@@ -6,6 +6,38 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
+- *(hoola-audio)* Mp3 handling
+- *(hoola-audio)* Ogg and wav support
+- *(hoola-audio)* Better logging
+- *(ttw)* Stage I
+- *(ttw)* Stage II
+- *(ttw)* Stage III
+- *(ttw)* Stage IV
+- *(ttw)* Stage V
+- *(ttw)* Stage VI
+- *(ttw)* Stage VII
+- *(ttw)* Stage VIII (variables)
+- *(ttw)* Asset::Copy
+- *(ttw)* Stage IX (all assets initially handled)
+- *(ttw)* Multithreading support
+- *(ttw)* Ttw installer functionality is fully ported ☢️
+
+### 🐛 Bug Fixes
+
+- *(ttw)* Variable resolving
+- *(ttw)* Ogg resampling
+- *(ttw)* Fix asset handling
+
+### 🚜 Refactor
+
+- *(ttw)* Type safety for manifest file
+- Cleanup warnings
+- Cleanup ttw installer code
+
+## [0.11.3] - 2025-01-15
+
+### 🚀 Features
+
 - *(archives)* Bethesda archives now extract a bit more optimally, extracting archives through cli
 
 ## [0.11.2] - 2025-01-14
