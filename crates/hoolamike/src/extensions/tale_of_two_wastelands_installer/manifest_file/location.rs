@@ -41,6 +41,13 @@ pub enum Location {
 }
 
 impl Location {
+    pub fn name(&self) -> &str {
+        match self {
+            Location::Folder(l) => l.inner.name.as_str(),
+            Location::ReadArchive(l) => l.inner.name.as_str(),
+            Location::WriteArchive(l) => l.inner.name.as_str(),
+        }
+    }
     pub fn value_mut(&mut self) -> &mut String {
         match self {
             Location::Folder(WithKindGuard {

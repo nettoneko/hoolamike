@@ -7,7 +7,7 @@ use {
     std::{convert::identity, future::Future, path::PathBuf, sync::Arc},
     tap::prelude::*,
     tempfile::{NamedTempFile, TempPath},
-    tracing::info_span,
+    tracing::{debug_span, info_span},
 };
 
 #[extension_traits::extension(pub trait ReadableCatchUnwindExt)]
@@ -77,23 +77,29 @@ macro_rules! cloned {
 #[extension_traits::extension(pub(crate) trait PathReadWrite)]
 impl<T: AsRef<std::path::Path>> T {
     fn open_file_read(&self) -> anyhow::Result<(PathBuf, std::fs::File)> {
-        std::fs::OpenOptions::new()
-            .read(true)
-            .open(self)
-            .with_context(|| format!("opening file for reading at [{}]", self.as_ref().display()))
-            .map(|file| (self.as_ref().to_owned(), file))
+        debug_span!("open_file_read", path=%self.as_ref().display()).in_scope(|| {
+            std::fs::OpenOptions::new()
+                .read(true)
+                .open(self)
+                .with_context(|| format!("opening file for reading at [{}]", self.as_ref().display()))
+                .map(|file| (self.as_ref().to_owned(), file))
+        })
     }
     fn open_file_write(&self) -> anyhow::Result<(PathBuf, std::fs::File)> {
-        if let Some(parent) = self.as_ref().parent() {
-            std::fs::create_dir_all(parent).context("creating full path for output file")?;
-        }
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(self)
-            .with_context(|| format!("opening file for writing at [{}]", self.as_ref().display()))
-            .map(|file| (self.as_ref().to_owned(), file))
+        debug_span!("open_file_read", path=%self.as_ref().display()).in_scope(|| {
+            Ok(()).and_then(|_| {
+                if let Some(parent) = self.as_ref().parent() {
+                    std::fs::create_dir_all(parent).context("creating full path for output file")?;
+                }
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .open(self)
+                    .with_context(|| format!("opening file for writing at [{}]", self.as_ref().display()))
+                    .map(|file| (self.as_ref().to_owned(), file))
+            })
+        })
     }
 }
 

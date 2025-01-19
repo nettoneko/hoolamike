@@ -1,6 +1,7 @@
 use {
     super::{
         manifest_file::asset::{Asset, CopyAsset, NewAsset, PatchAsset},
+        LazyArchiveChunk,
         PathReadWrite,
         RepackingContext,
         SeekWithTempFileExt,
@@ -25,7 +26,7 @@ pub struct AssetContext {
 
 impl AssetContext {
     #[instrument(skip(self))]
-    pub fn handle_asset(self, asset: Asset) -> Result<()> {
+    pub fn handle_asset(self, asset: Asset) -> Result<Option<LazyArchiveChunk>> {
         let Self {
             path_to_ttw_mpi_file,
             repacking_context,

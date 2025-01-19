@@ -7,6 +7,7 @@ use {
         utils::{scoped_temp_file, MaybeWindowsPath, PathReadWrite},
     },
     anyhow::{Context, Result},
+    itertools::Itertools,
     manifest_file::{
         asset::{FullLocation, LocationIndex, MaybeFullLocation},
         kind_guard::WithKindGuard,
@@ -16,7 +17,6 @@ use {
     },
     normalize_path::NormalizePath,
     num::ToPrimitive,
-    parking_lot::Mutex,
     rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     serde::{Deserialize, Serialize},
     std::{
@@ -64,7 +64,6 @@ type LocationsLookup = BTreeMap<LocationIndex, Location>;
 
 #[derive(Clone)]
 struct RepackingContext {
-    queued_archives: Arc<Mutex<BTreeMap<PathBuf, LazyArchive>>>,
     locations: Arc<LocationsLookup>,
 }
 
@@ -85,7 +84,7 @@ impl LazyArchive {
         }
     }
 
-    #[instrument]
+    #[instrument(skip(self), fields(current_count=self.files.len()))]
     fn insert(&mut self, archive_path: PathBuf, file: TempPath) {
         debug!("scheduling file into archive");
         self.files.push((archive_path, file))
@@ -94,10 +93,7 @@ impl LazyArchive {
 
 impl RepackingContext {
     pub fn new(locations: Arc<LocationsLookup>) -> Self {
-        Self {
-            queued_archives: Default::default(),
-            locations,
-        }
+        Self { locations }
     }
 }
 
@@ -180,9 +176,15 @@ impl MaybeFullLocation {
     }
 }
 
+pub struct LazyArchiveChunk {
+    target: WriteArchiveLocation,
+    key: PathBuf,
+    buffer: TempPath,
+}
+
 impl FullLocation {
     #[instrument(level = "DEBUG", skip(from_reader, repacking_context))]
-    fn insert_into(self, repacking_context: RepackingContext, from_reader: &mut impl Read) -> Result<()> {
+    fn insert_into(self, repacking_context: RepackingContext, from_reader: &mut impl Read) -> Result<Option<LazyArchiveChunk>> {
         repacking_context
             .locations
             .get(&self.location)
@@ -201,32 +203,26 @@ impl FullLocation {
                         std::io::copy(from_reader, &mut target_file)
                             .with_context(|| format!("copying into [{target_path:#?}]"))
                             .map(|wrote| tracing::info!(?target_path, "wrote [{wrote}bytes]"))
-                    }),
+                    })
+                    .map(|_| None),
                 Location::ReadArchive(read_archive) => anyhow::bail!("cannot insert into Location::ReadArchive({read_archive:#?})"),
-                Location::WriteArchive(write_archive) => write_archive
-                    .inner
-                    .value
-                    .clone()
-                    .pipe(MaybeWindowsPath)
-                    .pipe(MaybeWindowsPath::into_path)
-                    .pipe(|output_archive_path| {
-                        let archive_path = self.path.0.into_path().normalize();
-                        scoped_temp_file()
-                            .and_then(|mut buffer| {
-                                std::io::copy(from_reader, &mut buffer)
-                                    .context("copying into buffer")
-                                    .map(|_| buffer)
+                Location::WriteArchive(write_archive) => {
+                    let archive_path = self.path.0.into_path().normalize();
+                    scoped_temp_file()
+                        .and_then(|mut buffer| {
+                            std::io::copy(from_reader, &mut buffer)
+                                .context("copying into buffer")
+                                .map(|_| buffer)
+                        })
+                        .map(|buffer| buffer.into_temp_path())
+                        .map(|buffer| {
+                            Some(LazyArchiveChunk {
+                                target: write_archive.inner.clone(),
+                                key: archive_path,
+                                buffer,
                             })
-                            .map(|buffer| buffer.into_temp_path())
-                            .map(|buffer| {
-                                repacking_context
-                                    .queued_archives
-                                    .lock()
-                                    .entry(output_archive_path)
-                                    .or_insert_with(|| LazyArchive::new(&write_archive.inner))
-                                    .insert(archive_path, buffer);
-                            })
-                    }),
+                        })
+                }
             })
     }
     fn into_reader(self, context: RepackingContext) -> Result<Box<dyn Read>> {
@@ -347,12 +343,7 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         true => assets,
         false => assets
             .into_par_iter()
-            .filter(|a| {
-                serde_json::to_string(a)
-                    .map(|text| contains.iter().all(|phrase| text.contains(phrase)))
-                    .tap_err(|error| warn!(?error, "serializiation failed?"))
-                    .unwrap_or_default()
-            })
+            .filter(|a| format!("{a:?}").pipe(|text| contains.iter().all(|phrase| text.contains(phrase))))
             .collect::<Vec<_>>(),
     };
     let asset_count = assets.len() as u64;
@@ -360,62 +351,102 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         pb.pb_set_style(&count_progress_style());
         pb.pb_set_length(asset_count);
     });
-
-    let repacking_context = RepackingContext::new(locations.pipe(Arc::new));
-    let asset_context = handle_asset::AssetContext {
-        path_to_ttw_mpi_file: Arc::from(path_to_ttw_mpi_file.as_path()),
-        repacking_context: repacking_context.clone(),
-    };
+    let locations = Arc::new(locations);
 
     handling_assets
         .clone()
         .in_scope(|| {
             assets
-                .into_par_iter()
-                .inspect(move |_| handling_assets.pb_inc(1))
-                .try_for_each({
-                    let asset_context = asset_context.clone();
-                    move |asset| {
-                        info_span!("handling_asset", kind=?manifest_file::asset::AssetRawKind::from(&asset), asset=%asset.name()).in_scope(|| {
-                            asset_context
+                .into_iter()
+                .sorted_unstable_by_key(|a| a.target())
+                .chunk_by(|a| a.target())
+                .into_iter()
+                .map(|(location, assets)| (location, assets.into_iter().collect_vec()))
+                .collect_vec()
+                .pipe(|by_location| {
+                    by_location
+                        .into_iter()
+                        .map(move |(location, assets)| {
+                            let asset_chunk_len = assets.len() as u64;
+                            let location_debug = locations
+                                .get(&location)
+                                .map(|l| format!("{} ({location:#?})", l.name()))
+                                .unwrap_or_else(|| format!("UNKNOWN ({location:?})"));
+                            let handling_assets_for_location = info_span!("handling_assets_for_location", location=%location_debug).tap(|pb| {
+                                pb.pb_set_style(&count_progress_style());
+                                pb.pb_set_length(asset_chunk_len);
+                            });
+                            let repacking_context = RepackingContext::new(locations.clone());
+                            let asset_context = handle_asset::AssetContext {
+                                path_to_ttw_mpi_file: Arc::from(path_to_ttw_mpi_file.as_path()),
+                                repacking_context: repacking_context.clone(),
+                            };
+
+                            handling_assets_for_location
                                 .clone()
-                                .handle_asset(asset.clone())
-                                .with_context(|| format!("handling [{asset:#?}]"))
-                                .inspect(|_| info!("[OK]"))
-                        })
-                    }
-                })
-                .context("executing asset operations")
-                .map(move |_| {
-                    repacking_context
-                        .queued_archives
-                        .lock()
-                        .pipe_deref_mut(std::mem::take)
-                })
-                .and_then(|archives| {
-                    let building_archives = info_span!("building_archives").tap_mut(|pb| {
-                        pb.pb_set_style(&count_progress_style());
-                        pb.pb_set_length(archives.len() as _);
-                    });
-                    building_archives.clone().in_scope(|| {
-                        archives
-                            .into_iter()
-                            .inspect(|_| building_archives.pb_inc(1))
-                            .try_for_each(|(_, descriptor)| {
-                                build_bsa::build_bsa(descriptor, |archive, options, output_path| {
-                                    output_path
-                                        .into_path()
-                                        .normalize()
-                                        .open_file_write()
-                                        .and_then(|(output_path, output)| {
-                                            archive
-                                                .write(&mut tracing::Span::current().wrap_write(0, output), &options)
-                                                .with_context(|| format!("writing built bsa file to {output_path:?}"))
-                                                .tap_ok(|_| info!(?output_path, "[OK]"))
+                                .in_scope(move || {
+                                    assets
+                                        .into_par_iter()
+                                        .inspect(move |_| handling_assets_for_location.pb_inc(1))
+                                        .map({
+                                            let asset_context = asset_context.clone();
+                                            move |asset| {
+                                                info_span!("handling_asset", kind=?manifest_file::asset::AssetRawKind::from(&asset), asset=%asset.name())
+                                                    .in_scope(|| {
+                                                        asset_context
+                                                            .clone()
+                                                            .handle_asset(asset.clone())
+                                                            .with_context(|| format!("handling [{asset:#?}]"))
+                                                            .inspect(|_| info!("[OK]"))
+                                                    })
+                                            }
+                                        })
+                                        .collect::<Result<Vec<_>>>()
+                                        .context("executing asset operations")
+                                        .map(move |lazy_archive| {
+                                            lazy_archive
+                                                .into_iter()
+                                                .flatten()
+                                                .collect_vec()
+                                                .into_iter()
+                                                .peekable()
+                                                .pipe(|mut archive| {
+                                                    archive
+                                                        .peek()
+                                                        .map(|chunk| chunk.target.clone())
+                                                        .map(|first_target| {
+                                                            LazyArchive::new(&first_target).pipe(|lazy_archive| {
+                                                                archive.fold(lazy_archive, |a, entry| a.tap_mut(|a| a.insert(entry.key, entry.buffer)))
+                                                            })
+                                                        })
+                                                })
+                                        })
+                                        .and_then(|archives| {
+                                            let building_archives = info_span!("building_archive");
+                                            building_archives.clone().in_scope(|| {
+                                                archives
+                                                    .into_iter()
+                                                    .inspect(|_| building_archives.pb_inc(1))
+                                                    .try_for_each(|descriptor| {
+                                                        build_bsa::build_bsa(descriptor, |archive, options, output_path| {
+                                                            output_path
+                                                                .into_path()
+                                                                .normalize()
+                                                                .open_file_write()
+                                                                .and_then(|(output_path, output)| {
+                                                                    archive
+                                                                        .write(&mut tracing::Span::current().wrap_write(0, output), &options)
+                                                                        .with_context(|| format!("writing built bsa file to {output_path:?}"))
+                                                                        .tap_ok(|_| info!(?output_path, "[OK]"))
+                                                                })
+                                                        })
+                                                    })
+                                            })
                                         })
                                 })
-                            })
-                    })
+                                .map(|_| asset_chunk_len)
+                        })
+                        .try_for_each(|e| e.map(|count| handling_assets.pb_inc(count)))
                 })
         })
         .tap_ok(|_| {

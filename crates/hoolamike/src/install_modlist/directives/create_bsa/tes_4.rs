@@ -31,7 +31,7 @@ impl<Directive: std::fmt::Debug> LazyArchiveFile<Directive> {
     #[instrument]
     pub fn new(from_file: &std::fs::File, directive: Directive) -> Result<Self> {
         // SAFETY: do not touch that file while it's opened please
-        debug!("creating file");
+        debug!("creating file handle");
         unsafe { memmap2::Mmap::map(from_file) }
             .context("creating file")
             .tap_ok(super::try_optimize_memory_mapping)
