@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
+- *(ttw)* Implement the CLI post-fixup-command functionality. bonus is that we don't execute arbitrary shell commands - input is parsed and validated
+
+## [0.12.2] - 2025-01-19
+
+### 🚀 Features
+
 - *(ttw)* Optimize performance by easing down on logging a little bit and splitting the operations into chunks to prevent flooding user drive with temporary files
 
 ### 🚜 Refactor
