@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 🚀 Features
+
+- *(ttw)* Optimize performance by easing down on logging a little bit and splitting the operations into chunks to prevent flooding user drive with temporary files
+
+### 🚜 Refactor
+
+- *(ttw)* Split into modules and cleanup
+
+## [0.12.1] - 2025-01-19
+
 ### 🐛 Bug Fixes
 
 - *(ttw)* Archives in bsa are case insensitive, and ttw installer makes extensive use of it
