@@ -426,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "bsa-cli"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "ba2 3.0.0",
@@ -1474,7 +1474,7 @@ dependencies = [
 
 [[package]]
 name = "hoola-audio"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1494,7 +1494,7 @@ dependencies = [
 
 [[package]]
 name = "hoolamike"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -1560,6 +1560,7 @@ dependencies = [
  "tempfile",
  "test-log",
  "thiserror 2.0.9",
+ "tikv-jemallocator",
  "tokio",
  "tokio-cached-future",
  "tracing",
@@ -3809,6 +3810,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "tikv-jemalloc-sys"
+version = "0.6.0+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd3c60906412afa9c2b5b5a48ca6a5abe5736aec9eb48ad05037a677e52e4e2d"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
+name = "tikv-jemallocator"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cec5ff18518d81584f477e9bfdf957f5bb0979b0bac3af4ca30b5b3ae2d2865"
+dependencies = [
+ "libc",
+ "tikv-jemalloc-sys",
+]
+
+[[package]]
 name = "time"
 version = "0.3.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3885,7 +3906,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-cached-future"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4639,7 +4660,7 @@ checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
 name = "wrapped-7zip"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "chrono",

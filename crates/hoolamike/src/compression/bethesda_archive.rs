@@ -86,6 +86,15 @@ impl Tes4Archive<'_> {
     }
 }
 
+fn make_case_insensitive(path: &Path) -> PathBuf {
+    path.display()
+        .to_string()
+        .to_lowercase()
+        .pipe(MaybeWindowsPath)
+        .pipe(MaybeWindowsPath::into_path)
+        .normalize()
+}
+
 impl super::ProcessArchive for Fallout4Archive<'_> {
     fn list_paths(&mut self) -> Result<Vec<PathBuf>> {
         self.list_paths_with_originals()
@@ -155,11 +164,12 @@ impl super::ProcessArchive for Tes4Archive<'_> {
         paths
             .iter()
             .copied()
-            .map(|path| path.normalize())
+            .map(make_case_insensitive)
             .collect::<BTreeSet<_>>()
             .pipe_ref_mut(move |paths| {
                 self.list_paths_with_originals()
                     .into_iter()
+                    .map(|(p, k)| (make_case_insensitive(&p), k))
                     .filter(|(path, _)| {
                         paths.remove(path.as_path()).tap(|exists_in_archive| {
                             if !*exists_in_archive {
