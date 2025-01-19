@@ -614,6 +614,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b63caa9aa9397e2d9480a9b13673856c78d8ac123288526c37d7839f2a86990"
 
 [[package]]
+name = "combine"
+version = "4.6.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
+dependencies = [
+ "bytes",
+ "memchr",
+]
+
+[[package]]
 name = "compress-tools"
 version = "0.15.1"
 source = "git+https://github.com/Niedzwiedzw/compress-tools-rs#f233aa29d35f8a93056a3ffe21a21c6fce6ef60f"
@@ -1505,6 +1515,7 @@ dependencies = [
  "bon",
  "chrono",
  "clap",
+ "combine",
  "compress-tools",
  "console",
  "console-subscriber",
@@ -1519,6 +1530,7 @@ dependencies = [
  "flate2",
  "fs2",
  "futures",
+ "futures-executor",
  "futures-util",
  "hex",
  "hoola-audio",
@@ -1553,6 +1565,7 @@ dependencies = [
  "serde_yaml",
  "sevenz-rust",
  "similar",
+ "snailquote",
  "static_assertions",
  "symphonia",
  "tabled",
@@ -1575,6 +1588,7 @@ dependencies = [
  "wrapped-7zip",
  "xdelta",
  "xxhash-rust",
+ "yash-syntax",
  "zip",
 ]
 
@@ -3352,6 +3366,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
+name = "snailquote"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec62a949bda7f15800481a711909f946e1204f2460f89210eaf7f57730f88f86"
+dependencies = [
+ "thiserror 1.0.69",
+ "unicode_categories",
+]
+
+[[package]]
 name = "socket2"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4181,6 +4205,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
+name = "unicode_categories"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
+
+[[package]]
 name = "unrar"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4689,6 +4719,17 @@ name = "yansi"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
+
+[[package]]
+name = "yash-syntax"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98ecaad089c0bb4df8a3f88de03f4b891b1fa55396a7daee883810391e156940"
+dependencies = [
+ "futures-util",
+ "itertools",
+ "thiserror 2.0.9",
+]
 
 [[package]]
 name = "yoke"

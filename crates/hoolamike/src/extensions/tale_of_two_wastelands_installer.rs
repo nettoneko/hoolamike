@@ -44,6 +44,8 @@ pub mod templating {
     }
 }
 
+pub mod post_commands;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExtensionConfig {
@@ -280,7 +282,7 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         tags: _,
         checks: _,
         file_attrs: _,
-        post_commands: _,
+        post_commands,
         assets,
     } = crate::compression::bethesda_archive::BethesdaArchive::open(path_to_ttw_mpi_file)
         .and_then(|mut archive| {
@@ -292,7 +294,7 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         .and_then(|reader| {
             String::new()
                 .pipe(|mut out| {
-                    info_span!("extracing_manifest")
+                    info_span!("extracting_manifest")
                         .wrap_read(0, reader)
                         .read_to_string(&mut out)
                         .map(|_| out)
@@ -321,6 +323,7 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         ttw_config_variables: ttw_config_variables.clone(),
         hoolamike_installation_config: hoolamike_config.clone(),
     };
+
     let locations = locations
         .release()
         .into_iter()
@@ -337,6 +340,16 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         })
         .collect::<Result<BTreeMap<LocationIndex, Location>>>()
         .context("collecting locations")?;
+
+    let post_commands = post_commands
+        .into_iter()
+        .map(|mut p| {
+            variables_context
+                .resolve_variable(&p.value)
+                .map(|updated| p.tap_mut(|p| p.value = updated.to_string()))
+        })
+        .collect::<Result<Vec<_>>>()
+        .context("collecting post commands")?;
 
     let contains = Arc::new(contains);
     let assets = match contains.is_empty() {
@@ -449,6 +462,7 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
                         .try_for_each(|e| e.map(|count| handling_assets.pb_inc(count)))
                 })
         })
+        .and_then(|_| self::post_commands::handle_post_commands(post_commands))
         .tap_ok(|_| {
             let Package {
                 title,
