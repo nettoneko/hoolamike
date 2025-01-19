@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 🐛 Bug Fixes
+
+- *(ttw)* Archives in bsa are case insensitive, and ttw installer makes extensive use of it
+
+## [0.12.0] - 2025-01-18
+
 ### 🚀 Features
 
 - *(hoola-audio)* Mp3 handling
