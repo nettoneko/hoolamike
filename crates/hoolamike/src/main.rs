@@ -13,9 +13,6 @@ use {
     tap::{Pipe, TapFallible},
 };
 
-#[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
-
 pub const BUFFER_SIZE: usize = 1024 * 64;
 
 #[derive(Parser)]

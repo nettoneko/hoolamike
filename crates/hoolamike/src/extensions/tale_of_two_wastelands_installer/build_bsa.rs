@@ -5,7 +5,7 @@ use {
     ba2::tes4::*,
 };
 
-#[instrument(skip(handle_archive))]
+#[instrument(skip(handle_archive, file_states), fields(files=file_states.len()))]
 pub fn build_bsa<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) -> Result<()>>(
     LazyArchive {
         files: file_states,
@@ -56,12 +56,10 @@ pub fn build_bsa<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) -> Re
         .inspect(|_| reading_bsa_entries.pb_inc(1))
         .collect::<Result<Vec<_>>>()
         .and_then(|entries| {
-            let building_archive = info_span!("building_archive", path=%output_archive_file)
-                .entered()
-                .tap(|pb| {
-                    pb.pb_set_style(&count_progress_style());
-                    pb.pb_set_length(entries.len() as _);
-                });
+            let building_archive = info_span!("building_archive", path=%output_archive_file).tap(|pb| {
+                pb.pb_set_style(&count_progress_style());
+                pb.pb_set_length(entries.len() as _);
+            });
             building_archive.in_scope(|| {
                 entries.pipe_ref(|entries| {
                     entries

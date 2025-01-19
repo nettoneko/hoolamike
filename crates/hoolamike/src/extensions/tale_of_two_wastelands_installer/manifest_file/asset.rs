@@ -135,6 +135,16 @@ pub enum Asset {
 }
 
 impl Asset {
+    pub fn target(&self) -> LocationIndex {
+        match self {
+            Asset::Copy(copy_asset) => copy_asset.target.location,
+            Asset::New(new_asset) => new_asset.target.location,
+            Asset::Patch(patch_asset) => patch_asset.target.location,
+            Asset::OggEnc2(ogg_enc2_asset) => ogg_enc2_asset.target.location,
+            Asset::AudioEnc(audio_enc_asset) => audio_enc_asset.target.location,
+            Asset::XwmaFuz(_) => unimplemented!("Asset::XwmaFuz(_)"),
+        }
+    }
     pub fn name(&self) -> &str {
         match self {
             Asset::Copy(copy_asset) => copy_asset.source.path.0 .0.as_str(),

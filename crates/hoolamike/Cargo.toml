@@ -107,7 +107,7 @@ xxhash-rust.workspace = true
 zip.workspace = true
 pretty_assertions = "1.4.1"
 xdelta = { git = "https://github.com/SonnyX/xdelta-decoder-rust", rev = "4ee8d64a77659267d3e39cd05f61a6ee369492fc" }
-tikv-jemallocator = "0.6.0"
+# tikv-jemallocator = "0.6.0"
 
 [dev-dependencies]
 assert-json-diff = "2.0.2"

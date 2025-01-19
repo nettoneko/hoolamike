@@ -1,15 +1,14 @@
 use {
     crate::{
-        compression::{bethesda_archive::BethesdaArchive, ProcessArchive, SeekWithTempFileExt},
+        compression::{ProcessArchive, SeekWithTempFileExt},
         config_file::HoolamikeConfig,
         modlist_json::GameName,
         progress_bars_v2::{count_progress_style, IndicatifWrapIoExt},
-        utils::{scoped_temp_file, with_scoped_temp_path, MaybeWindowsPath, PathReadWrite, ReadableCatchUnwindExt},
+        utils::{scoped_temp_file, MaybeWindowsPath, PathReadWrite},
     },
     anyhow::{Context, Result},
-    hoola_audio::Mp3TargetChannelMode,
     manifest_file::{
-        asset::{Asset, CopyAsset, FullLocation, LocationIndex, MaybeFullLocation, NewAsset, PatchAsset},
+        asset::{FullLocation, LocationIndex, MaybeFullLocation},
         kind_guard::WithKindGuard,
         location::{Location, ReadArchiveLocation, WriteArchiveLocation},
         variable::Variable,
@@ -343,7 +342,6 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         .collect::<Result<BTreeMap<LocationIndex, Location>>>()
         .context("collecting locations")?;
 
-    let repacking_context = RepackingContext::new(locations.pipe(Arc::new));
     let contains = Arc::new(contains);
     let assets = match contains.is_empty() {
         true => assets,
@@ -363,6 +361,12 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         pb.pb_set_length(asset_count);
     });
 
+    let repacking_context = RepackingContext::new(locations.pipe(Arc::new));
+    let asset_context = handle_asset::AssetContext {
+        path_to_ttw_mpi_file: Arc::from(path_to_ttw_mpi_file.as_path()),
+        repacking_context: repacking_context.clone(),
+    };
+
     handling_assets
         .clone()
         .in_scope(|| {
@@ -370,236 +374,14 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
                 .into_par_iter()
                 .inspect(move |_| handling_assets.pb_inc(1))
                 .try_for_each({
-                    let repacking_context = repacking_context.clone();
+                    let asset_context = asset_context.clone();
                     move |asset| {
                         info_span!("handling_asset", kind=?manifest_file::asset::AssetRawKind::from(&asset), asset=%asset.name()).in_scope(|| {
-                            match asset.clone() {
-                                Asset::New(NewAsset {
-                                    tags: _,
-                                    status: _,
-                                    source,
-                                    target,
-                                }) => {
-                                    let target = target.lookup_from_both_source_and_target(&source);
-                                    BethesdaArchive::open(path_to_ttw_mpi_file)
-                                        .context("opening mpi file")
-                                        .and_then(|mut archive| {
-                                            archive
-                                                .get_handle(
-                                                    &source
-                                                        .path
-                                                        .0
-                                                        .tap_mut(|path| path.0 = path.0.to_lowercase())
-                                                        .into_path(),
-                                                )
-                                                .and_then(|mut handle| target.insert_into(repacking_context.clone(), &mut handle))
-                                        })
-                                }
-                                Asset::Copy(CopyAsset {
-                                    tags: _,
-                                    status: _,
-                                    source,
-                                    target,
-                                }) => {
-                                    let target = target.lookup_from_both_source_and_target(&source);
-                                    source
-                                        .into_reader(repacking_context.clone())
-                                        .context("building source")
-                                        .and_then(|mut source| {
-                                            target
-                                                .insert_into(repacking_context.clone(), &mut source)
-                                                .context("performing move")
-                                        })
-                                }
-                                Asset::Patch(PatchAsset {
-                                    tags: _,
-                                    status: _,
-                                    source,
-                                    target,
-                                }) => {
-                                    let target = target.lookup_from_both_source_and_target(&source);
-                                    BethesdaArchive::open(path_to_ttw_mpi_file)
-                                        .context("opening mpi file")
-                                        .and_then(|mut archive| {
-                                            archive.get_handle(
-                                                &target
-                                                    .path
-                                                    .0
-                                                    .clone()
-                                                    .tap_mut(|patch| patch.0 = patch.0.to_lowercase())
-                                                    .into_path()
-                                                    .normalize()
-                                                    .tap_mut(|p| {
-                                                        p.add_extension("xd3");
-                                                    }),
-                                            )
-                                        })
-                                        .and_then(|patch| {
-                                            patch
-                                                .seek_with_temp_file_blocking_raw(0)
-                                                .map(|(_, path)| path)
-                                        })
-                                        .context("reading patch file")
-                                        .and_then(|patch_file| {
-                                            source
-                                                .into_reader(repacking_context.clone())
-                                                .and_then(|reader| reader.seek_with_temp_file_blocking_raw(0))
-                                                .map(|(_, file)| file)
-                                                .context("reading source file")
-                                                .and_then(|source_file| {
-                                                    with_scoped_temp_path(|output_buffer| {
-                                                        std::panic::catch_unwind(|| xdelta::decode_file(Some(&source_file), &patch_file, output_buffer))
-                                                            .for_anyhow()
-                                                            .context("decoding xdelta patch")
-                                                            .map(|_| output_buffer)
-                                                            .and_then(|patched_file| {
-                                                                patched_file
-                                                                    .open_file_read()
-                                                                    .and_then(|(_, mut file)| target.insert_into(repacking_context.clone(), &mut file))
-                                                            })
-                                                    })
-                                                })
-                                        })
-                                }
-                                Asset::XwmaFuz(_xwma_fuz_asset) => Err(anyhow::anyhow!(" not implemented")),
-                                Asset::OggEnc2(ogg_enc_asset) => {
-                                    let target = ogg_enc_asset
-                                        .target
-                                        .clone()
-                                        .lookup_from_both_source_and_target(&ogg_enc_asset.source);
-                                    ogg_enc_asset
-                                        .params
-                                        .parse()
-                                        .context("bad params")
-                                        .and_then(|mut params| {
-                                            let target_frequency = params
-                                                .remove("f")
-                                                .context("no 'f' param (frequency)")
-                                                .context("frequency reading ogg encoder params")
-                                                .and_then(|f| {
-                                                    f.parse::<u32>()
-                                                        .with_context(|| format!("'{f}' is not a valid frequency"))
-                                                })?;
-                                            if let Some(quality) = params.remove("q") {
-                                                tracing::debug!(%quality, "found quality param, byt it cannot currently be parametrized");
-                                            }
-
-                                            if !params.is_empty() {
-                                                anyhow::bail!("leftover params: {params:#?}");
-                                            }
-                                            ogg_enc_asset
-                                                .source
-                                                .into_reader(repacking_context.clone())
-                                                .and_then(|source| {
-                                                    source
-                                                        .seek_with_temp_file_blocking_raw(0)
-                                                        .and_then(|(_, source)| {
-                                                            with_scoped_temp_path(|buffer| {
-                                                                hoola_audio::resample_ogg(&source, buffer, target_frequency).and_then(|_| {
-                                                                    buffer
-                                                                        .open_file_read()
-                                                                        .and_then(|(_, mut buffer)| target.insert_into(repacking_context.clone(), &mut buffer))
-                                                                })
-                                                            })
-                                                        })
-                                                })
-                                        })
-                                }
-                                Asset::AudioEnc(audio_enc) => {
-                                    let target = audio_enc
-                                        .target
-                                        .clone()
-                                        .lookup_from_both_source_and_target(&audio_enc.source);
-                                    let target_path = target.path.0.clone().into_path();
-                                    audio_enc
-                                        .params
-                                        .parse()
-                                        .context("bad params")
-                                        .and_then(|mut params| {
-                                            let target_frequency = params
-                                                .remove("f")
-                                                .map(|f| {
-                                                    f.parse::<u32>()
-                                                        .with_context(|| format!("'{f}' is not a valid frequency"))
-                                                })
-                                                .transpose()?;
-
-                                            let target_format = params.remove("fmt").map(ToOwned::to_owned);
-                                            let target_channel_mode = params
-                                                .remove("c")
-                                                .map(|c| {
-                                                    c.parse::<usize>()
-                                                        .with_context(|| format!("'{c}' is not a valid channel number"))
-                                                        .and_then(Mp3TargetChannelMode::from_count)
-                                                })
-                                                .transpose()
-                                                .context("reading channel mode")?;
-
-                                            let target_bitrate = params
-                                                .remove("b")
-                                                .map(|b| {
-                                                    b.parse::<u32>()
-                                                        .with_context(|| format!("'{b}' is not a valid bitrate"))
-                                                })
-                                                .transpose()?;
-
-                                            if let Some(quality) = params.remove("q") {
-                                                tracing::warn!(%quality, "found quality param, byt it cannot currently be parametrized");
-                                            }
-
-                                            if !params.is_empty() {
-                                                anyhow::bail!("leftover params: {params:#?}");
-                                            }
-
-                                            let target_extension = target_path
-                                                .extension()
-                                                .context("target file has no extension")
-                                                .map(|e| e.to_string_lossy().to_string())?
-                                                .to_lowercase();
-                                            if let Some(target_format) = target_format {
-                                                if target_format != target_extension {
-                                                    anyhow::bail!("specified format [{target_format}], but extension is [{target_extension}]")
-                                                }
-                                            }
-
-                                            audio_enc
-                                                .source
-                                                .into_reader(repacking_context.clone())
-                                                .and_then(|source| {
-                                                    source
-                                                        .seek_with_temp_file_blocking_raw(0)
-                                                        .and_then(|(_, source)| {
-                                                            with_scoped_temp_path(|buffer| {
-                                                                (match target_extension.as_str() {
-                                                                    "wav" => hoola_audio::convert_to_wav(&source, buffer, target_frequency)
-                                                                        .context("converting to wav")
-                                                                        .map(|_| buffer),
-                                                                    "mp3" => hoola_audio::convert_to_mp3(
-                                                                        &source,
-                                                                        buffer,
-                                                                        target_bitrate,
-                                                                        target_frequency,
-                                                                        target_channel_mode,
-                                                                    )
-                                                                    .context("converting to mp3")
-                                                                    .map(|_| buffer),
-                                                                    other => Err(anyhow::anyhow!(
-                                                                        "extension [.{other}] is not supported by hoolamike, file an issue"
-                                                                    )),
-                                                                })
-                                                                .and_then(|buffer| {
-                                                                    buffer
-                                                                        .open_file_read()
-                                                                        .and_then(|(_, mut file)| target.insert_into(repacking_context.clone(), &mut file))
-                                                                })
-                                                            })
-                                                        })
-                                                })
-                                        })
-                                }
-                            }
-                            .with_context(|| format!("handling [{asset:#?}]"))
-                            .inspect(|_| info!("[OK]"))
+                            asset_context
+                                .clone()
+                                .handle_asset(asset.clone())
+                                .with_context(|| format!("handling [{asset:#?}]"))
+                                .inspect(|_| info!("[OK]"))
                         })
                     }
                 })
@@ -655,3 +437,4 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
 }
 
 mod build_bsa;
+mod handle_asset;
