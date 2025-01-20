@@ -21,7 +21,7 @@ ba2 = { git = "https://github.com/Ryan-rsm-McKenzie/bsa-rs", branch = "overflow-
 base64.workspace = true
 binrw.workspace = true
 bon.workspace = true
-chrono.workspace = true
+chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "cargo", "env"] }
 compress-tools.workspace = true
 console.workspace = true
@@ -111,6 +111,7 @@ combine = "4.6.7"
 yash-syntax = "0.13.0"
 futures-executor = "0.3.31"
 snailquote = "0.3.1"
+filetime = "0.2.25"
 # tikv-jemallocator = "0.6.0"
 
 [dev-dependencies]

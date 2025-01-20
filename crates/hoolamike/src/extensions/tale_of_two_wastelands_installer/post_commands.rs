@@ -102,7 +102,11 @@ pub fn handle_post_commands(post_commands: Vec<PostCommand>) -> Result<()> {
                         let (from, to) = (&from, from.with_file_name(new_file_name));
                         std::fs::rename(from, &to).with_context(|| format!("renaming [{from:?}] -> [{to:?}]"))
                     }
-                    ParsedPostCommand::Delete(path_buf) => std::fs::remove_file(path_buf).with_context(|| format!("removing [{path_buf:?}]")),
+                    ParsedPostCommand::Delete(_path_buf) => {
+                        info!("skipping {command:?}");
+                        Ok(())
+                        // std::fs::remove_file(path_buf).with_context(|| format!("removing [{path_buf:?}]"))
+                    }
                 }
                 .tap_ok(|_| info!("executed succesfully: {command:?}"))
             })

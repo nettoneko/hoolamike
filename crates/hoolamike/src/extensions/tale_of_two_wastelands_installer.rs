@@ -44,8 +44,6 @@ pub mod templating {
     }
 }
 
-pub mod post_commands;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExtensionConfig {
@@ -281,7 +279,7 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         locations,
         tags: _,
         checks: _,
-        file_attrs: _,
+        file_attrs,
         post_commands,
         assets,
     } = crate::compression::bethesda_archive::BethesdaArchive::open(path_to_ttw_mpi_file)
@@ -343,7 +341,17 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
 
     let post_commands = post_commands
         .into_iter()
-        .map(|mut p| {
+        .map(|p| {
+            variables_context
+                .resolve_variable(&p.value)
+                .map(|updated| p.tap_mut(|p| p.value = updated.to_string()))
+        })
+        .collect::<Result<Vec<_>>>()
+        .context("collecting post commands")?;
+
+    let file_attrs = file_attrs
+        .into_iter()
+        .map(|p| {
             variables_context
                 .resolve_variable(&p.value)
                 .map(|updated| p.tap_mut(|p| p.value = updated.to_string()))
@@ -462,7 +470,8 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
                         .try_for_each(|e| e.map(|count| handling_assets.pb_inc(count)))
                 })
         })
-        .and_then(|_| self::post_commands::handle_post_commands(post_commands))
+        .and_then(|_| self::post_commands::handle_post_commands(post_commands).context("handling post_commands"))
+        .and_then(|_| self::file_attrs::handle_file_attrs(file_attrs).context("handling file_attrs"))
         .tap_ok(|_| {
             let Package {
                 title,
@@ -481,5 +490,44 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         })
 }
 
-mod build_bsa;
-mod handle_asset;
+pub mod build_bsa;
+pub mod handle_asset;
+pub mod post_commands;
+pub mod file_attrs {
+    use {
+        super::manifest_file::FileAttr,
+        crate::utils::MaybeWindowsPath,
+        anyhow::{Context, Result},
+        chrono::{DateTime, Duration, Local, Utc},
+        std::time::{SystemTime, UNIX_EPOCH},
+        tap::prelude::*,
+        tracing::info,
+    };
+    fn chrono_to_system_time(dt: DateTime<Utc>) -> SystemTime {
+        // The number of whole seconds since the Unix epoch
+        let secs = dt.timestamp();
+        // The subsecond nanoseconds
+        let nsecs = dt.timestamp_subsec_nanos();
+
+        if secs >= 0 {
+            UNIX_EPOCH + std::time::Duration::new(secs as u64, nsecs)
+        } else {
+            // For times before the Unix epoch, subtract:
+            UNIX_EPOCH - std::time::Duration::new((-secs) as u64, nsecs)
+        }
+    }
+    pub fn handle_file_attrs(file_attrs: Vec<FileAttr>) -> Result<()> {
+        file_attrs
+            .into_iter()
+            .try_for_each(|FileAttr { value, last_modified }| {
+                MaybeWindowsPath(value).into_path().pipe(|path| {
+                    let last_modified = last_modified
+                        .with_timezone(&chrono::Utc)
+                        .pipe(chrono_to_system_time);
+                    let file_time = filetime::FileTime::from_system_time(last_modified);
+                    info!("updating [{path:?}]: modified_time = [{file_time}]");
+                    filetime::set_file_mtime(&path, file_time).with_context(|| format!("setting file time of [{path:?}] to [{file_time}]"))
+                })
+            })
+    }
+}

@@ -1,5 +1,6 @@
 use {
     crate::modlist_json::HumanUrl,
+    chrono::FixedOffset,
     serde::{Deserialize, Serialize},
 };
 
@@ -29,7 +30,7 @@ pub mod asset;
 #[serde(rename_all = "PascalCase")]
 pub struct FileAttr {
     pub value: String,
-    pub last_modified: String,
+    pub last_modified: chrono::DateTime<FixedOffset>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -94,7 +95,7 @@ mod tests {
 
     #[test_log::test]
     fn test_ad_hoc_example_manifest_file() -> anyhow::Result<()> {
-        let example = include_str!("../../../../../playground/begin-again/ttw-installer/ttw-mpi-extracted/_package/index.json");
+        let example = include_str!("../../../../../playground/begin-again/tale-of-two-wastelands/mpi-unpacked/_package/index.json");
         serde_json::from_str::<serde_json::Value>(example)
             .context("deserializing json")
             .and_then(|v| serde_json::to_string_pretty(&v).context("reserializing raw json"))
