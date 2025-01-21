@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
+- *(fnv)* Bsas are now compressed using correct format (fixes Begin Again and Tale of two Wastelands)
+
+## [0.12.4] - 2025-01-20
+
+### 🚀 Features
+
 - *(ttw)* Fix the last-modified timestamps for files
 
 ## [0.12.3] - 2025-01-19
