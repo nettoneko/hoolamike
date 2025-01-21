@@ -44,7 +44,7 @@ impl<Directive: std::fmt::Debug> LazyArchiveFile<Directive> {
 
 impl LazyArchiveFile<FileStateData> {
     #[instrument]
-    pub fn as_archive_file(&self) -> Result<File<'_>> {
+    pub fn as_archive_file(&self, version: Version) -> Result<File<'_>> {
         self.directive.pipe_ref(
             |FileStateData {
                  flip_compression: _,
@@ -54,7 +54,7 @@ impl LazyArchiveFile<FileStateData> {
                 File::read(
                     Borrowed(self.as_bytes()),
                     &FileReadOptions::builder()
-                        .version(Version::SSE)
+                        .version(version)
                         .compression_result(CompressionResult::Compressed)
                         .build(),
                 )
@@ -187,7 +187,7 @@ pub fn create_archive<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) 
                 entries
                     .par_iter()
                     .map(|(key, file)| {
-                        file.as_archive_file().map(|file| {
+                        file.as_archive_file(version).map(|file| {
                             building_archive.pb_inc(1);
                             (key, file)
                         })

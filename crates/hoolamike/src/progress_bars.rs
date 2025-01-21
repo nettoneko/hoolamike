@@ -103,7 +103,7 @@ pub fn vertical_progress_bar(len: u64, kind: ProgressKind, with_finish: indicati
         kind.stylize(&mut pb);
         let prefix = kind.prefix();
         pb.set_prefix(prefix);
-        pb.enable_steady_tick(std::time::Duration::from_secs(1));
+        // pb.enable_steady_tick(std::time::Duration::from_secs(1));
         pb.with_finish(with_finish.clone())
     })
 }

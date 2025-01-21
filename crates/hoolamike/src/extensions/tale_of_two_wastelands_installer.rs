@@ -63,7 +63,7 @@ const MANIFEST_PATH: &str = "_package/index.json";
 type LocationsLookup = BTreeMap<LocationIndex, Location>;
 
 #[derive(Clone)]
-struct RepackingContext {
+pub struct RepackingContext {
     locations: Arc<LocationsLookup>,
 }
 
@@ -498,7 +498,7 @@ pub mod file_attrs {
         super::manifest_file::FileAttr,
         crate::utils::MaybeWindowsPath,
         anyhow::{Context, Result},
-        chrono::{DateTime, Duration, Local, Utc},
+        chrono::{DateTime, Utc},
         std::time::{SystemTime, UNIX_EPOCH},
         tap::prelude::*,
         tracing::info,

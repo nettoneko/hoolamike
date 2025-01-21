@@ -75,7 +75,7 @@ pub fn build_bsa<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) -> Re
                     entries
                         .par_iter()
                         .map(|(key, file)| {
-                            file.as_archive_file().map(|file| {
+                            file.as_archive_file(version).map(|file| {
                                 building_archive.pb_inc(1);
                                 (key, file)
                             })
