@@ -91,6 +91,7 @@ pub mod read_wrappers;
 pub mod utils;
 
 pub mod archive_cli;
+pub mod audio_cli;
 pub mod compression;
 pub mod config_file;
 pub mod downloaders;

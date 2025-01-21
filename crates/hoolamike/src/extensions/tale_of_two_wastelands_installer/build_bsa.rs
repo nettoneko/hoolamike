@@ -17,7 +17,7 @@ pub fn build_bsa<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) -> Re
                 archive_type: _,
                 archive_flags,
                 files_flags,
-                archive_compressed: _,
+                archive_compressed,
             },
     }: LazyArchive,
     handle_archive: F,
@@ -75,7 +75,14 @@ pub fn build_bsa<F: FnOnce(&Archive<'_>, ArchiveOptions, MaybeWindowsPath) -> Re
                     entries
                         .par_iter()
                         .map(|(key, file)| {
-                            file.as_archive_file(version).map(|file| {
+                            file.as_archive_file(
+                                version,
+                                match archive_compressed {
+                                    true => Some(ba2::CompressionResult::Compressed),
+                                    false => Some(ba2::CompressionResult::Decompressed),
+                                },
+                            )
+                            .map(|file| {
                                 building_archive.pb_inc(1);
                                 (key, file)
                             })

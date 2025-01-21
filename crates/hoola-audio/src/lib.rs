@@ -37,7 +37,7 @@ struct Cli {
 }
 
 #[derive(Args, Clone, Debug)]
-struct FromTo {
+pub struct FromTo {
     /// path to source file
     from: PathBuf,
     /// path to target (output) file
@@ -45,7 +45,7 @@ struct FromTo {
 }
 
 #[derive(Subcommand, Debug)]
-enum Commands {
+pub enum Commands {
     ConvertStereoMP3ToMono(FromTo),
     ConvertOGGToWAV(FromTo),
     ResampleOGG {
@@ -55,6 +55,22 @@ enum Commands {
         #[arg(long)]
         target_frequency: u32,
     },
+}
+
+impl Commands {
+    pub fn run(self) -> Result<()> {
+        let command = self;
+        debug!("debug logging on");
+        let _span = info_span!("running", ?command).entered();
+        match command {
+            Commands::ConvertStereoMP3ToMono(FromTo { from, to }) => convert_to_mp3(&from, &to, None, Some(44100), Some(Mp3TargetChannelMode::Mono)),
+            Commands::ConvertOGGToWAV(FromTo { from, to }) => convert_to_wav(&from, &to, None),
+            Commands::ResampleOGG {
+                context: FromTo { from, to },
+                target_frequency,
+            } => resample_ogg(&from, &to, target_frequency),
+        }
+    }
 }
 
 #[derive(derivative::Derivative)]
