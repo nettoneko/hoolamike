@@ -261,6 +261,13 @@ impl ProcessArchive for BethesdaArchive<'_> {
             BethesdaArchive::Tes4(tes4) => tes4.get_handle(path),
         }
     }
+
+    fn get_many_handles(&mut self, paths: &[&Path]) -> Result<Vec<(PathBuf, super::ArchiveFileHandle)>> {
+        match self {
+            BethesdaArchive::Fallout4(fo4) => fo4.get_many_handles(paths),
+            BethesdaArchive::Tes4(tes4) => tes4.get_many_handles(paths),
+        }
+    }
 }
 
 impl BethesdaArchive<'_> {

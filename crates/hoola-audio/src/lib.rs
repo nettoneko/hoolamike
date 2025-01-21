@@ -206,7 +206,7 @@ impl DecodedChunk {
         self.sample_buffer.samples().len() / channel_count
     }
 
-    pub fn split_channels(&self) -> impl Iterator<Item = impl Iterator<Item = &f32> + '_> + '_ {
+    pub fn split_channels(&self) -> impl Iterator<Item = impl Iterator<Item = f32> + '_> + '_ {
         let channels = self.spec.channels.count();
         (0..channels).map(move |channel| {
             self.sample_buffer
@@ -214,6 +214,7 @@ impl DecodedChunk {
                 .iter()
                 .skip(channel)
                 .step_by(channels)
+                .copied()
         })
     }
 
@@ -594,7 +595,7 @@ pub fn resample_ogg(from: &Path, to: &Path, target_frequency: u32) -> Result<()>
                             .split_channels()
                             .zip(buffers.iter_mut())
                             .for_each(|(channel, buffer)| {
-                                buffer.extend(channel.copied());
+                                buffer.extend(channel);
                             });
                     })
                 })

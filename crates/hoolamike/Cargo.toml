@@ -112,6 +112,7 @@ yash-syntax = "0.13.0"
 futures-executor = "0.3.31"
 snailquote = "0.3.1"
 filetime = "0.2.25"
+rubato = "0.16.1"
 # tikv-jemallocator = "0.6.0"
 
 [dev-dependencies]
