@@ -117,3 +117,7 @@ rubato = "0.16.1"
 
 [dev-dependencies]
 assert-json-diff = "2.0.2"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
