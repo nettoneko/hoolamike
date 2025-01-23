@@ -767,8 +767,10 @@ impl BufferedResampler {
 //     }
 // }
 
+type ChanVec<T> = heapless::Vec<T, 2>;
+
 pub struct LoadedTrack {
-    pub channels: Vec<Vec<f32>>,
+    pub channels: ChanVec<Vec<f32>>,
     pub sample_rate: u32,
 }
 
@@ -778,6 +780,20 @@ impl std::fmt::Debug for LoadedTrack {
             .field("channels", &self.channels.len())
             .field("sample_rate", &self.sample_rate)
             .finish_non_exhaustive()
+    }
+}
+
+#[extension_traits::extension(trait HeaplessVecTryCollectExt)]
+impl<const N: usize, T> heapless::Vec<T, N>
+where
+    Self: Sized,
+{
+    fn try_from_iter<I: Iterator<Item = T>>(mut iter: I) -> Result<Self> {
+        iter.try_fold(Self::new(), |mut acc, next| {
+            acc.push(next)
+                .map_err(|_| anyhow::anyhow!("max capacity [{N}] reached, could not push another element"))
+                .map(|_| acc)
+        })
     }
 }
 
@@ -810,7 +826,7 @@ impl LoadedTrack {
             .context("loading raw track")
     }
 
-    pub fn iter_chunks(&self, size: usize) -> impl Iterator<Item = Vec<&[f32]>> + '_ {
+    pub fn iter_chunks(&self, size: usize) -> impl Iterator<Item = ChanVec<&[f32]>> + '_ {
         self.channels[0]
             .chunks(size)
             .enumerate()
@@ -826,7 +842,8 @@ impl LoadedTrack {
                             ch.get(0..0).expect("come on")
                         })
                     })
-                    .collect_vec()
+                    .pipe(ChanVec::try_from_iter)
+                    .expect("max channel count to be 2")
             })
     }
 
@@ -905,7 +922,10 @@ impl LoadedTrack {
     }
     pub fn empty(sample_rate: u32, channels: usize) -> Self {
         Self {
-            channels: (0..channels).map(|_| Default::default()).collect_vec(),
+            channels: (0..channels)
+                .map(|_| Default::default())
+                .pipe(ChanVec::try_from_iter)
+                .expect("max channel count to be 2"),
             sample_rate,
         }
     }
