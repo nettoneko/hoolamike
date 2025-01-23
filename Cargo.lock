@@ -426,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "bsa-cli"
-version = "0.12.5"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "ba2 3.0.0",
@@ -1503,7 +1503,7 @@ dependencies = [
 
 [[package]]
 name = "hoola-audio"
-version = "0.12.5"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1527,7 +1527,7 @@ dependencies = [
 
 [[package]]
 name = "hoolamike"
-version = "0.12.5"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -3965,7 +3965,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-cached-future"
-version = "0.12.5"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4725,7 +4725,7 @@ checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
 name = "wrapped-7zip"
-version = "0.12.5"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "chrono",

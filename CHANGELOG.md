@@ -6,6 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
+- *(bsa)* Unpacking multiple bsa files is now significantly faster, audio cli
+- *(ttw)* Fixed resampling at cost of higher memory usage
+- *(ttw)* Use smallvec to speed up allocations
+
+### 🐛 Bug Fixes
+
+- *(ttw)* Respect compression requirement
+
+### ⚙️ Miscellaneous Tasks
+
+- Performance flags by default
+
+## [0.12.5] - 2025-01-21
+
+### 🚀 Features
+
 - *(fnv)* Bsas are now compressed using correct format (fixes Begin Again and Tale of two Wastelands)
 
 ## [0.12.4] - 2025-01-20
