@@ -17,6 +17,8 @@ use {
     wrapped_7zip::WRAPPED_7ZIP,
 };
 
+pub mod preheated_archive;
+
 pub mod bethesda_archive;
 pub mod compress_tools;
 pub mod sevenz;
@@ -163,7 +165,7 @@ impl ArchiveHandle<'_> {
             .map(|b| b.to_lowercase())
             .as_deref()
         {
-            Some("bsa" | "ba2") => bethesda_archive::BethesdaArchive::open(path)
+            Some("bsa" | "ba2" | "mpi") => bethesda_archive::BethesdaArchive::open(path)
                 .context("reading bsa")
                 .map(Self::Bethesda)
                 .and_then(&mut with_guessed)

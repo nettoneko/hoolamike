@@ -1,36 +1,34 @@
 use {
     super::{
-        manifest_file::asset::{Asset, CopyAsset, NewAsset, PatchAsset},
+        manifest_file::asset::{Asset, CopyAsset, LocationIndex, NewAsset, PatchAsset},
         LazyArchiveChunk,
         PathReadWrite,
         RepackingContext,
         SeekWithTempFileExt,
     },
     crate::{
-        compression::{bethesda_archive::BethesdaArchive, ProcessArchive},
+        compression::preheated_archive::PreheatedArchive,
         utils::{with_scoped_temp_path, ReadableCatchUnwindExt},
     },
     anyhow::{Context, Result},
     hoola_audio::Mp3TargetChannelMode,
     normalize_path::NormalizePath,
-    std::{path::Path, sync::Arc},
+    std::{collections::BTreeMap, io::BufReader, sync::Arc},
     tap::prelude::*,
     tracing::instrument,
 };
 
 #[derive(Clone)]
 pub struct AssetContext {
-    pub path_to_ttw_mpi_file: Arc<Path>,
+    pub preheated_mpi_file: Arc<PreheatedArchive>,
     pub repacking_context: RepackingContext,
+    pub preheated: Arc<BTreeMap<LocationIndex, PreheatedArchive>>,
 }
 
 impl AssetContext {
     #[instrument(skip(self))]
     pub fn handle_asset(self, asset: Asset) -> Result<Option<LazyArchiveChunk>> {
-        let Self {
-            path_to_ttw_mpi_file,
-            repacking_context,
-        } = self;
+        let Self { preheated_mpi_file, .. } = self.clone();
         match asset {
             Asset::New(NewAsset {
                 tags: _,
@@ -39,19 +37,19 @@ impl AssetContext {
                 target,
             }) => {
                 let target = target.lookup_from_both_source_and_target(&source);
-                BethesdaArchive::open(&path_to_ttw_mpi_file)
-                    .context("opening mpi file")
-                    .and_then(|mut archive| {
-                        archive
-                            .get_handle(
-                                &source
-                                    .path
-                                    .0
-                                    .tap_mut(|path| path.0 = path.0.to_lowercase())
-                                    .into_path(),
-                            )
-                            .and_then(|mut handle| target.insert_into(repacking_context.clone(), &mut handle))
-                    })
+                preheated_mpi_file
+                    .paths
+                    .get(
+                        &source
+                            .path
+                            .0
+                            .clone()
+                            .tap_mut(|path| path.0 = path.0.to_lowercase())
+                            .into_path(),
+                    )
+                    .with_context(|| format!("no [{source:?}] in mpi file"))
+                    .and_then(|path| path.open_file_read())
+                    .and_then(|(_, handle)| target.insert_into(self.repacking_context.clone(), &mut BufReader::new(handle)))
             }
             Asset::Copy(CopyAsset {
                 tags: _,
@@ -61,11 +59,11 @@ impl AssetContext {
             }) => {
                 let target = target.lookup_from_both_source_and_target(&source);
                 source
-                    .into_reader(repacking_context.clone())
+                    .into_reader(self.clone())
                     .context("building source")
                     .and_then(|mut source| {
                         target
-                            .insert_into(repacking_context.clone(), &mut source)
+                            .insert_into(self.repacking_context.clone(), &mut source)
                             .context("performing move")
                     })
             }
@@ -76,44 +74,38 @@ impl AssetContext {
                 target,
             }) => {
                 let target = target.lookup_from_both_source_and_target(&source);
-                BethesdaArchive::open(&path_to_ttw_mpi_file)
-                    .context("opening mpi file")
-                    .and_then(|mut archive| {
-                        archive.get_handle(
-                            &target
-                                .path
-                                .0
-                                .clone()
-                                .tap_mut(|patch| patch.0 = patch.0.to_lowercase())
-                                .into_path()
-                                .normalize()
-                                .tap_mut(|p| {
-                                    p.add_extension("xd3");
-                                }),
-                        )
-                    })
-                    .and_then(|patch| {
-                        patch
-                            .seek_with_temp_file_blocking_raw(0)
-                            .map(|(_, path)| path)
-                    })
+                preheated_mpi_file
+                    .paths
+                    .get(
+                        &target
+                            .path
+                            .0
+                            .clone()
+                            .tap_mut(|patch| patch.0 = patch.0.to_lowercase())
+                            .into_path()
+                            .normalize()
+                            .tap_mut(|p| {
+                                p.add_extension("xd3");
+                            }),
+                    )
+                    .with_context(|| format!("no [{source:?}] in mpi file"))
                     .context("reading patch file")
                     .and_then(|patch_file| {
                         source
-                            .into_reader(repacking_context.clone())
+                            .into_reader(self.clone())
                             .and_then(|reader| reader.seek_with_temp_file_blocking_raw(0))
                             .map(|(_, file)| file)
                             .context("reading source file")
                             .and_then(|source_file| {
                                 with_scoped_temp_path(|output_buffer| {
-                                    std::panic::catch_unwind(|| xdelta::decode_file(Some(&source_file), &patch_file, output_buffer))
+                                    std::panic::catch_unwind(|| xdelta::decode_file(Some(&source_file), patch_file, output_buffer))
                                         .for_anyhow()
                                         .context("decoding xdelta patch")
                                         .map(|_| output_buffer)
                                         .and_then(|patched_file| {
                                             patched_file
                                                 .open_file_read()
-                                                .and_then(|(_, mut file)| target.insert_into(repacking_context.clone(), &mut file))
+                                                .and_then(|(_, mut file)| target.insert_into(self.repacking_context.clone(), &mut file))
                                         })
                                 })
                             })
@@ -147,7 +139,7 @@ impl AssetContext {
                         }
                         ogg_enc_asset
                             .source
-                            .into_reader(repacking_context.clone())
+                            .into_reader(self.clone())
                             .and_then(|source| {
                                 source
                                     .seek_with_temp_file_blocking_raw(0)
@@ -156,7 +148,7 @@ impl AssetContext {
                                             hoola_audio::resample_ogg(&source, buffer, target_frequency).and_then(|_| {
                                                 buffer
                                                     .open_file_read()
-                                                    .and_then(|(_, mut buffer)| target.insert_into(repacking_context.clone(), &mut buffer))
+                                                    .and_then(|(_, mut buffer)| target.insert_into(self.repacking_context.clone(), &mut buffer))
                                             })
                                         })
                                     })
@@ -222,7 +214,7 @@ impl AssetContext {
 
                         audio_enc
                             .source
-                            .into_reader(repacking_context.clone())
+                            .into_reader(self.clone())
                             .and_then(|source| {
                                 source
                                     .seek_with_temp_file_blocking_raw(0)
@@ -240,7 +232,7 @@ impl AssetContext {
                                             .and_then(|buffer| {
                                                 buffer
                                                     .open_file_read()
-                                                    .and_then(|(_, mut file)| target.insert_into(repacking_context.clone(), &mut file))
+                                                    .and_then(|(_, mut file)| target.insert_into(self.repacking_context.clone(), &mut file))
                                             })
                                         })
                                     })

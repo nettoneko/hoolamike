@@ -247,7 +247,9 @@ async fn async_main() -> Result<()> {
                 .map(|directives| println!("{directives}")),
         },
         Commands::Archive(archive_cli_command) => archive_cli_command.run(),
-        Commands::Audio(audio_cli_command) => audio_cli_command.command.run(),
+        Commands::Audio(audio_cli_command) => audio_cli_command
+            .command
+            .pipe(|c| c.clone().run().with_context(|| format!("running\n{c:#?}"))),
         Commands::TaleOfTwoWastelands(cli_config) => {
             let (_config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
             crate::extensions::tale_of_two_wastelands_installer::install(cli_config, config)

@@ -1,12 +1,13 @@
 use {
     crate::{
-        compression::{ProcessArchive, SeekWithTempFileExt},
+        compression::{preheated_archive::PreheatedArchive, ProcessArchive, SeekWithTempFileExt},
         config_file::HoolamikeConfig,
         modlist_json::GameName,
         progress_bars_v2::{count_progress_style, IndicatifWrapIoExt},
-        utils::{scoped_temp_file, MaybeWindowsPath, PathReadWrite},
+        utils::{scoped_temp_file, MaybeWindowsPath, PathReadWrite, ReadableCatchUnwindExt},
     },
     anyhow::{Context, Result},
+    handle_asset::AssetContext,
     itertools::Itertools,
     manifest_file::{
         asset::{FullLocation, LocationIndex, MaybeFullLocation},
@@ -22,6 +23,7 @@ use {
     std::{
         borrow::Cow,
         collections::BTreeMap,
+        convert::identity,
         io::{BufReader, Read},
         path::{Path, PathBuf},
         sync::Arc,
@@ -225,40 +227,52 @@ impl FullLocation {
                 }
             })
     }
-    fn into_reader(self, context: RepackingContext) -> Result<Box<dyn Read>> {
-        context
-            .locations
-            .get(&self.location)
-            .with_context(|| format!("no location for {self:#?}"))
-            .inspect(|location| tracing::debug!("{location:#?}"))
-            .and_then(|location| {
-                (match location {
-                    Location::Folder(folder) => folder
-                        .inner
-                        .value
-                        .clone()
-                        .pipe(MaybeWindowsPath)
-                        .pipe(MaybeWindowsPath::into_path)
-                        .pipe(|path| path.join(self.path.0.into_path()).normalize())
-                        .pipe(|source| {
-                            source
-                                .open_file_read()
-                                .map(|(_, file)| Box::new(file) as Box<dyn Read>)
-                        }),
-                    Location::ReadArchive(WithKindGuard {
-                        inner: ReadArchiveLocation { name: _, value },
-                        ..
-                    }) => {
-                        let value = MaybeWindowsPath(value.clone()).into_path().normalize();
-                        crate::compression::ArchiveHandle::with_guessed(value.as_path(), value.extension(), |mut archive| {
-                            archive.get_handle(&self.path.clone().0.into_path())
-                        })
-                        .map(|handle| Box::new(handle) as Box<dyn Read>)
-                    }
-                    Location::WriteArchive(write_archive) => anyhow::bail!("cannot write into this, right? => Location::WriteArchive({write_archive:#?})"),
-                })
-                .with_context(|| format!("when converting location into reader:\n[{location:#?}]"))
-            })
+    fn into_reader(self, context: AssetContext) -> Result<Box<dyn Read>> {
+        match context.preheated.get(&self.location) {
+            Some(preheated) => {
+                let source = preheated
+                    .paths
+                    .get(&self.path.clone().0.into_path())
+                    .with_context(|| format!("no file [{:?}] in archive [{:#?}]", self.path, self.location))?;
+                source
+                    .open_file_read()
+                    .map(|(_, file)| Box::new(BufReader::new(file)) as Box<dyn Read>)
+            }
+            None => context
+                .repacking_context
+                .locations
+                .get(&self.location)
+                .with_context(|| format!("no location for {self:#?}"))
+                .inspect(|location| tracing::debug!("{location:#?}"))
+                .and_then(|location| {
+                    (match location {
+                        Location::Folder(folder) => folder
+                            .inner
+                            .value
+                            .clone()
+                            .pipe(MaybeWindowsPath)
+                            .pipe(MaybeWindowsPath::into_path)
+                            .pipe(|path| path.join(self.path.0.into_path()).normalize())
+                            .pipe(|source| {
+                                source
+                                    .open_file_read()
+                                    .map(|(_, file)| Box::new(file) as Box<dyn Read>)
+                            }),
+                        Location::ReadArchive(WithKindGuard {
+                            inner: ReadArchiveLocation { name: _, value },
+                            ..
+                        }) => {
+                            let value = MaybeWindowsPath(value.clone()).into_path().normalize();
+                            crate::compression::ArchiveHandle::with_guessed(value.as_path(), value.extension(), |mut archive| {
+                                archive.get_handle(&self.path.clone().0.into_path())
+                            })
+                            .map(|handle| Box::new(handle) as Box<dyn Read>)
+                        }
+                        Location::WriteArchive(write_archive) => anyhow::bail!("cannot write into this, right? => Location::WriteArchive({write_archive:#?})"),
+                    })
+                    .with_context(|| format!("when converting location into reader:\n[{location:#?}]"))
+                }),
+        }
     }
 }
 
@@ -303,6 +317,10 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         })
         .with_context(|| format!("extracting manifest out of [{path_to_ttw_mpi_file:?}]"))?;
     info!(package=%serde_json::to_string_pretty(&package).unwrap_or_else(|e| format!("[{e:#?}]")), "got manifest file");
+
+    let preheated_mpi_file = PreheatedArchive::from_archive_concurrent(path_to_ttw_mpi_file, 64)
+        .context("preheating mpi file")
+        .map(Arc::new)?;
 
     let _span = info_span!(
         "installing_ttw",
@@ -398,9 +416,36 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
                                 pb.pb_set_length(asset_chunk_len);
                             });
                             let repacking_context = RepackingContext::new(locations.clone());
+                            let preheated_sources = assets
+                                .iter()
+                                .map(|asset| asset.target())
+                                .map(|source| {
+                                    locations
+                                        .get(&source)
+                                        .with_context(|| format!("source not found: [{source:?}]"))
+                                        .map(|location| match location {
+                                            Location::Folder(_) => None,
+                                            Location::ReadArchive(archive) => Some((source, archive.inner.clone())),
+                                            Location::WriteArchive(_) => None,
+                                        })
+                                })
+                                .collect::<Result<Vec<_>>>()
+                                .context("not all locations could be found")
+                                .and_then(|locations| {
+                                    locations
+                                        .into_iter()
+                                        .flatten()
+                                        .map(|(source, ReadArchiveLocation { name: _, value })| {
+                                            let archive_path = MaybeWindowsPath(value).into_path().normalize();
+                                            PreheatedArchive::from_archive_concurrent(&archive_path, 128).map(|preheated| (source, preheated))
+                                        })
+                                        .collect::<Result<BTreeMap<_, _>>>()
+                                        .context("preheating failed")
+                                })?;
                             let asset_context = handle_asset::AssetContext {
-                                path_to_ttw_mpi_file: Arc::from(path_to_ttw_mpi_file.as_path()),
+                                preheated_mpi_file: preheated_mpi_file.clone(),
                                 repacking_context: repacking_context.clone(),
+                                preheated: Arc::new(preheated_sources),
                             };
 
                             handling_assets_for_location
@@ -414,9 +459,14 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
                                             move |asset| {
                                                 info_span!("handling_asset", kind=?manifest_file::asset::AssetRawKind::from(&asset), asset=%asset.name())
                                                     .in_scope(|| {
+                                                        tracing::trace!("starting");
                                                         asset_context
                                                             .clone()
-                                                            .handle_asset(asset.clone())
+                                                            .pipe(|c| {
+                                                                std::panic::catch_unwind(|| c.handle_asset(asset.clone()))
+                                                                    .for_anyhow()
+                                                                    .and_then(identity)
+                                                            })
                                                             .with_context(|| format!("handling [{asset:#?}]"))
                                                             .inspect(|_| info!("[OK]"))
                                                     })
@@ -491,43 +541,6 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
 }
 
 pub mod build_bsa;
+pub mod file_attrs;
 pub mod handle_asset;
 pub mod post_commands;
-pub mod file_attrs {
-    use {
-        super::manifest_file::FileAttr,
-        crate::utils::MaybeWindowsPath,
-        anyhow::{Context, Result},
-        chrono::{DateTime, Utc},
-        std::time::{SystemTime, UNIX_EPOCH},
-        tap::prelude::*,
-        tracing::info,
-    };
-    fn chrono_to_system_time(dt: DateTime<Utc>) -> SystemTime {
-        // The number of whole seconds since the Unix epoch
-        let secs = dt.timestamp();
-        // The subsecond nanoseconds
-        let nsecs = dt.timestamp_subsec_nanos();
-
-        if secs >= 0 {
-            UNIX_EPOCH + std::time::Duration::new(secs as u64, nsecs)
-        } else {
-            // For times before the Unix epoch, subtract:
-            UNIX_EPOCH - std::time::Duration::new((-secs) as u64, nsecs)
-        }
-    }
-    pub fn handle_file_attrs(file_attrs: Vec<FileAttr>) -> Result<()> {
-        file_attrs
-            .into_iter()
-            .try_for_each(|FileAttr { value, last_modified }| {
-                MaybeWindowsPath(value).into_path().pipe(|path| {
-                    let last_modified = last_modified
-                        .with_timezone(&chrono::Utc)
-                        .pipe(chrono_to_system_time);
-                    let file_time = filetime::FileTime::from_system_time(last_modified);
-                    info!("updating [{path:?}]: modified_time = [{file_time}]");
-                    filetime::set_file_mtime(&path, file_time).with_context(|| format!("setting file time of [{path:?}] to [{file_time}]"))
-                })
-            })
-    }
-}

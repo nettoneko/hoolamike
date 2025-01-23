@@ -3,16 +3,17 @@
 
 use {
     anyhow::{bail, Context, Result},
-    chunk_while::IteratorChunkWhileExt,
     clap::{Args, Parser, Subcommand},
     itertools::Itertools,
-    mp3lame_encoder::{Bitrate, MonoPcm},
+    mp3lame_encoder::{Bitrate, DualPcm, MonoPcm},
     num::ToPrimitive,
+    rubato::{FastFixedIn, FftFixedOut, PolynomialDegree, Resampler},
     std::{
         convert::identity,
         io::{BufWriter, Write},
         iter::repeat,
-        num::{NonZeroU32, NonZeroU8},
+        num::{NonZeroU32, NonZeroU8, NonZeroUsize},
+        ops::Not,
         path::{Path, PathBuf},
     },
     symphonia::core::{
@@ -26,6 +27,8 @@ use {
     tracing::{debug, info_span, instrument, trace, warn},
     vorbis_rs::VorbisEncoderBuilder,
 };
+
+pub mod resampler;
 
 pub mod chunk_while;
 
@@ -44,9 +47,12 @@ pub struct FromTo {
     to: PathBuf,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
-    ConvertStereoMP3ToMono(FromTo),
+    ConvertStereoMP3ToMono {
+        #[command(flatten)]
+        context: FromTo,
+    },
     ConvertOGGToWAV(FromTo),
     ResampleOGG {
         #[command(flatten)]
@@ -63,7 +69,9 @@ impl Commands {
         debug!("debug logging on");
         let _span = info_span!("running", ?command).entered();
         match command {
-            Commands::ConvertStereoMP3ToMono(FromTo { from, to }) => convert_to_mp3(&from, &to, None, Some(44100), Some(Mp3TargetChannelMode::Mono)),
+            Commands::ConvertStereoMP3ToMono { context: FromTo { from, to } } => {
+                convert_to_mp3(&from, &to, None, Some(44100), Some(Mp3TargetChannelMode::Mono))
+            }
             Commands::ConvertOGGToWAV(FromTo { from, to }) => convert_to_wav(&from, &to, None),
             Commands::ResampleOGG {
                 context: FromTo { from, to },
@@ -75,7 +83,7 @@ impl Commands {
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
-struct FormatReaderIterator {
+pub struct FormatReaderIterator {
     #[derivative(Debug = "ignore")]
     decoder: Box<dyn Decoder>,
     #[derivative(Debug = "ignore")]
@@ -150,10 +158,14 @@ impl FormatReaderIterator {
                         packet_track_id=%packet.track_id(),
                         "next packet",
                     );
-                    if packet.dur() == 0 {
-                        tracing::debug!("skipping empty chunk");
-                        continue;
-                    }
+                    // if packet.data.is_empty() {
+                    //     tracing::trace!("skipping empty chunk (data len == 0)");
+                    //     continue;
+                    // }
+                    // if packet.dur() == 0 {
+                    //     tracing::trace!("skipping empty chunk");
+                    //     continue;
+                    // }
                     if packet.track_id() == self.selected_track {
                         return Ok(Some(packet));
                     } else {
@@ -189,11 +201,15 @@ impl FormatReaderIterator {
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
-struct DecodedChunk {
+pub struct DecodedChunk {
     spec: SignalSpec,
     /// it contains interleaved data
     #[derivative(Debug = "ignore")]
     sample_buffer: SampleBuffer<f32>,
+}
+
+fn split_channels_raw<const COUNT: usize>(samples: &[f32]) -> [impl Iterator<Item = f32> + '_; COUNT] {
+    std::array::from_fn(move |channel| samples.iter().skip(channel).step_by(COUNT).copied())
 }
 
 impl DecodedChunk {
@@ -322,24 +338,19 @@ impl<T> std::result::Result<T, mp3lame_encoder::BuildError> {
 //     }
 // }
 
-const SAMPLE_RATE: u32 = 44_100;
-
-fn setup_logging() {
-    use tracing_subscriber::{prelude::*, EnvFilter};
-    let subscriber = tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().unwrap_or(EnvFilter::from("info")))
-        .with(tracing_subscriber::fmt::Layer::new().with_writer(std::io::stderr));
-    if let Err(message) = tracing::subscriber::set_global_default(subscriber) {
-        eprintln!("logging setup failed: {message:?}");
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum Mp3TargetChannelMode {
     Mono,
     Stereo,
 }
+
 impl Mp3TargetChannelMode {
+    pub fn as_count(self) -> usize {
+        match self {
+            Mp3TargetChannelMode::Mono => 1,
+            Mp3TargetChannelMode::Stereo => 2,
+        }
+    }
     pub fn from_count(count: usize) -> Result<Self> {
         match count {
             1 => Ok(Self::Mono),
@@ -358,17 +369,26 @@ pub fn convert_to_mp3(
 ) -> Result<()> {
     FormatReaderIterator::from_file(from).and_then(|reader| -> Result<_> {
         use mp3lame_encoder::{Builder, FlushNoGap};
-        let mut reader = reader.peekable();
-        let source_channel_mode = reader
+        let mut reader = reader
+            .filter(|c| {
+                c.as_ref()
+                    .map(|e| !e.sample_buffer.is_empty())
+                    .unwrap_or(true)
+            })
+            .peekable();
+        let (source_sample_rate, source_channel_mode, buffer_size) = reader
             .peek()
             .context("stream is empty")
             .and_then(|e| {
                 e.as_ref()
                     .map_err(|e| anyhow::anyhow!("{e:#?}"))
-                    .map(|c| c.spec.channels.count())
+                    .map(|c| (c.spec.rate, c.spec.channels.count(), c.sample_buffer.len()))
             })
-            .and_then(Mp3TargetChannelMode::from_count)?;
+            .and_then(|(rate, channels, chunk_size)| Mp3TargetChannelMode::from_count(channels).map(|channels| (rate, channels, chunk_size)))?;
 
+        let target_frequency = target_frequency.unwrap_or(source_sample_rate);
+
+        let target_channel_mode = target_channel_mode.unwrap_or(source_channel_mode);
         let mut output = std::fs::OpenOptions::new()
             .write(true)
             .truncate(true)
@@ -376,20 +396,37 @@ pub fn convert_to_mp3(
             .open(to)
             .with_context(|| format!("opening output file: [{to:?}]"))?
             .pipe(BufWriter::new);
-
+        let buffer_size = buffer_size
+            .pipe(NonZeroUsize::new)
+            .context("buffer size cannot be 0")?;
+        let mut resampler = target_frequency
+            .eq(&source_sample_rate)
+            .not()
+            .then_some(())
+            .and_then(|_| {
+                BufferedResampler::resampler_from_to(
+                    source_sample_rate,
+                    target_frequency,
+                    buffer_size,
+                    source_channel_mode
+                        .as_count()
+                        .pipe(NonZeroUsize::new)
+                        .expect("enum to handle empty channels"),
+                )
+                .transpose()
+            })
+            .transpose()
+            .context("deducing resampler")?;
         let mut buffer = Vec::new();
         Builder::new()
             .context("creating mp3 lame encoder builder")
             .and_then(|mut encoder| {
                 encoder
-                    .set_num_channels(match target_channel_mode.unwrap_or(source_channel_mode) {
-                        Mp3TargetChannelMode::Mono => 1,
-                        Mp3TargetChannelMode::Stereo => 2,
-                    })
+                    .set_num_channels(target_channel_mode.as_count() as u8)
                     .for_anyhow()
                     .context("set_num_channels")?;
                 encoder
-                    .set_sample_rate(target_frequency.unwrap_or(SAMPLE_RATE))
+                    .set_sample_rate(target_frequency)
                     .for_anyhow()
                     .context("set_sample_rate")?;
 
@@ -422,7 +459,7 @@ pub fn convert_to_mp3(
                     .for_anyhow()
                     .context("setting bitrate")?;
                 encoder
-                    .set_quality(mp3lame_encoder::Quality::Best)
+                    .set_quality(mp3lame_encoder::Quality::Good)
                     .for_anyhow()
                     .context("set quality")?;
                 encoder
@@ -440,35 +477,184 @@ pub fn convert_to_mp3(
             .and_then(|mut encoder| {
                 reader
                     .try_for_each(|chunk| {
-                        chunk
-                            .and_then(|chunk| match target_channel_mode {
-                                Some(target) => match target {
-                                    Mp3TargetChannelMode::Mono => chunk.downmix_to_mono(),
-                                    Mp3TargetChannelMode::Stereo => chunk.upmix_to_stereo(),
+                        chunk.and_then(|chunk| -> Result<_> {
+                            match (source_channel_mode, target_channel_mode) {
+                                (Mp3TargetChannelMode::Mono, Mp3TargetChannelMode::Mono) => match resampler.as_mut() {
+                                    Some(resampler) => {
+                                        let resampled = resampler
+                                            .process(&[chunk.sample_buffer.samples()])
+                                            .context("resampling")?;
+                                        buffer.reserve(mp3lame_encoder::max_required_buffer_size(chunk.sample_buffer.len()));
+                                        encoder
+                                            .encode_to_vec(MonoPcm(resampled.first().context("channel mismatch")?), &mut buffer)
+                                            .map_err(|e| anyhow::anyhow!("{e:#?}"))
+                                            .context("encoding mp3 chunk")
+                                            .inspect(|size| debug!("encoded chunk of size [{size}]"))
+                                            .and_then(|size| {
+                                                output
+                                                    .write_all(&buffer)
+                                                    .context("writing chunk of encoded mp3 to file")
+                                                    .tap_ok(|_| buffer.clear())
+                                                    .tap_ok(|_| debug!("wrote [{size}]"))
+                                            })
+                                    }
+                                    None => {
+                                        buffer.reserve(mp3lame_encoder::max_required_buffer_size(chunk.sample_buffer.len()));
+                                        encoder
+                                            .encode_to_vec(MonoPcm(chunk.sample_buffer.samples()), &mut buffer)
+                                            .map_err(|e| anyhow::anyhow!("{e:#?}"))
+                                            .context("encoding mp3 chunk")
+                                            .inspect(|size| debug!("encoded chunk of size [{size}]"))
+                                            .and_then(|size| {
+                                                output
+                                                    .write_all(&buffer)
+                                                    .context("writing chunk of encoded mp3 to file")
+                                                    .tap_ok(|_| buffer.clear())
+                                                    .tap_ok(|_| debug!("wrote [{size}]"))
+                                            })
+                                    }
                                 },
-                                None => chunk
-                                    .sample_buffer
-                                    .samples()
-                                    .iter()
-                                    .copied()
-                                    .collect_vec()
-                                    .pipe(Ok),
-                            })
-                            .and_then(|chunk| {
-                                buffer.reserve(mp3lame_encoder::max_required_buffer_size(chunk.len()));
-                                encoder
-                                    .encode_to_vec(MonoPcm(chunk.as_slice()), &mut buffer)
-                                    .map_err(|e| anyhow::anyhow!("{e:#?}"))
-                                    .context("encoding mp3 chunk")
-                                    .inspect(|size| debug!("encoded chunk of size [{size}]"))
-                                    .and_then(|size| {
-                                        output
-                                            .write_all(&buffer)
-                                            .context("writing chunk of encoded mp3 to file")
-                                            .tap_ok(|_| buffer.clear())
-                                            .tap_ok(|_| debug!("wrote [{size}]"))
-                                    })
-                            })
+                                (Mp3TargetChannelMode::Stereo, Mp3TargetChannelMode::Stereo) => {
+                                    let [left, right] = chunk
+                                        .split_channels()
+                                        .map(|ch| ch.collect_vec())
+                                        .collect_vec()
+                                        .try_conv::<[_; 2]>()
+                                        .map_err(|bad_size| anyhow::anyhow!("bad size: {bad_size:?}"))
+                                        .context("channel size mismatch")?;
+                                    match resampler.as_mut() {
+                                        Some(resampler) => {
+                                            let resampled = resampler.process(&[&left, &right]).context("resampling")?;
+                                            buffer.reserve(mp3lame_encoder::max_required_buffer_size(chunk.sample_buffer.len()));
+                                            let [left, right] = resampled
+                                                .iter()
+                                                .collect_vec()
+                                                .try_conv::<[_; 2]>()
+                                                .map_err(|s| anyhow::anyhow!("{s:?}"))
+                                                .context("Bad size")?;
+                                            encoder
+                                                .encode_to_vec(DualPcm { left, right }, &mut buffer)
+                                                .map_err(|e| anyhow::anyhow!("{e:#?}"))
+                                                .context("encoding mp3 chunk")
+                                                .inspect(|size| debug!("encoded chunk of size [{size}]"))
+                                                .and_then(|size| {
+                                                    output
+                                                        .write_all(&buffer)
+                                                        .context("writing chunk of encoded mp3 to file")
+                                                        .tap_ok(|_| buffer.clear())
+                                                        .tap_ok(|_| debug!("wrote [{size}]"))
+                                                })
+                                        }
+                                        None => {
+                                            buffer.reserve(mp3lame_encoder::max_required_buffer_size(chunk.sample_buffer.len()));
+                                            encoder
+                                                .encode_to_vec(DualPcm { left: &left, right: &right }, &mut buffer)
+                                                .map_err(|e| anyhow::anyhow!("{e:#?}"))
+                                                .context("encoding mp3 chunk")
+                                                .inspect(|size| debug!("encoded chunk of size [{size}]"))
+                                                .and_then(|size| {
+                                                    output
+                                                        .write_all(&buffer)
+                                                        .context("writing chunk of encoded mp3 to file")
+                                                        .tap_ok(|_| buffer.clear())
+                                                        .tap_ok(|_| debug!("wrote [{size}]"))
+                                                })
+                                        }
+                                    }
+                                }
+                                (Mp3TargetChannelMode::Mono, Mp3TargetChannelMode::Stereo) => {
+                                    let stereo = chunk.upmix_to_stereo().context("upmixing to stereo")?;
+                                    let [left, right] = split_channels_raw::<2>(stereo.as_slice()).map(|i| i.collect_vec());
+                                    match resampler.as_mut() {
+                                        Some(resampler) => {
+                                            let resampled = resampler.process(&[&left, &right]).context("resampling")?;
+                                            buffer.reserve(mp3lame_encoder::max_required_buffer_size(chunk.sample_buffer.len()));
+                                            let [left, right] = resampled
+                                                .iter()
+                                                .collect_vec()
+                                                .try_conv::<[_; 2]>()
+                                                .map_err(|s| anyhow::anyhow!("{s:?}"))
+                                                .context("Bad size")?;
+                                            encoder
+                                                .encode_to_vec(DualPcm { left, right }, &mut buffer)
+                                                .map_err(|e| anyhow::anyhow!("{e:#?}"))
+                                                .context("encoding mp3 chunk")
+                                                .inspect(|size| debug!("encoded chunk of size [{size}]"))
+                                                .and_then(|size| {
+                                                    output
+                                                        .write_all(&buffer)
+                                                        .context("writing chunk of encoded mp3 to file")
+                                                        .tap_ok(|_| buffer.clear())
+                                                        .tap_ok(|_| debug!("wrote [{size}]"))
+                                                })
+                                        }
+                                        None => {
+                                            buffer.reserve(mp3lame_encoder::max_required_buffer_size(chunk.sample_buffer.len()));
+                                            encoder
+                                                .encode_to_vec(DualPcm { left: &left, right: &right }, &mut buffer)
+                                                .map_err(|e| anyhow::anyhow!("{e:#?}"))
+                                                .context("encoding mp3 chunk")
+                                                .inspect(|size| debug!("encoded chunk of size [{size}]"))
+                                                .and_then(|size| {
+                                                    output
+                                                        .write_all(&buffer)
+                                                        .context("writing chunk of encoded mp3 to file")
+                                                        .tap_ok(|_| buffer.clear())
+                                                        .tap_ok(|_| debug!("wrote [{size}]"))
+                                                })
+                                        }
+                                    }
+                                }
+                                (Mp3TargetChannelMode::Stereo, Mp3TargetChannelMode::Mono) => {
+                                    let chunk = chunk.downmix_to_mono().context("downmixing to mono")?;
+                                    match resampler.as_mut() {
+                                        Some(resampler) => {
+                                            let resampled = resampler
+                                                .process(&[chunk.as_slice()])
+                                                .context("resampling")?;
+                                            buffer.reserve(mp3lame_encoder::max_required_buffer_size(chunk.len()));
+                                            encoder
+                                                .encode_to_vec(MonoPcm(resampled.first().context("channel mismatch")?), &mut buffer)
+                                                .map_err(|e| anyhow::anyhow!("{e:#?}"))
+                                                .context("encoding mp3 chunk")
+                                                .inspect(|size| debug!("encoded chunk of size [{size}]"))
+                                                .and_then(|size| {
+                                                    output
+                                                        .write_all(&buffer)
+                                                        .context("writing chunk of encoded mp3 to file")
+                                                        .tap_ok(|_| buffer.clear())
+                                                        .tap_ok(|_| debug!("wrote [{size}]"))
+                                                })
+                                        }
+                                        None => {
+                                            buffer.reserve(mp3lame_encoder::max_required_buffer_size(chunk.len()));
+                                            encoder
+                                                .encode_to_vec(MonoPcm(chunk.as_slice()), &mut buffer)
+                                                .map_err(|e| anyhow::anyhow!("{e:#?}"))
+                                                .context("encoding mp3 chunk")
+                                                .inspect(|size| debug!("encoded chunk of size [{size}]"))
+                                                .and_then(|size| {
+                                                    output
+                                                        .write_all(&buffer)
+                                                        .context("writing chunk of encoded mp3 to file")
+                                                        .tap_ok(|_| buffer.clear())
+                                                        .tap_ok(|_| debug!("wrote [{size}]"))
+                                                })
+                                        }
+                                    }
+                                } // Some(target) => match target {
+                                  //     Mp3TargetChannelMode::Mono => chunk.downmix_to_mono(),
+                                  //     Mp3TargetChannelMode::Stereo => chunk.upmix_to_stereo(),
+                                  // },
+                                  // None => chunk
+                                  //     .sample_buffer
+                                  //     .samples()
+                                  //     .iter()
+                                  //     .copied()
+                                  //     .collect_vec()
+                                  //     .pipe(Ok),
+                            }
+                        })
                     })
                     .and_then(|_| {
                         encoder
@@ -488,65 +674,268 @@ pub fn convert_to_mp3(
 }
 
 pub fn convert_to_wav(from: &Path, to: &Path, target_frequency: Option<u32>) -> Result<()> {
-    FormatReaderIterator::from_file(from).and_then(|reader| {
-        let mut reader = reader.peekable();
-        let (source_sample_rate, channel_count) = reader
-            .peek()
-            .map(|chunk| {
-                chunk
-                    .as_ref()
-                    .map_err(|e| anyhow::anyhow!("{e:#?}"))
-                    .map(|c| (c.spec.rate, c.spec.channels.count()))
-            })
-            .context("input is empty")
-            .and_then(identity)
-            .context("deducing source spec")?;
+    let track = FormatReaderIterator::from_file(from)
+        .and_then(LoadedTrack::from_reader)
+        .context("loading track")
+        .and_then(|track| match target_frequency {
+            Some(target) => track.resample_if_needed(target).context("resampling"),
+            None => Ok(track),
+        })
+        .context("maybe resampling")?;
+    let mut writer = hound::WavWriter::create(
+        to,
+        hound::WavSpec {
+            channels: track.channels.len() as _,
+            sample_rate: track.sample_rate,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        }
+        .tap(|spec| tracing::trace!(?spec, "creating wav writer with spec")),
+    )
+    .context("creating WAV writer")?;
+    let wrote = track
+        .interleaved_samples_iter()
+        .try_for_each(|sample| writer.write_sample(sample))
+        .context("writing to writer failed");
+    wrote.and_then(|_| writer.finalize().context("finalizing the writer"))
+}
 
-        let target_frequency = target_frequency.unwrap_or(source_sample_rate);
+struct BufferedResampler {
+    resampler: FftFixedOut<f32>,
+    out_buffers: Vec<Vec<f32>>,
+}
 
-        let mut writer = hound::WavWriter::create(
-            to,
-            hound::WavSpec {
-                channels: channel_count as _,
-                sample_rate: target_frequency,
-                bits_per_sample: 32,
-                sample_format: hound::SampleFormat::Float,
+impl BufferedResampler {
+    fn process<Inner>(&mut self, chunk: &[Inner]) -> Result<&Vec<Vec<f32>>>
+    where
+        Inner: AsRef<[f32]>,
+    {
+        // self.buffers.iter_mut().for_each(|b| {
+        //     b.clear();
+        // });
+        //
+        self.out_buffers = self.resampler.process(chunk, None)?;
+        // let frames = self.resampler.output_frames_next();
+
+        // self.buffers.iter_mut().for_each(|b| {
+        //     b.resize(frames, 0.);
+        // });
+        // let (_, to) = self
+        //     .resampler
+        //     .process_into_buffer(chunk, &mut self.buffers, None)
+        //     .context("resampling chunk")?;
+        // self.buffers.iter_mut().for_each(|b| {
+        //     b.truncate(to);
+        // });
+        Ok(&self.out_buffers)
+    }
+    fn resampler_from_to(from: u32, to: u32, chunk_size: NonZeroUsize, channels: NonZeroUsize) -> Result<Option<Self>> {
+        match from == to {
+            true => Ok(None),
+            false => {
+                let resampler = FftFixedOut::new(from as _, to as _, chunk_size.get(), 2, channels.get()).context("Creating sinc interpolation resampler")?;
+                Ok(Some(Self {
+                    out_buffers: (0..channels.get())
+                        .map(|_| vec![0f32; Resampler::output_frames_max(&resampler) + 10])
+                        .collect_vec(),
+                    resampler,
+                }))
             }
-            .tap(|spec| tracing::trace!(?spec, "creating wav writer with spec")),
-        )
-        .context("creating WAV writer")?;
-        reader
-            .try_for_each(|chunk| {
-                chunk.and_then(|chunk| {
-                    chunk
-                        .sample_buffer
-                        .samples()
-                        .iter()
-                        .try_for_each(|s| writer.write_sample(*s).context("wrtigin sample"))
-                })
+        }
+    }
+}
+
+// fn resamples_from_to(from: u32, to: u32, chunk_size: usize, channels: usize) -> Result<Option<SincFixedIn<f32>>> {
+//     match from == to {
+//         true => Ok(None),
+//         false => Ok(Some(
+//             SincFixedIn::new(
+//                 to as f32 / from as f32,
+//                 2.0,
+//                 SincInterpolationParameters {
+//                     sinc_len: 256,
+//                     f_cutoff: 0.95,
+//                     oversampling_factor: 256,
+//                     interpolation: SincInterpolationType::Quadratic,
+//                     window: rubato::WindowFunction::BlackmanHarris2,
+//                 },
+//                 chunk_size,
+//                 channels,
+//             )
+//             .context("Creating sinc interpolation resampler")?,
+//         )),
+//     }
+// }
+
+pub struct LoadedTrack {
+    pub channels: Vec<Vec<f32>>,
+    pub sample_rate: u32,
+}
+
+impl std::fmt::Debug for LoadedTrack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoadedTrack")
+            .field("channels", &self.channels.len())
+            .field("sample_rate", &self.sample_rate)
+            .finish_non_exhaustive()
+    }
+}
+
+impl LoadedTrack {
+    #[instrument(level = "TRACE", skip(reader), ret)]
+    pub fn from_reader(reader: FormatReaderIterator) -> Result<Self> {
+        trace!("loading from reader");
+        let mut reader = reader
+            .filter(|c| {
+                c.as_ref()
+                    .map(|e| !e.sample_buffer.is_empty())
+                    .unwrap_or(true)
             })
-            .context("writing reencoded wav data")
-            .and_then(|_| writer.finalize().context("finalizing the writer"))?;
-        debug!("[DONE]");
-        Ok(())
-    })
+            .peekable();
+        let (original_rate, original_channel_count, _sample_buffer_size) = reader
+            .peek()
+            .map(|r| {
+                r.as_ref()
+                    .map_err(|e| anyhow::anyhow!("{e:#?}"))
+                    .map(|r| (r.spec.rate, r.spec.channels.count(), r.sample_buffer.len()))
+            })
+            .context("input is empty?")
+            .and_then(identity)
+            .context("deducing original metadata")?;
+        reader
+            .try_fold(Self::empty(original_rate, original_channel_count), |mut acc, next| {
+                next.map(|next| acc.load_interleaved(next.sample_buffer.samples()))
+                    .map(|_| acc)
+            })
+            .context("loading raw track")
+    }
+
+    pub fn iter_chunks(&self, size: usize) -> impl Iterator<Item = Vec<&[f32]>> + '_ {
+        self.channels[0]
+            .chunks(size)
+            .enumerate()
+            .map(move |(start_idx, chunk)| (size * start_idx, chunk))
+            .map(|(start, chunk)| (start, start + chunk.len()))
+            .map(|(start, end)| {
+                self.channels
+                    .iter()
+                    .enumerate()
+                    .map(|(channel_index, ch)| {
+                        ch.get(start..end).unwrap_or_else(|| {
+                            tracing::warn!(%channel_index, %start, %end, "channel is shorter than first channel?");
+                            ch.get(0..0).expect("come on")
+                        })
+                    })
+                    .collect_vec()
+            })
+    }
+
+    #[instrument(level = "TRACE", ret)]
+    pub fn resample_if_needed(self, target_sample_rate: u32) -> Result<Self> {
+        if self.sample_rate == target_sample_rate {
+            Ok(self)
+        } else {
+            self.resample(target_sample_rate)
+        }
+    }
+
+    pub fn interleaved_samples_iter(&self) -> impl Iterator<Item = f32> + '_ {
+        (0..(self.channels[0].len())).flat_map(move |sample_idx| (0..self.channels.len()).map(move |ch| self.channels[ch][sample_idx]))
+    }
+
+    #[instrument(level = "TRACE", ret)]
+    pub fn resample(self, target_sample_rate: u32) -> Result<Self> {
+        fn append_frames(buffers: &mut [Vec<f32>], additional: &[Vec<f32>], nbr_frames: usize) -> Result<()> {
+            buffers
+                .iter_mut()
+                .zip(additional.iter())
+                .try_for_each(|(b, a)| -> Result<()> {
+                    b.extend_from_slice(
+                        a.get(..nbr_frames)
+                            .with_context(|| format!("bad slice: [..{nbr_frames}]"))?,
+                    );
+                    Ok(())
+                })
+        }
+
+        let mut resampled_track = Self::empty(target_sample_rate, self.channels.len());
+
+        let f_ratio = target_sample_rate as f32 / self.sample_rate as f32;
+        // let params = SincInterpolationParameters {
+        //     sinc_len: 256,
+        //     f_cutoff: 0.95,
+        //     interpolation: SincInterpolationType::Linear,
+        //     oversampling_factor: 256,
+        //     window: WindowFunction::BlackmanHarris2,
+        // };
+        let mut resampler =
+            FastFixedIn::<f32>::new(f_ratio as f64, 2.0, PolynomialDegree::Septic, 1024, self.channels.len()).context("creating fastfft resampler")?;
+
+        let mut input_frames_next = resampler.input_frames_next();
+        let resampler_delay = resampler.output_delay();
+        let mut outbuffer = vec![vec![0.0f32; resampler.output_frames_max()]; self.channels.len()];
+        let mut indata_slices: Vec<&[f32]> = self.channels.iter().map(|v| v.as_slice()).collect();
+        while indata_slices[0].len() >= input_frames_next {
+            let (nbr_in, nbr_out) = resampler
+                .process_into_buffer(&indata_slices, &mut outbuffer, None)
+                .context("processing into buffer")?;
+            for chan in indata_slices.iter_mut() {
+                *chan = chan
+                    .get(nbr_in..)
+                    .with_context(|| ("invalid slice: [{nbr_in}..]"))?;
+            }
+            append_frames(&mut resampled_track.channels, &outbuffer, nbr_out)?;
+            input_frames_next = resampler.input_frames_next();
+        }
+
+        // Process a partial chunk with the last frames.
+        if !indata_slices[0].is_empty() {
+            let (_nbr_in, nbr_out) = resampler
+                .process_partial_into_buffer(Some(&indata_slices), &mut outbuffer, None)
+                .context("processing partial into buffer")?;
+            append_frames(&mut resampled_track.channels, &outbuffer, nbr_out)?;
+        }
+        resampled_track.channels.iter_mut().for_each(|channel| {
+            channel
+                .drain(0..(resampler_delay.min(channel.len())))
+                .enumerate()
+                .for_each(|sample| trace!(%resampler_delay, ?sample,  "dropping sample"))
+        });
+        Ok(resampled_track)
+    }
+    pub fn empty(sample_rate: u32, channels: usize) -> Self {
+        Self {
+            channels: (0..channels).map(|_| Default::default()).collect_vec(),
+            sample_rate,
+        }
+    }
+
+    pub fn load_channel(&mut self, channel: usize, data: &[f32]) {
+        self.channels[channel].extend_from_slice(data);
+    }
+
+    pub fn load_interleaved(&mut self, interleaved: &[f32]) {
+        let channel_count = self.channels.len();
+        (0..channel_count).for_each(|channel| {
+            self.channels[channel].extend(
+                interleaved
+                    .iter()
+                    .skip(channel)
+                    .step_by(channel_count)
+                    .copied(),
+            );
+        })
+    }
 }
 
 pub fn resample_ogg(from: &Path, to: &Path, target_frequency: u32) -> Result<()> {
-    let mut reader = FormatReaderIterator::from_file(from)
-        .context("opening source file")?
-        .peekable();
-    let (original_rate, original_channel_count) = reader
-        .peek()
-        .map(|r| {
-            r.as_ref()
-                .map_err(|e| anyhow::anyhow!("{e:#?}"))
-                .map(|r| (r.spec.rate, r.spec.channels.count()))
-        })
-        .context("input is empty?")
-        .and_then(identity)
-        .context("deducing original metadata")?;
-    let _source_span = info_span!("with_source_info", %original_rate, %original_channel_count).entered();
+    let track = FormatReaderIterator::from_file(from)
+        .context("opening source file")
+        .and_then(LoadedTrack::from_reader)?
+        .resample_if_needed(target_frequency)?;
+
+    const REASONABLE_OGG_BLOCK_SIZE: usize = 2048;
+
     let mut output = std::fs::File::create(to)
         .context("opening output file for writing")?
         .pipe(BufWriter::new);
@@ -556,7 +945,9 @@ pub fn resample_ogg(from: &Path, to: &Path, target_frequency: u32) -> Result<()>
                 .pipe(NonZeroU32::new)
                 .context("zero sampling frequency?")
                 .tap_ok(|target_frequency| debug!(%target_frequency))?,
-            original_channel_count
+            track
+                .channels
+                .len()
                 .to_u8()
                 .context("too many channels (max is 255)")
                 .and_then(|channels| NonZeroU8::new(channels).context("no channels"))
@@ -568,69 +959,18 @@ pub fn resample_ogg(from: &Path, to: &Path, target_frequency: u32) -> Result<()>
         .and_then(|mut e| e.build().context("finalizing vorbis encoder"))
         .context("creating vorbis encoder")
     })?;
-    let mut buffers = (0..original_channel_count)
-        .map(|_| Vec::new())
-        .collect_vec();
-    const REASONABLE_OGG_BLOCK_SIZE: usize = 2048;
-    reader
-        .chunk_while(|chunk| {
-            chunk
-                .iter()
-                .map(|c| {
-                    c.as_ref()
-                        .map(|c| c.single_channel_length())
-                        .unwrap_or_default()
-                })
-                .sum::<usize>()
-                < REASONABLE_OGG_BLOCK_SIZE
-        })
+
+    let reencoded = track
+        .iter_chunks(REASONABLE_OGG_BLOCK_SIZE)
         .try_for_each(|chunk| {
-            buffers.iter_mut().for_each(|b| b.clear());
-            chunk
-                .into_iter()
-                .collect::<Result<Vec<_>>>()
-                .map(|chunk| {
-                    chunk.into_iter().for_each(|chunk| {
-                        chunk
-                            .split_channels()
-                            .zip(buffers.iter_mut())
-                            .for_each(|(channel, buffer)| {
-                                buffer.extend(channel);
-                            });
-                    })
-                })
-                .and_then(|_| {
-                    tracing::trace!(
-                        samples = buffers
-                            .first()
-                            .as_ref()
-                            .map(|b| b.len())
-                            .unwrap_or_default(),
-                        "wrote to buffer"
-                    );
-                    encoder
-                        .encode_audio_block(&buffers)
-                        .context("encoding sample")
-                })
-        })
+            encoder
+                .encode_audio_block(&chunk)
+                .context("encoding sample")?;
+
+            Ok(())
+        });
+    reencoded
         .and_then(|_| encoder.finish().context("finalizing encoder"))
         .and_then(|w| w.flush().context("flushing the output"))
-        .with_context(|| format!("resampling [from:?] -> [{to:?}]"))
-}
-
-#[allow(dead_code)]
-fn main() -> Result<()> {
-    setup_logging();
-    let Cli { command } = Cli::parse();
-
-    debug!("debug logging on");
-    let _span = info_span!("running", ?command).entered();
-    match command {
-        Commands::ConvertStereoMP3ToMono(FromTo { from, to }) => convert_to_mp3(&from, &to, None, Some(44100), Some(Mp3TargetChannelMode::Mono)),
-        Commands::ConvertOGGToWAV(FromTo { from, to }) => convert_to_wav(&from, &to, None),
-        Commands::ResampleOGG {
-            context: FromTo { from, to },
-            target_frequency,
-        } => resample_ogg(&from, &to, target_frequency),
-    }
+        .with_context(|| format!("resampling [{from:?}] -> [{to:?}]"))
 }
