@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
+- *(fnv)* Fallout new vegas 4gb patcher functionality is now built into hoolamike (no need to run FNVPatch.exe or anything like that)
+
+## [0.13.0] - 2025-01-23
+
+### 🚀 Features
+
 - *(bsa)* Unpacking multiple bsa files is now significantly faster, audio cli
 - *(ttw)* Fixed resampling at cost of higher memory usage
 - *(ttw)* Use smallvec to speed up allocations
