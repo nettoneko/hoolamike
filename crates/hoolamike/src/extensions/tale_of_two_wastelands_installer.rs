@@ -286,6 +286,17 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         .as_ref()
         .and_then(|extras| extras.tale_of_two_wastelands.as_ref())
         .context("no tale of two wastelands configured in hoolamike.yaml")?;
+    let fallout_new_vegas_exe_path = hoolamike_config
+        .games
+        .get(&GameName::new("FalloutNewVegas".to_string()))
+        .context("new vegas not configured")
+        .map(|game| game.root_directory.join("FalloutNV.exe"))
+        .and_then(|path| {
+            path.try_exists()
+                .context("checking for file existence")
+                .and_then(|exists| exists.then_some(path).context("file does not exist"))
+        })
+        .context("resolving path to FalloutNV.exe based on hoolamike config")?;
 
     let manifest_file::Manifest {
         package,
@@ -522,6 +533,11 @@ pub fn install(CliConfig { contains }: CliConfig, hoolamike_config: HoolamikeCon
         })
         .and_then(|_| self::post_commands::handle_post_commands(post_commands).context("handling post_commands"))
         .and_then(|_| self::file_attrs::handle_file_attrs(file_attrs).context("handling file_attrs"))
+        .and_then(|_| {
+            super::fallout_new_vegas_4gb_patch::patch_fallout_new_vegas(&fallout_new_vegas_exe_path)
+                .context("applying 4gb patch")
+                .tap_ok(|_| info!("[🩹] Fallout New Vegas 4GB Patch is applied (no need to run FNVPatch.exe or anything like that)"))
+        })
         .tap_ok(|_| {
             let Package {
                 title,

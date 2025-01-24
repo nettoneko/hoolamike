@@ -11,6 +11,7 @@ use {
     num::ToPrimitive,
     std::{ops::Div, path::PathBuf, str::FromStr},
     tap::{Pipe, TapFallible},
+    tracing::info,
 };
 
 pub const BUFFER_SIZE: usize = 1024 * 64;
@@ -61,7 +62,13 @@ struct HoolamikeDebug {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Emulats TTW installer functionality (make sure to add installer variables to hoolamike.yaml)
     TaleOfTwoWastelands(crate::extensions::tale_of_two_wastelands_installer::CliConfig),
+    /// applies 4GB patch to FalloutNV.exe (replaces FNVPatcher.exe/FNVPatcher.py etc )
+    FalloutNewVegasPatcher {
+        /// path to FalloutNV.exe
+        at_path: PathBuf,
+    },
     HoolamikeDebug(HoolamikeDebug),
     /// tests the modlist parser
     ValidateModlist {
@@ -201,6 +208,9 @@ async fn async_main() -> Result<()> {
     let _guard = setup_logging(logging_mode);
 
     match command {
+        Commands::FalloutNewVegasPatcher { at_path } => crate::extensions::fallout_new_vegas_4gb_patch::patch_fallout_new_vegas(&at_path)
+            .context("applying patch")
+            .tap_ok(|_| info!("[🩹] Fallout New Vegas 4GB Patch is applied (no need to run FNVPatch.exe or anything like that)")),
         Commands::PostInstallFixup => {
             let (_config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
             post_install_fixup::run_post_install_fixup(&config)
