@@ -21,9 +21,6 @@ jobs:
           - os-name: Windows-x86_64
             runs-on: windows-latest
             target: x86_64-pc-windows-msvc
-          - os-name: macOS-x86_64
-            runs-on: macos-latest
-            target: x86_64-apple-darwin
           - os-name: macOS-arm64
             runs-on: macos-14
             target: aarch64-apple-darwin
@@ -33,12 +30,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # Linux
       - name: Install libarchive (Linux)
         if: matrix.platform.os-name == 'Linux-x86_64'
         run: sudo apt-get update --yes && sudo apt-get install --yes pkg-config libssl-dev libarchive-dev
 
-      # Windows
       - name: Cache vcpkg (Windows)
         if: matrix.platform.os-name == 'Windows-x86_64'
         uses: actions/cache@v3
@@ -65,32 +60,6 @@ jobs:
           echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" >> $env:GITHUB_ENV
         shell: pwsh
 
-      # macOS Intel
-      - name: Install libarchive (macOS Intel)
-        if: matrix.platform.os-name == 'macOS-x86_64'
-        run: |
-          mkdir -p ~/homebrew-x86_64
-          curl -L https://github.com/Homebrew/brew/tarball/master | tar xz --strip 1 -C ~/homebrew-x86_64
-          arch -x86_64 ~/homebrew-x86_64/bin/brew update
-          arch -x86_64 ~/homebrew-x86_64/bin/brew install libarchive pkg-config
-          echo "PKG_CONFIG_PATH=$HOME/homebrew-x86_64/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
-          echo "PATH=$HOME/homebrew-x86_64/bin:$PATH" >> $GITHUB_ENV
-          # Debug output
-          echo "Homebrew path: ~/homebrew-x86_64/bin/brew"
-          echo "Libarchive version:"
-          arch -x86_64 ~/homebrew-x86_64/bin/brew info libarchive | grep Cellar
-          echo "pkg-config version:"
-          arch -x86_64 ~/homebrew-x86_64/bin/pkg-config --version
-          echo "Checking libarchive with pkg-config:"
-          arch -x86_64 ~/homebrew-x86_64/bin/pkg-config --modversion libarchive || echo "Failed to find libarchive"
-          ls -l ~/homebrew-x86_64/opt/libarchive/lib/pkgconfig || true
-      - name: Set build environment (macOS Intel)
-        if: matrix.platform.os-name == 'macOS-x86_64'
-        run: |
-          echo "LDFLAGS=-L/Users/runner/homebrew-x86_64/opt/libarchive/lib" >> $GITHUB_ENV
-        shell: bash
-
-      # macOS ARM
       - name: Install libarchive (macOS ARM)
         if: matrix.platform.os-name == 'macOS-arm64'
         run: |
@@ -98,15 +67,6 @@ jobs:
           brew install libarchive pkg-config || brew upgrade libarchive pkg-config
           echo "PKG_CONFIG_PATH=/opt/homebrew/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
-          # Debug output
-          echo "Libarchive version:"
-          brew info libarchive | grep Cellar
-          echo "pkg-config version:"
-          pkg-config --version
-          echo "Checking libarchive with pkg-config:"
-          pkg-config --modversion libarchive || echo "Failed to find libarchive"
-          ls -l /opt/homebrew/opt/libarchive/lib/pkgconfig || true
-
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -119,8 +79,6 @@ jobs:
           toolchain: nightly
           targets: ${{ matrix.platform.target }}
 
-        
-
       - name: Build binary
         env:
           VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
@@ -128,11 +86,8 @@ jobs:
           PKG_CONFIG_ALLOW_CROSS: ${{ env.PKG_CONFIG_ALLOW_CROSS }}
           CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG: true
           RUST_BACKTRACE: full
-          CFLAGS: ${{ (matrix.platform.os-name == 'Linux-x86_64' || matrix.platform.os-name == 'macOS-x86_64') && '-msse2' || '' }}
+          CFLAGS: ${{ matrix.platform.os-name == 'Linux-x86_64' && '-msse2' || '' }}
         run: |
-          # Debug: Print environment variables
-          echo "LDFLAGS=$env:LDFLAGS"
-          echo "CFLAGS=$env:CFLAGS"
           if ($env:VCPKG_ROOT) {
             cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }} -Z build-std --features "vcpkg" --verbose
           } else {
@@ -140,26 +95,10 @@ jobs:
           }
         shell: pwsh
 
-
-      - name: Package artifacts (non-macOS)
-        if: "!contains(matrix.platform.os-name, 'macOS')"
+      - name: Package artifacts
         run: |
           mkdir artifacts
           cp target/${{ matrix.platform.target }}/release/hoolamike* artifacts/
-        shell: bash
-
-      - name: Package artifacts (macOS) and create universal binary
-        if: contains(matrix.platform.os-name, 'macOS')
-        run: |
-          mkdir artifacts
-          cp target/${{ matrix.platform.target }}/release/hoolamike artifacts/hoolamike-${{ matrix.platform.target }}
-          if [ "${{ matrix.platform.os-name }}" = "macOS-arm64" ]; then
-            if [ -f "../artifacts/hoolamike-x86_64-apple-darwin" ]; then
-              lipo -create -output artifacts/hoolamike artifacts/hoolamike-${{ matrix.platform.target }} ../artifacts/hoolamike-x86_64-apple-darwin
-            else
-              cp artifacts/hoolamike-${{ matrix.platform.target }} artifacts/hoolamike
-            fi
-          fi
         shell: bash
 
       - name: Publish GitHub release
