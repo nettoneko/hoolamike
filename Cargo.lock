@@ -1998,8 +1998,9 @@ dependencies = [
 
 [[package]]
 name = "indicatif"
-version = "0.17.9"
-source = "git+https://github.com/Niedzwiedzw/indicatif?branch=main#d98924248a8ae5e0739ff1ae27c5840840419238"
+version = "0.17.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "183b3088984b400f4cfac3620d5e076c84da5364016b4f49473de574b2586235"
 dependencies = [
  "console",
  "number_prefix",
@@ -5011,3 +5012,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "indicatif"
+version = "0.17.9"
+source = "git+https://github.com/Niedzwiedzw/indicatif?branch=main#d98924248a8ae5e0739ff1ae27c5840840419238"

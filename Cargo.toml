@@ -26,15 +26,15 @@ tokio-cached-future.path = "crates/tokio-cached-future"
 hoola-audio.path = "crates/hoola-audio"
 
 # external
-anyhow = "1.0.93"
+anyhow = "1.0.96"
 base64 = "0.22.1"
 binrw = "0.14.1"
-bon = "3.1.1"
-chrono = { version = "0.4.38", features = ["serde"] }
-clap = { version = "4.5.21", features = ["derive", "cargo", "env", "string"] }
+bon = "3.3.2"
+chrono = { version = "0.4.39", features = ["serde"] }
+clap = { version = "4.5.30", features = ["derive", "cargo", "env", "string"] }
 # compress-tools = "0.15.1"
 compress-tools.git = "https://github.com/Niedzwiedzw/compress-tools-rs"
-console = { version = "0.15.8", features = ["windows-console-colors"] }
+console = { version = "0.15.10", features = ["windows-console-colors"] }
 console-subscriber = "0.4.1"
 derivative = "2.2.0"
 derive_more = { version = "1.0.0", features = ["full"] }
@@ -46,18 +46,18 @@ fs2 = "0.4.3"
 futures = "0.3.31"
 futures-util = "0.3.31"
 hex = "0.4.3"
-indexmap = { version = "2.7.0", features = ["serde"] }
-indicatif = { version = "0.17.9", features = ["tokio", "improved_unicode"] }
+indexmap = { version = "2.7.1", features = ["serde"] }
+indicatif = { version = "0.17.11", features = ["tokio", "improved_unicode"] }
 iter-read = "1.1.0"
 itertools = "0.13.0"
 nonempty = { version = "0.10.0", features = ["serde", "serialize"] }
 num = "0.4.3"
 num_cpus = "1.16.0"
 omnom = "3.0.0"
-once_cell = "1.20.2"
+once_cell = "1.20.3"
 parking_lot = { version = "0.12.3", features = ["arc_lock", "nightly"] }
 regex = "1.11.1"
-reqwest = { version = "0.12.9", default-features = false, features = [
+reqwest = { version = "0.12.12", default-features = false, features = [
   "stream",
   "rustls-tls",
   "charset",
@@ -65,25 +65,25 @@ reqwest = { version = "0.12.9", default-features = false, features = [
   "macos-system-configuration",
 ] }
 scraper = "0.21.0"
-serde = { version = "1.0.215", features = ["derive"] }
-serde_json = "1.0.133"
+serde = { version = "1.0.218", features = ["derive"] }
+serde_json = "1.0.139"
 serde_urlencoded = "0.7.1"
 serde_yaml = "0.9.34"
 sevenz-rust = "0.6.1"
 tabled = "0.17.0"
 tap = "1.0.1"
-tempfile = "3.14.0"
-test-log = { version = "0.2.16", default-features = false, features = [
+tempfile = "3.17.1"
+test-log = { version = "0.2.17", default-features = false, features = [
   "trace",
 ] }
-tokio = { version = "1.41.1", features = ["full", "tracing"] }
+tokio = { version = "1.43.0", features = ["full", "tracing"] }
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 transpare = { git = "https://github.com/Niedzwiedzw/transpare", version = "0.2.0" }
 url = { version = "2.5.4", features = ["serde"] }
-uuid = { version = "1.11.0", features = ["serde", "v4"] }
-xxhash-rust = { version = "0.8.12", features = ["xxh64", "std"] }
-zip = { version = "2.2.1", features = ["lzma-rs", "flate2"] }
+uuid = { version = "1.14.0", features = ["serde", "v4"] }
+xxhash-rust = { version = "0.8.15", features = ["xxh64", "std"] }
+zip = { version = "2.2.2", features = ["lzma-rs", "flate2"] }
 
 [patch.crates-io]
 indicatif = { git = "https://github.com/Niedzwiedzw/indicatif", branch = "main" }
