@@ -24,6 +24,9 @@ jobs:
           - os-name: macOS-x86_64
             runs-on: macos-latest
             target: x86_64-apple-darwin
+          - os-name: macOS-arm64
+            runs-on: macos-14
+            target: aarch64-apple-darwin
 
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
@@ -57,9 +60,13 @@ jobs:
         if: matrix.platform.os-name == 'macOS-x86_64'
         run: |
           brew install libarchive
-          # Set pkg-config path for Homebrew's libarchive
-          echo "PKG_CONFIG_PATH=/usr/local/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
-
+          # Set PKG_CONFIG_PATH for both Intel and ARM Homebrew locations
+          echo "PKG_CONFIG_PATH=/usr/local/opt/libarchive/lib/pkgconfig:/opt/homebrew/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
+          # Debug output
+          echo "Libarchive version:"
+          brew info libarchive | grep Cellar
+          ls -l /usr/local/opt/libarchive/lib/pkgconfig || true
+          ls -l /opt/homebrew/opt/libarchive/lib/pkgconfig || true
       # Cache
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2

@@ -87,3 +87,7 @@ zip = { version = "2.2.1", features = ["lzma-rs", "flate2"] }
 
 [patch.crates-io]
 indicatif = { git = "https://github.com/Niedzwiedzw/indicatif", branch = "main" }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
