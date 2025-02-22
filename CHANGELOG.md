@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 🐛 Bug Fixes
+
+- Unused imports
+
+### ⚙️ Miscellaneous Tasks
+
+- Update octadiff reader to compile on latest nightly rust
+
+## [0.14.0] - 2025-01-24
+
 ### 🚀 Features
 
 - *(fnv)* Fallout new vegas 4gb patcher functionality is now built into hoolamike (no need to run FNVPatch.exe or anything like that)
