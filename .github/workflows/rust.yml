@@ -57,16 +57,23 @@ jobs:
 
       # MacOS
       - name: Install libarchive (macOS)
-        if: matrix.platform.os-name == 'macOS-x86_64'
+        if: contains(matrix.platform.os-name, 'macOS')
         run: |
-          brew install libarchive
-          # Set PKG_CONFIG_PATH for both Intel and ARM Homebrew locations
+          brew install libarchive pkg-config
+          # Set PKG_CONFIG_PATH for both Intel and ARM
           echo "PKG_CONFIG_PATH=/usr/local/opt/libarchive/lib/pkgconfig:/opt/homebrew/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
+          # Allow cross-compilation (even though we're building natively)
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
           # Debug output
           echo "Libarchive version:"
           brew info libarchive | grep Cellar
+          echo "pkg-config version:"
+          pkg-config --version
+          echo "Checking libarchive with pkg-config:"
+          pkg-config --modversion libarchive || echo "Failed to find libarchive"
           ls -l /usr/local/opt/libarchive/lib/pkgconfig || true
           ls -l /opt/homebrew/opt/libarchive/lib/pkgconfig || true
+
       # Cache
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -81,8 +88,11 @@ jobs:
 
       - name: Build binary
         env:
-          VCPKG_ROOT: ${{ env.VCPKG_ROOT }}  # For Windows
-          PKG_CONFIG_PATH: ${{ env.PKG_CONFIG_PATH }}  # For macOS
+          VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
+          PKG_CONFIG_PATH: ${{ env.PKG_CONFIG_PATH }}
+          PKG_CONFIG_ALLOW_CROSS: ${{ env.PKG_CONFIG_ALLOW_CROSS }}
+          CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG: true
+          RUST_BACKTRACE: full  # For full backtraces
         run: |
           if ($env:VCPKG_ROOT) {
             cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }} -Z build-std --features "vcpkg"
@@ -91,10 +101,25 @@ jobs:
           }
         shell: pwsh
 
-      - name: Package artifacts
+      - name: Package artifacts (non-macOS)
+        if: "!contains(matrix.platform.os-name, 'macOS')"
         run: |
           mkdir artifacts
           cp target/${{ matrix.platform.target }}/release/hoolamike* artifacts/
+        shell: bash
+
+      - name: Package artifacts (macOS) and create universal binary
+        if: contains(matrix.platform.os-name, 'macOS')
+        run: |
+          mkdir artifacts
+          cp target/${{ matrix.platform.target }}/release/hoolamike artifacts/hoolamike-${{ matrix.platform.target }}
+          if [ "${{ matrix.platform.os-name }}" = "macOS-arm64" ]; then
+            if [ -f "../artifacts/hoolamike-x86_64-apple-darwin" ]; then
+              lipo -create -output artifacts/hoolamike artifacts/hoolamike-${{ matrix.platform.target }} ../artifacts/hoolamike-x86_64-apple-darwin
+            else
+              cp artifacts/hoolamike-${{ matrix.platform.target }} artifacts/hoolamike
+            fi
+          fi
         shell: bash
 
       - name: Publish GitHub release
