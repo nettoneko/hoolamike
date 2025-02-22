@@ -1,8 +1,8 @@
 name: build and release
 on:
   push:
-    tags:
-      - v*
+    # tags:
+    #   - v*
 env:
   RUST_BACKTRACE: 1
 jobs:
