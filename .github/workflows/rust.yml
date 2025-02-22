@@ -24,9 +24,9 @@ jobs:
           - os-name: macOS-x86_64
             runs-on: macos-latest
             target: x86_64-apple-darwin
-          # - os-name: macOS-arm64
-          #   runs-on: macos-14
-          #   target: aarch64-apple-darwin
+          - os-name: macOS-arm64
+            runs-on: macos-14
+            target: aarch64-apple-darwin
 
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
@@ -71,13 +71,27 @@ jobs:
         shell: pwsh
 
       # MacOS
-      - name: Install libarchive (macOS)
-        if: contains(matrix.platform.os-name, 'macOS')
+      - name: Install libarchive (macOS Intel)
+        if: matrix.platform.os-name == 'macOS-x86_64'
+        run: |
+          # Force Homebrew to install x86_64 version
+          arch -x86_64 /bin/bash -c "brew install libarchive pkg-config"
+          echo "PKG_CONFIG_PATH=/usr/local/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
+          # Debug output
+          echo "Libarchive version:"
+          arch -x86_64 brew info libarchive | grep Cellar
+          echo "pkg-config version:"
+          arch -x86_64 pkg-config --version
+          echo "Checking libarchive with pkg-config:"
+          arch -x86_64 pkg-config --modversion libarchive || echo "Failed to find libarchive"
+          ls -l /usr/local/opt/libarchive/lib/pkgconfig || true
+
+      - name: Install libarchive (macOS ARM)
+        if: matrix.platform.os-name == 'macOS-arm64'
         run: |
           brew install libarchive pkg-config
-          # Set PKG_CONFIG_PATH for both Intel and ARM
-          echo "PKG_CONFIG_PATH=/usr/local/opt/libarchive/lib/pkgconfig:/opt/homebrew/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
-          # Allow cross-compilation (even though we're building natively)
+          echo "PKG_CONFIG_PATH=/opt/homebrew/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
           # Debug output
           echo "Libarchive version:"
@@ -86,7 +100,6 @@ jobs:
           pkg-config --version
           echo "Checking libarchive with pkg-config:"
           pkg-config --modversion libarchive || echo "Failed to find libarchive"
-          ls -l /usr/local/opt/libarchive/lib/pkgconfig || true
           ls -l /opt/homebrew/opt/libarchive/lib/pkgconfig || true
 
       # Cache
@@ -136,6 +149,7 @@ jobs:
             fi
           fi
         shell: bash
+
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v1
