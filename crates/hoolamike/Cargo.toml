@@ -14,18 +14,14 @@ hoola-audio.workspace = true
 
 # external
 anyhow.workspace = true
-async-recursion = { workspace = true }
 ba2 = { workspace = true }
 base64.workspace = true
 binrw.workspace = true
-bon.workspace = true
 chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "cargo", "env"] }
 compress-tools.workspace = true
 console.workspace = true
 console-subscriber.workspace = true
-crossbeam = { workspace = true, features = ["crossbeam-channel"] }
-dashmap = { workspace = true, features = ["inline"] }
 derivative.workspace = true
 derive_more.workspace = true
 directxtex = { workspace = true }
@@ -33,26 +29,11 @@ enum-kinds.workspace = true
 enum_dispatch.workspace = true
 extension-traits.workspace = true
 flate2.workspace = true
-fs2.workspace = true
 futures.workspace = true
-futures-util.workspace = true
 hex.workspace = true
 indexmap.workspace = true
 indicatif = { workspace = true, features = ["rayon"] }
-inquire = { workspace = true, features = [
-  "chrono",
-  "console",
-  "date",
-  "editor",
-  "fuzzy",
-  "fuzzy-matcher",
-  "macros",
-  "one-liners",
-  "tempfile",
-] }
-iter-read.workspace = true
 itertools.workspace = true
-lru = { workspace = true }
 memmap2 = { workspace = true }
 nonempty.workspace = true
 normalize-path = { workspace = true }
@@ -60,31 +41,24 @@ num.workspace = true
 num_cpus.workspace = true
 omnom.workspace = true
 once_cell.workspace = true
-os_pipe = { workspace = true }
 parking_lot.workspace = true
 rand = { workspace = true }
 rayon = { workspace = true }
 regex.workspace = true
 reqwest.workspace = true
-ringbuffer = { workspace = true }
 scraper.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
 serde_repr = { workspace = true }
-serde_urlencoded.workspace = true
 serde_with = { workspace = true }
 serde_yaml.workspace = true
-sevenz-rust.workspace = true
 similar = { workspace = true, features = ["inline"] }
 static_assertions = { workspace = true, features = ["nightly"] }
-symphonia = { workspace = true, features = ["all-codecs"] }
 tabled.workspace = true
 tap.workspace = true
 tempfile.workspace = true
 test-log.workspace = true
-thiserror = { workspace = true }
 tokio.workspace = true
-tokio-cached-future.workspace = true
 tracing.workspace = true
 tracing-flame = { workspace = true }
 tracing-indicatif = { workspace = true }
@@ -97,14 +71,11 @@ uuid.workspace = true
 walkdir = { workspace = true }
 xxhash-rust.workspace = true
 zip.workspace = true
-pretty_assertions = { workspace = true }
 xdelta = { workspace = true }
-combine = { workspace = true }
 yash-syntax = { workspace = true }
 futures-executor = { workspace = true }
 snailquote = { workspace = true }
 filetime = { workspace = true }
-rubato = { workspace = true }
 sha1 = { workspace = true }
 hex-literal = { workspace = true }
 # tikv-jemallocator = "0.6.0"

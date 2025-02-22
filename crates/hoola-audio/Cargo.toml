@@ -18,12 +18,9 @@ itertools.workspace = true
 mp3lame-encoder = { workspace = true }
 nonempty.workspace = true
 num.workspace = true
-ogg = { workspace = true }
 ringbuf = { workspace = true }
 rubato = { workspace = true }
-sha1 = { workspace = true }
 symphonia = { workspace = true, features = ["all-codecs", "opt-simd"] }
 tap.workspace = true
 tracing.workspace = true
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
 vorbis_rs = { workspace = true }
