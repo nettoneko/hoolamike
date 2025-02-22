@@ -40,15 +40,30 @@ jobs:
         run: sudo apt-get update --yes && sudo apt-get install --yes pkg-config libssl-dev libarchive-dev
 
       # Windows
+      - name: Cache vcpkg (Windows)
+        if: matrix.platform.os-name == 'Windows-x86_64'
+        uses: actions/cache@v3
+        with:
+          path: |
+            vcpkg
+            vcpkg_installed
+          key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg- 
       - name: Setup vcpkg (Windows)
         if: matrix.platform.os-name == 'Windows-x86_64'
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          cd vcpkg
-          .\bootstrap-vcpkg.bat
+          if (-Not (Test-Path vcpkg)) {
+            git clone https://github.com/microsoft/vcpkg.git
+            cd vcpkg
+            .\bootstrap-vcpkg.bat
+          } else {
+            cd vcpkg
+            git pull
+          }
           .\vcpkg.exe install libarchive:x64-windows
           echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" >> $env:GITHUB_ENV
-        shell: pwsh 
+        shell: pwsh
       - name: Install libarchive (Windows)
         if: matrix.platform.os-name == 'Windows-x86_64'
         run: |
