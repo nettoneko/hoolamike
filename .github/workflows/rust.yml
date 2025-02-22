@@ -69,27 +69,24 @@ jobs:
       - name: Install libarchive (macOS Intel)
         if: matrix.platform.os-name == 'macOS-x86_64'
         run: |
-          # Use Homebrew via PATH or explicit shell script
-          if ! command -v brew >/dev/null 2>&1; then
-            echo "Homebrew not found in PATH, falling back to explicit path"
-            BREW_PATH="/usr/local/Homebrew/bin/brew"
-          else
-            BREW_PATH="brew"
-          fi
-          # Ensure x86_64 architecture
-          arch -x86_64 /bin/bash -c "${BREW_PATH} update"
-          arch -x86_64 /bin/bash -c "${BREW_PATH} install libarchive pkg-config || ${BREW_PATH} upgrade libarchive pkg-config"
-          echo "PKG_CONFIG_PATH=/usr/local/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
-          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
+          # Install Homebrew for x86_64 in a user-writable directory
+          mkdir -p ~/homebrew-x86_64
+          curl -L https://github.com/Homebrew/brew/tarball/master | tar xz --strip 1 -C ~/homebrew-x86_64
+          arch -x86_64 ~/homebrew-x86_64/bin/brew update
+          arch -x86_64 ~/homebrew-x86_64/bin/brew install libarchive pkg-config
+          # Set environment variables
+          echo "PKG_CONFIG_PATH=$HOME/homebrew-x86_64/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
+          echo "PATH=$HOME/homebrew-x86_64/bin:$PATH" >> $GITHUB_ENV
           # Debug output
-          echo "Homebrew path: ${BREW_PATH}"
+          echo "Homebrew path: ~/homebrew-x86_64/bin/brew"
           echo "Libarchive version:"
-          arch -x86_64 /bin/bash -c "${BREW_PATH} info libarchive | grep Cellar"
+          arch -x86_64 ~/homebrew-x86_64/bin/brew info libarchive | grep Cellar
           echo "pkg-config version:"
-          arch -x86_64 /usr/local/bin/pkg-config --version || echo "pkg-config not found"
+          arch -x86_64 ~/homebrew-x86_64/bin/pkg-config --version
           echo "Checking libarchive with pkg-config:"
-          arch -x86_64 /usr/local/bin/pkg-config --modversion libarchive || echo "Failed to find libarchive"
-          ls -l /usr/local/opt/libarchive/lib/pkgconfig || true
+          arch -x86_64 ~/homebrew-x86_64/bin/pkg-config --modversion libarchive || echo "Failed to find libarchive"
+          ls -l ~/homebrew-x86_64/opt/libarchive/lib/pkgconfig || true
+
 
       # macOS ARM
       - name: Install libarchive (macOS ARM)
