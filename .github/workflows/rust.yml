@@ -3,73 +3,72 @@ on:
   push:
     # tags:
     #   - v*
+
 env:
   RUST_BACKTRACE: 1
+
 jobs:
   release:
     permissions:
       contents: write  # Required to create releases
     name: Release - ${{ matrix.platform.os-name }} with rust ${{ matrix.toolchain }}
     strategy:
-      # fail-fast: false
       matrix:
         platform:
-          # - os-name: FreeBSD-x86_64
-          #   runs-on: ubuntu-20.04
-          #   target: x86_64-unknown-freebsd
-          #   skip_tests: true
-
           - os-name: Linux-x86_64
             runs-on: ubuntu-20.04
             target: x86_64-unknown-linux-gnu
-
-          # - os-name: Linux-aarch64
-          #   runs-on: ubuntu-20.04
-          #   target: aarch64-unknown-linux-gnu
-
-          # - os-name: Linux-riscv64
-          #   runs-on: ubuntu-20.04
-          #   target: riscv64gc-unknown-linux-gnu
-
           - os-name: Windows-x86_64
             runs-on: windows-latest
             target: x86_64-pc-windows-msvc
-
           - os-name: macOS-x86_64
-            runs-on: macOS-latest
+            runs-on: macos-latest
             target: x86_64-apple-darwin
-
-          # more targets here ...
 
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install libarchive
-        run: sudo apt-get update --yes && sudo apt-get install --yes pkg-config openssl libssl-dev libarchive-dev
-      - name: cache
+      # LIBARCHIVE Installation
+      - name: Install libarchive (Linux)
+        if: matrix.platform.os-name == 'Linux-x86_64'
+        run: sudo apt-get update --yes && sudo apt-get install --yes pkg-config libssl-dev libarchive-dev
+
+      - name: Install libarchive (Windows)
+        if: matrix.platform.os-name == 'Windows-x86_64'
+        run: |
+          choco install libarchive
+        shell: pwsh
+
+      - name: Install libarchive (macOS)
+        if: matrix.platform.os-name == 'macOS-x86_64'
+        run: brew install libarchive
+
+      - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: "true"
-      - name: Build binary
-        uses: houseabsolute/actions-rust-cross@v0
-        with:
-          command: "build"
-          target: ${{ matrix.platform.target }}
-          toolchain: "nightly"
-          args: "--locked --release --package hoolamike"
 
-      - name: Publish artifacts and release
-        uses: houseabsolute/actions-rust-release@v0
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
-          executable-name: hoolamike
-          target: ${{ matrix.platform.target }}
-          changes-file: "CHANGELOG.md"
+          toolchain: nightly
+          targets: ${{ matrix.platform.target }}
+
+      - name: Build binary
+        run: cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }}
+
+      - name: Package artifacts
+        run: |
+          mkdir artifacts
+          cp target/${{ matrix.platform.target }}/release/hoolamike* artifacts/
+        shell: bash
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
           draft: false
-          files: "hoolamike"
+          files: artifacts/hoolamike*
           body_path: CHANGELOG.md
-        if: startsWith( github.ref, 'refs/tags/v' )
