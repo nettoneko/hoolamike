@@ -55,7 +55,10 @@ jobs:
       # MacOS
       - name: Install libarchive (macOS)
         if: matrix.platform.os-name == 'macOS-x86_64'
-        run: brew install libarchive
+        run: |
+          brew install libarchive
+          # Set pkg-config path for Homebrew's libarchive
+          echo "PKG_CONFIG_PATH=/usr/local/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
 
       # Cache
       - name: Cache Rust dependencies
