@@ -69,12 +69,10 @@ jobs:
       - name: Install libarchive (macOS Intel)
         if: matrix.platform.os-name == 'macOS-x86_64'
         run: |
-          # Install Homebrew for x86_64 in a user-writable directory
           mkdir -p ~/homebrew-x86_64
           curl -L https://github.com/Homebrew/brew/tarball/master | tar xz --strip 1 -C ~/homebrew-x86_64
           arch -x86_64 ~/homebrew-x86_64/bin/brew update
           arch -x86_64 ~/homebrew-x86_64/bin/brew install libarchive pkg-config
-          # Set environment variables
           echo "PKG_CONFIG_PATH=$HOME/homebrew-x86_64/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
           echo "PATH=$HOME/homebrew-x86_64/bin:$PATH" >> $GITHUB_ENV
           # Debug output
@@ -86,7 +84,11 @@ jobs:
           echo "Checking libarchive with pkg-config:"
           arch -x86_64 ~/homebrew-x86_64/bin/pkg-config --modversion libarchive || echo "Failed to find libarchive"
           ls -l ~/homebrew-x86_64/opt/libarchive/lib/pkgconfig || true
-
+      - name: Set build environment (macOS Intel)
+        if: matrix.platform.os-name == 'macOS-x86_64'
+        run: |
+          echo "LDFLAGS=-L/Users/runner/homebrew-x86_64/opt/libarchive/lib" >> $GITHUB_ENV
+        shell: bash
 
       # macOS ARM
       - name: Install libarchive (macOS ARM)
@@ -105,6 +107,7 @@ jobs:
           pkg-config --modversion libarchive || echo "Failed to find libarchive"
           ls -l /opt/homebrew/opt/libarchive/lib/pkgconfig || true
 
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
@@ -116,6 +119,8 @@ jobs:
           toolchain: nightly
           targets: ${{ matrix.platform.target }}
 
+        
+
       - name: Build binary
         env:
           VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
@@ -123,18 +128,18 @@ jobs:
           PKG_CONFIG_ALLOW_CROSS: ${{ env.PKG_CONFIG_ALLOW_CROSS }}
           CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG: true
           RUST_BACKTRACE: full
-          # Ensure SSE2 support for libmp3lame_sys on x86_64
-          # Only set LDFLAGS for macOS Intel
-          LDFLAGS: ${{ matrix.platform.os-name == 'macOS-x86_64' && '-L$HOME/homebrew-x86_64/opt/libarchive/lib' || '' }}
-          # Ensure SSE2 for x86_64 platforms (Linux and macOS Intel)
           CFLAGS: ${{ (matrix.platform.os-name == 'Linux-x86_64' || matrix.platform.os-name == 'macOS-x86_64') && '-msse2' || '' }}
         run: |
+          # Debug: Print environment variables
+          echo "LDFLAGS=$env:LDFLAGS"
+          echo "CFLAGS=$env:CFLAGS"
           if ($env:VCPKG_ROOT) {
             cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }} -Z build-std --features "vcpkg" --verbose
           } else {
             cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }} --verbose
           }
         shell: pwsh
+
 
       - name: Package artifacts (non-macOS)
         if: "!contains(matrix.platform.os-name, 'macOS')"
