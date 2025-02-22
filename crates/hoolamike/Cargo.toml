@@ -37,10 +37,6 @@ fs2.workspace = true
 futures.workspace = true
 futures-util.workspace = true
 hex.workspace = true
-# image_dds = { git = "https://github.com/ScanMountGoat/image_dds", rev = "97872bbc7ad3a2dc5e1a0f8596de3a1dafd10e43", features = [
-#   "serde",
-# ] }
-image_dds = { workspace = true, features = ["serde"] }
 indexmap.workspace = true
 indicatif = { workspace = true, features = ["rayon"] }
 inquire = { workspace = true, features = [

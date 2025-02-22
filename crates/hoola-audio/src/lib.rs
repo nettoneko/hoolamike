@@ -4,14 +4,13 @@
 use {
     anyhow::{bail, Context, Result},
     clap::{Args, Parser, Subcommand},
-    itertools::Itertools,
+    itertools::{repeat_n, Itertools},
     mp3lame_encoder::{Bitrate, DualPcm, MonoPcm},
     num::ToPrimitive,
     rubato::{FastFixedIn, FftFixedOut, PolynomialDegree, Resampler},
     std::{
         convert::identity,
         io::{BufWriter, Write},
-        iter::repeat,
         num::{NonZeroU32, NonZeroU8, NonZeroUsize},
         ops::Not,
         path::{Path, PathBuf},
@@ -117,7 +116,7 @@ impl FormatReaderIterator {
             format!("{track:#?}")
                 .chars()
                 .take(1024)
-                .chain(repeat('.').take(3))
+                .chain(repeat_n('.', 3))
                 .collect::<String>()
         );
         let decoder = symphonia::default::get_codecs()

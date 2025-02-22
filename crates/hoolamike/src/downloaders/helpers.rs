@@ -58,7 +58,7 @@ where
         }
         .pipe(ready)
         .and_then(|response| response.text().map_context("extracting text from response"))
-        .inspect_ok(|text| trace!("fetched {} bytes of text ({}...)", text.bytes().len(), &text[..(64.min(text.len()))]))
+        .inspect_ok(|text| trace!("fetched {} bytes of text ({}...)", text.len(), &text[..(64.min(text.len()))]))
         .and_then(|response| {
             validate(&response)
                 .pipe(ready)

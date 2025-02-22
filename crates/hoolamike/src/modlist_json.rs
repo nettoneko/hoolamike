@@ -590,7 +590,7 @@ pub mod parsing_helpers {
     pub fn validate_modlist_file(input: &str) -> Result<()> {
         input
             .tap(|input| {
-                info!("file is {} bytes long", input.bytes().len());
+                info!("file is {} bytes long", input.len());
             })
             .pipe_as_ref(serde_json::from_str::<Value>)
             .context("bad json")

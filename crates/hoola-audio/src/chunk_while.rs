@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn test_chunk_while_size_less_than_5() {
-        let data = std::iter::repeat(1u8).take(1000);
+        let data = std::iter::repeat_n(1u8, 1000);
         let iter = data
             .into_iter()
             .chunk_while(|chunk| chunk.iter().copied().sum::<u8>() < 5);
