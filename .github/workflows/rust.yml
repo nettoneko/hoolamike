@@ -78,6 +78,8 @@ jobs:
         with:
           toolchain: nightly
           targets: ${{ matrix.platform.target }}
+          components: rust-src  # Add rust-src component for -Z build-std
+
 
       - name: Build binary
         env:
