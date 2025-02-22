@@ -10,7 +10,7 @@ env:
 jobs:
   release:
     permissions:
-      contents: write  # Required to create releases
+      contents: write
     name: Release - ${{ matrix.platform.os-name }} with rust ${{ matrix.toolchain }}
     strategy:
       matrix:
@@ -33,7 +33,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # LIBARCHIVE Installation
       # Linux
       - name: Install libarchive (Linux)
         if: matrix.platform.os-name == 'Linux-x86_64'
@@ -49,7 +48,8 @@ jobs:
             vcpkg_installed
           key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            ${{ runner.os }}-vcpkg- 
+            ${{ runner.os }}-vcpkg-
+
       - name: Setup vcpkg (Windows)
         if: matrix.platform.os-name == 'Windows-x86_64'
         run: |
@@ -64,29 +64,30 @@ jobs:
           .\vcpkg.exe install libarchive:x64-windows
           echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" >> $env:GITHUB_ENV
         shell: pwsh
-      - name: Install libarchive (Windows)
-        if: matrix.platform.os-name == 'Windows-x86_64'
-        run: |
-          choco install libarchive
-        shell: pwsh
 
-      # MacOS
+      # macOS Intel
       - name: Install libarchive (macOS Intel)
         if: matrix.platform.os-name == 'macOS-x86_64'
         run: |
-          # Force Homebrew to install x86_64 version
-          arch -x86_64 /bin/bash -c "brew install libarchive pkg-config"
+          # Ensure Homebrew is installed for x86_64 in /usr/local
+          if [ ! -d "/usr/local/Homebrew" ]; then
+            arch -x86_64 /bin/bash -c "NONINTERACTIVE=1 /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+          fi
+          # Update and install under x86_64
+          arch -x86_64 /usr/local/bin/brew update
+          arch -x86_64 /usr/local/bin/brew install libarchive pkg-config
           echo "PKG_CONFIG_PATH=/usr/local/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
           # Debug output
           echo "Libarchive version:"
-          arch -x86_64 brew info libarchive | grep Cellar
+          arch -x86_64 /usr/local/bin/brew info libarchive | grep Cellar
           echo "pkg-config version:"
-          arch -x86_64 pkg-config --version
+          arch -x86_64 /usr/local/bin/pkg-config --version
           echo "Checking libarchive with pkg-config:"
-          arch -x86_64 pkg-config --modversion libarchive || echo "Failed to find libarchive"
+          arch -x86_64 /usr/local/bin/pkg-config --modversion libarchive || echo "Failed to find libarchive"
           ls -l /usr/local/opt/libarchive/lib/pkgconfig || true
 
+      # macOS ARM
       - name: Install libarchive (macOS ARM)
         if: matrix.platform.os-name == 'macOS-arm64'
         run: |
@@ -102,7 +103,6 @@ jobs:
           pkg-config --modversion libarchive || echo "Failed to find libarchive"
           ls -l /opt/homebrew/opt/libarchive/lib/pkgconfig || true
 
-      # Cache
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
@@ -120,12 +120,12 @@ jobs:
           PKG_CONFIG_PATH: ${{ env.PKG_CONFIG_PATH }}
           PKG_CONFIG_ALLOW_CROSS: ${{ env.PKG_CONFIG_ALLOW_CROSS }}
           CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG: true
-          RUST_BACKTRACE: full  # For full backtraces
+          RUST_BACKTRACE: full
         run: |
           if ($env:VCPKG_ROOT) {
-            cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }} -Z build-std --features "vcpkg"
+            cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }} -Z build-std --features "vcpkg" --verbose
           } else {
-            cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }}
+            cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }} --verbose
           }
         shell: pwsh
 
@@ -149,7 +149,6 @@ jobs:
             fi
           fi
         shell: bash
-
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v1
