@@ -89,7 +89,7 @@ jobs:
           CFLAGS: ${{ matrix.platform.os-name == 'Linux-x86_64' && '-msse2' || '' }}
         run: |
           if ($env:VCPKG_ROOT) {
-            cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }} -Z build-std --features "vcpkg" --verbose
+            cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }} -Z build-std --verbose
           } else {
             cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }} --verbose
           }
