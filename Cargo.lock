@@ -1618,6 +1618,7 @@ dependencies = [
  "unrar",
  "url",
  "uuid",
+ "vcpkg",
  "walkdir",
  "wrapped-7zip",
  "xdelta",
