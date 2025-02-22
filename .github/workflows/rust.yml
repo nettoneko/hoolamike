@@ -69,13 +69,9 @@ jobs:
       - name: Install libarchive (macOS Intel)
         if: matrix.platform.os-name == 'macOS-x86_64'
         run: |
-          # Ensure Homebrew is installed for x86_64 in /usr/local
-          if [ ! -d "/usr/local/Homebrew" ]; then
-            arch -x86_64 /bin/bash -c "NONINTERACTIVE=1 /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-          fi
-          # Update and install under x86_64
+          # Use pre-installed Homebrew in /usr/local for x86_64
           arch -x86_64 /usr/local/bin/brew update
-          arch -x86_64 /usr/local/bin/brew install libarchive pkg-config
+          arch -x86_64 /usr/local/bin/brew install libarchive pkg-config || arch -x86_64 /usr/local/bin/brew upgrade libarchive pkg-config
           echo "PKG_CONFIG_PATH=/usr/local/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
           # Debug output
@@ -91,7 +87,8 @@ jobs:
       - name: Install libarchive (macOS ARM)
         if: matrix.platform.os-name == 'macOS-arm64'
         run: |
-          brew install libarchive pkg-config
+          brew update
+          brew install libarchive pkg-config || brew upgrade libarchive pkg-config
           echo "PKG_CONFIG_PATH=/opt/homebrew/opt/libarchive/lib/pkgconfig" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
           # Debug output
