@@ -71,7 +71,8 @@ jobs:
 
       - name: Build binary
         env:
-          VCPKG_ROOT: ${{ env.VCPKG_ROOT }}  # Make vcpkg available for Windows builds
+          VCPKG_ROOT: ${{ env.VCPKG_ROOT }}  # For Windows
+          PKG_CONFIG_PATH: ${{ env.PKG_CONFIG_PATH }}  # For macOS
         run: |
           if ($env:VCPKG_ROOT) {
             cargo build --locked --release --package hoolamike --target ${{ matrix.platform.target }} -Z build-std --features "vcpkg"
