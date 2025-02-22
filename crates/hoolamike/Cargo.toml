@@ -14,10 +14,8 @@ hoola-audio.workspace = true
 
 # external
 anyhow.workspace = true
-async-recursion = "1.1.1"
-# ba2 = { git = "https://github.com/Ryan-rsm-McKenzie/bsa-rs", rev = "b716bcbbf51ec8f7d5e5261128fabfbe3357ddb3" }
-ba2 = { git = "https://github.com/Ryan-rsm-McKenzie/bsa-rs", branch = "overflow-verbose" }
-# ba2 = { path = "/home/niedzwiedz/Games/modding/bsa-rs" }
+async-recursion = { workspace = true }
+ba2 = { workspace = true }
 base64.workspace = true
 binrw.workspace = true
 bon.workspace = true
@@ -26,11 +24,11 @@ clap = { workspace = true, features = ["derive", "cargo", "env"] }
 compress-tools.workspace = true
 console.workspace = true
 console-subscriber.workspace = true
-crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
-dashmap = { version = "6.1.0", features = ["inline"] }
+crossbeam = { workspace = true, features = ["crossbeam-channel"] }
+dashmap = { workspace = true, features = ["inline"] }
 derivative.workspace = true
 derive_more.workspace = true
-directxtex = "1.3.0"
+directxtex = { workspace = true }
 enum-kinds.workspace = true
 enum_dispatch.workspace = true
 extension-traits.workspace = true
@@ -42,12 +40,10 @@ hex.workspace = true
 # image_dds = { git = "https://github.com/ScanMountGoat/image_dds", rev = "97872bbc7ad3a2dc5e1a0f8596de3a1dafd10e43", features = [
 #   "serde",
 # ] }
-image_dds = { git = "https://github.com/Niedzwiedzw/image_dds.git", rev = "20439194dbfb117252278c9600b79260197b0dab", features = [
-  "serde",
-] }
+image_dds = { workspace = true, features = ["serde"] }
 indexmap.workspace = true
 indicatif = { workspace = true, features = ["rayon"] }
-inquire = { version = "0.7.5", default-features = false, features = [
+inquire = { workspace = true, features = [
   "chrono",
   "console",
   "date",
@@ -60,65 +56,65 @@ inquire = { version = "0.7.5", default-features = false, features = [
 ] }
 iter-read.workspace = true
 itertools.workspace = true
-lru = "0.12.5"
-memmap2 = "0.9.5"
+lru = { workspace = true }
+memmap2 = { workspace = true }
 nonempty.workspace = true
-normalize-path = "0.2.1"
+normalize-path = { workspace = true }
 num.workspace = true
 num_cpus.workspace = true
 omnom.workspace = true
 once_cell.workspace = true
-os_pipe = "1.2.1"
+os_pipe = { workspace = true }
 parking_lot.workspace = true
-rand = "0.8.5"
-rayon = "1.10.0"
+rand = { workspace = true }
+rayon = { workspace = true }
 regex.workspace = true
 reqwest.workspace = true
-ringbuffer = "0.15.0"
+ringbuffer = { workspace = true }
 scraper.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
-serde_repr = "0.1.19"
+serde_repr = { workspace = true }
 serde_urlencoded.workspace = true
-serde_with = "3.12.0"
+serde_with = { workspace = true }
 serde_yaml.workspace = true
 sevenz-rust.workspace = true
-similar = { version = "2.7.0", features = ["inline"] }
-static_assertions = { version = "1.1.0", features = ["nightly"] }
-symphonia = { version = "0.5.4", features = ["all-codecs"] }
+similar = { workspace = true, features = ["inline"] }
+static_assertions = { workspace = true, features = ["nightly"] }
+symphonia = { workspace = true, features = ["all-codecs"] }
 tabled.workspace = true
 tap.workspace = true
 tempfile.workspace = true
 test-log.workspace = true
-thiserror = "2.0.11"
+thiserror = { workspace = true }
 tokio.workspace = true
 tokio-cached-future.workspace = true
 tracing.workspace = true
-tracing-flame = "0.2.0"
-tracing-indicatif = "0.3.9"
+tracing-flame = { workspace = true }
+tracing-indicatif = { workspace = true }
 tracing-subscriber.workspace = true
 transpare.workspace = true
-typed-path = "0.10.0"
-unrar = "0.5.8"
+typed-path = { workspace = true }
+unrar = { workspace = true }
 url.workspace = true
 uuid.workspace = true
-walkdir = "2.5.0"
+walkdir = { workspace = true }
 xxhash-rust.workspace = true
 zip.workspace = true
-pretty_assertions = "1.4.1"
-xdelta = { git = "https://github.com/SonnyX/xdelta-decoder-rust", rev = "4ee8d64a77659267d3e39cd05f61a6ee369492fc" }
-combine = "4.6.7"
-yash-syntax = "0.13.0"
-futures-executor = "0.3.31"
-snailquote = "0.3.1"
-filetime = "0.2.25"
-rubato = "0.16.1"
-sha1 = "0.10.6"
-hex-literal = "0.4.1"
+pretty_assertions = { workspace = true }
+xdelta = { workspace = true }
+combine = { workspace = true }
+yash-syntax = { workspace = true }
+futures-executor = { workspace = true }
+snailquote = { workspace = true }
+filetime = { workspace = true }
+rubato = { workspace = true }
+sha1 = { workspace = true }
+hex-literal = { workspace = true }
 # tikv-jemallocator = "0.6.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 vcpkg = "0.2"
 
 [dev-dependencies]
-assert-json-diff = "2.0.2"
+assert-json-diff = { workspace = true }

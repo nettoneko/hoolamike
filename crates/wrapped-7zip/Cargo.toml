@@ -19,14 +19,14 @@ extension-traits.workspace = true
 futures.workspace = true
 futures-util.workspace = true
 parking_lot.workspace = true
-rayon = "1.10.0"
+rayon = { workspace = true }
 serde_json.workspace = true
 tap.workspace = true
 tempfile.workspace = true
 test-log.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
-which = "7.0.2"
+which = { workspace = true }
 
 [dev-dependencies]
-pretty_assertions = "1.4.1"
+pretty_assertions = { workspace = true }

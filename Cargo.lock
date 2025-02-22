@@ -283,21 +283,8 @@ dependencies = [
 [[package]]
 name = "ba2"
 version = "3.0.1"
-source = "git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?branch=main#7b90ce145d5de8e1dda280f10b2b0e0b5aa067f9"
-dependencies = [
- "bitflags 2.8.0",
- "bstr",
- "directxtex",
- "flate2",
- "lzzzz",
- "memmap2",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "ba2"
-version = "3.0.1"
-source = "git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?branch=overflow-verbose#35b833711e1544020446d1a4b010599c701b9f35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fdb05c5c954898b463887df1145016492deee06e9a778f8af491c7cde14c210"
 dependencies = [
  "bitflags 2.8.0",
  "bstr",
@@ -430,7 +417,7 @@ name = "bsa-cli"
 version = "0.14.1"
 dependencies = [
  "anyhow",
- "ba2 3.0.1 (git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?branch=main)",
+ "ba2",
  "clap",
  "derive_more 1.0.0",
  "tap",
@@ -1550,7 +1537,7 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "async-recursion",
- "ba2 3.0.1 (git+https://github.com/Ryan-rsm-McKenzie/bsa-rs?branch=overflow-verbose)",
+ "ba2",
  "base64 0.22.1",
  "binrw",
  "bon",
@@ -5012,8 +4999,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "indicatif"
-version = "0.17.9"
-source = "git+https://github.com/Niedzwiedzw/indicatif?branch=main#d98924248a8ae5e0739ff1ae27c5840840419238"
