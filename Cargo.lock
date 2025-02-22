@@ -416,8 +416,6 @@ dependencies = [
  "clap",
  "derive_more 1.0.0",
  "tap",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
