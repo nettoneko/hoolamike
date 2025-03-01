@@ -10,7 +10,7 @@ members = [
 default-members = ["crates/hoolamike"]
 
 [workspace.package]
-version = "0.14.15"
+version = "0.14.16"
 license = "MIT"
 repository = "https://github.com/Niedzwiedzw/hoolamike"
 categories = ["modding"]

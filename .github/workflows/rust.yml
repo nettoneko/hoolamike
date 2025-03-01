@@ -99,14 +99,24 @@ jobs:
 
       - name: Package artifacts
         run: |
-          mkdir artifacts
-          cp target/${{ matrix.platform.target }}/release/hoolamike* artifacts/
+          # Create a target-specific directory
+          mkdir -p artifacts/${{ matrix.platform.target }}
+          # Copy all output files (e.g., hoolamike, hoolamike.exe, etc.)
+          cp target/${{ matrix.platform.target }}/release/hoolamike* artifacts/${{ matrix.platform.target }}/
+          # Archive based on platform
+          if [ "${{ matrix.platform.os-name }}" = "Windows-x86_64" ]; then
+            7z a artifacts/hoolamike-${{ matrix.platform.target }}.zip ./artifacts/${{ matrix.platform.target }}/*
+          else
+            tar -czvf artifacts/hoolamike-${{ matrix.platform.target }}.tar.gz -C artifacts/${{ matrix.platform.target }} .
+          fi
         shell: bash
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/v')
         with:
-          draft: false
-          files: artifacts/hoolamike*
+          draft: true
+          files: |
+            artifacts/hoolamike-*.zip
+            artifacts/hoolamike-*.tar.gz
           body_path: CHANGELOG.md
