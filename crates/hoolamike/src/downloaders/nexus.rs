@@ -54,8 +54,13 @@ impl DownloadFileRequest {
             |Self {
                  game_domain_name,
                  mod_id,
-                 file_id: _,
-             }| { format!("{WEBSITE_BASE_URL}/{}/mods/{mod_id}", game_domain_name.to_lowercase()) },
+                 file_id,
+             }| {
+                format!(
+                    "{WEBSITE_BASE_URL}/{}/mods/{mod_id}?tab=files&file_id={file_id}&nmm=1",
+                    game_domain_name.to_lowercase()
+                )
+            },
         )
     }
 }
