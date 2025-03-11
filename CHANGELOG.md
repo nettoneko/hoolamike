@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 🐛 Bug Fixes
+
+- *(nexus)* Go directly to the specific file download link for multifile mods
+
+## [0.15.0] - 2025-03-11
+
 ### 🚀 Features
 
 - *(nexus)* Support nxm link handling, allowing downloads for non-premium accounts
