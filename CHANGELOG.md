@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [unreleased]
+
+### 🚀 Features
+
+- *(nexus)* Support nxm link handling, allowing downloads for non-premium accounts
+
 ## [0.14.1] - 2025-02-22
 
 ### 🐛 Bug Fixes
