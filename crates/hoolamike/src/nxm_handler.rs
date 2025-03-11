@@ -17,12 +17,13 @@ use {
     futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt},
     indicatif::ProgressBar,
     itertools::Itertools,
+    notify::{event::CreateKind, Watcher},
     serde::{Deserialize, Serialize},
     single_instance_server::listen_for_nxm_links,
     std::{collections::HashMap, convert::identity, future::ready, path::PathBuf, sync::Arc},
     tap::prelude::*,
     tokio_stream::wrappers::UnboundedReceiverStream,
-    tracing::{info, warn},
+    tracing::{debug, info, warn},
     tracing_indicatif::span_ext::IndicatifSpanExt,
     utils::AbortOnDropExt,
 };
@@ -206,7 +207,7 @@ pub async fn run(
                             ready(None)
                         }
                         Err(reason) => {
-                            info!("needs redownload: {} (reason: {reason})", archive.descriptor.name);
+                            info!("needs redownload: {} (reason:\n{reason:?}\n)", archive.descriptor.name);
                             ready(Some(archive))
                         }
                     })
@@ -230,9 +231,12 @@ pub async fn run(
                     UnboundedReceiverStream::new(rx)
                         .map(
                             |DownloadTask {
-                                 inner: (url, path_buf),
+                                 inner: (url, output_path),
                                  descriptor,
-                             }| { stream_file(url, path_buf, descriptor.size) },
+                             }| {
+                                stream_file(url.clone(), output_path.clone(), descriptor.size)
+                                    .inspect_err(move |reason| tracing::error!(?url, ?output_path, "could not finish download:\n\n{reason:?}"))
+                            },
                         )
                         .buffer_unordered(8)
                         .try_for_each(|e| {
@@ -245,12 +249,17 @@ pub async fn run(
                 .pipe(|task| (task, tx))
             };
 
-            let new_files = {
-                let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<PathBuf>();
-                tokio::task::spawn_blocking(move || {}).abort_on_drop()
+            let (filesystem_changes, _guard) = {
+                let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+                let mut watcher =
+                    notify::RecommendedWatcher::new(move |res| tx.send(res).unwrap(), notify::Config::default()).context("watching the filesystem failed")?;
+                watcher
+                    .watch(&download_cache.root_directory, notify::RecursiveMode::NonRecursive)
+                    .context("watching downloads directory for changes")?;
+                (UnboundedReceiverStream::new(rx), watcher)
             };
 
-            let mut nxm_clicks = listen_for_nxm_links(port)
+            let nxm_clicks = listen_for_nxm_links(port)
                 .filter_map(|event| match event {
                     single_instance_server::ServerEvent::Message(message) => message.pipe(anyhow::Ok).pipe(Some).pipe(ready),
                     single_instance_server::ServerEvent::Listener(ev) => match ev {
@@ -280,7 +289,42 @@ pub async fn run(
                     }
                 })
                 .boxed();
+
+            let new_files = filesystem_changes
+                .filter_map(|e| match e {
+                    Ok(event) => match event.kind {
+                        notify::EventKind::Create(CreateKind::File) => ready(event.paths.into_iter().next()),
+                        _ => ready(None),
+                    },
+                    Err(message) => {
+                        tracing::error!(?message, "watching filesysstem is failing");
+                        ready(None)
+                    }
+                })
+                .boxed();
+
             let initial_count = archive_lookup.len();
+
+            #[derive(derive_more::From)]
+            enum DownloaderEvent {
+                NxmClick((HumanUrl, DownloadFileRequest)),
+                Newfile(PathBuf),
+            }
+
+            let mut downloader_events = [nxm_clicks.map(DownloaderEvent::from).boxed(), new_files.map(DownloaderEvent::from).boxed()]
+                .pipe(futures::stream::iter)
+                .flatten_unordered(100);
+
+            let mut filename_lookup = archive_lookup
+                .values()
+                .map(|archive| {
+                    (
+                        download_cache.download_output_path(archive.descriptor.name.clone()),
+                        DownloadFileRequest::from_nexus_state(archive.inner.clone()).nexus_website_url(),
+                    )
+                })
+                .collect::<HashMap<_, _>>();
+
             while let Some(nexus_website_url) = archive_lookup.keys().next().cloned() {
                 info!("queued {}/{}", initial_count.saturating_sub(archive_lookup.len()), initial_count);
 
@@ -297,19 +341,41 @@ pub async fn run(
                             .ok_or(o.status)
                             .map_err(|s| anyhow!("bad status: {s}"))
                     })?;
-                let Some((download_url, click)) = nxm_clicks.next().await else {
-                    anyhow::bail!("server stopped?")
-                };
-                let Some(archive) = archive_lookup.remove(&click.nexus_website_url()) else {
-                    warn!("not on the list: {click:?}");
-                    continue;
-                };
-                queue_download_task
-                    .send(DownloadTask {
-                        inner: (download_url, download_cache.download_output_path(archive.descriptor.name.clone())),
-                        descriptor: archive.descriptor,
-                    })
-                    .context("channel closed?")?;
+
+                match downloader_events.next().await {
+                    Some(s) => match s {
+                        DownloaderEvent::NxmClick((download_url, click)) => {
+                            let Some(archive) = archive_lookup.remove(&click.nexus_website_url()) else {
+                                warn!("not on the list: {click:?}");
+                                continue;
+                            };
+                            queue_download_task
+                                .send(DownloadTask {
+                                    inner: (download_url, download_cache.download_output_path(archive.descriptor.name.clone())),
+                                    descriptor: archive.descriptor,
+                                })
+                                .with_context(|| format!("when queueing download task for {}", archive.inner.name))?;
+                        }
+                        DownloaderEvent::Newfile(path_buf) => filename_lookup
+                            .remove(&path_buf)
+                            .context("unexpected path")
+                            .and_then(|nexus| {
+                                archive_lookup
+                                    .remove(&nexus)
+                                    .with_context(|| format!("no [{path_buf:?}] in nexus queue"))
+                            })
+                            .with_context(|| format!("removing from queue because of (presumed manual download) of {path_buf:?}"))
+                            .pipe(|r| match r {
+                                Ok(removed) => info!("manual download detected: {} ({path_buf:?})", removed.descriptor.name),
+                                Err(message) => {
+                                    debug!("looks like you were trying to download something manually at {path_buf:?}:\n{message:?}")
+                                }
+                            }),
+                    },
+                    None => {
+                        anyhow::bail!("server stopped?")
+                    }
+                }
             }
             info!("You have queued all the files, awaiting for all downloads to finish");
             downloads_task
