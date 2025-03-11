@@ -1,6 +1,9 @@
 use {
     super::helpers::{FutureAnyhowExt, ReqwestPrettyJsonResponse},
-    crate::modlist_json::HumanUrl,
+    crate::{
+        modlist_json::{HumanUrl, NexusGameName, NexusState},
+        nxm_handler::NxmDownloadLink,
+    },
     anyhow::{Context, Result},
     chrono::{DateTime, Utc},
     futures::TryFutureExt,
@@ -11,7 +14,12 @@ use {
         Response,
     },
     serde::{Deserialize, Serialize},
-    std::{future::ready, str::FromStr, sync::Arc},
+    std::{
+        future::ready,
+        iter::{empty, once},
+        str::FromStr,
+        sync::Arc,
+    },
     tap::prelude::*,
 };
 
@@ -20,13 +28,36 @@ pub struct NexusDownloader {
 }
 
 const AUTH_HEADER: &str = "apikey";
-const BASE_URL: &str = "https://api.nexusmods.com";
+const API_BASE_URL: &str = "https://api.nexusmods.com";
+const WEBSITE_BASE_URL: &str = "https://www.nexusmods.com";
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct DownloadFileRequest {
     pub game_domain_name: String,
     pub mod_id: usize,
     pub file_id: usize,
+}
+
+impl DownloadFileRequest {
+    pub fn nexus_api_url(&self) -> String {
+        self.pipe(
+            |Self {
+                 game_domain_name,
+                 mod_id,
+                 file_id,
+             }| { format!("{API_BASE_URL}/v1/games/{game_domain_name}/mods/{mod_id}/files/{file_id}/download_link.json") },
+        )
+    }
+    /// https://www.nexusmods.com/skyrimspecialedition/mods/141070
+    pub fn nexus_website_url(&self) -> String {
+        self.pipe(
+            |Self {
+                 game_domain_name,
+                 mod_id,
+                 file_id: _,
+             }| { format!("{WEBSITE_BASE_URL}/{}/mods/{mod_id}", game_domain_name.to_lowercase()) },
+        )
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,10 +120,37 @@ pub struct NexusDownloadLink {
     pub short_name: String,
 }
 
+impl DownloadFileRequest {
+    pub fn from_nexus_state(
+        NexusState {
+            game_name, file_id, mod_id, ..
+        }: NexusState,
+    ) -> Self {
+        Self {
+            // TODO: validate this
+            game_domain_name: match game_name {
+                NexusGameName::GameName(game_name) => game_name.to_string(),
+                NexusGameName::Special(special) => match special {
+                    crate::modlist_json::SpecialGameName::ModdingTools => "site".into(),
+                    crate::modlist_json::SpecialGameName::FalloutNewVegas => "newvegas".into(),
+                },
+            },
+            mod_id,
+            file_id,
+        }
+    }
+}
+
+#[derive(derive_more::From, Debug)]
+pub enum DownloadLinkKind {
+    Premium(DownloadFileRequest),
+    Free(NxmDownloadLink),
+}
+
 impl NexusDownloader {
     pub fn new(api_key: String) -> Result<Self> {
-        [(AUTH_HEADER, api_key)]
-            .into_iter()
+        empty()
+            .chain(api_key.pipe(|api_key| (AUTH_HEADER, api_key)).pipe(once))
             .map(|(key, value)| {
                 HeaderValue::from_str(&value)
                     .with_context(|| format!("invalid header value for {key}"))
@@ -111,18 +169,19 @@ impl NexusDownloader {
             .context("building NexusDownloader")
     }
 
-    async fn generate_download_link(
-        self: Arc<Self>,
-        DownloadFileRequest {
-            game_domain_name,
-            mod_id,
-            file_id,
-        }: &DownloadFileRequest,
-    ) -> Result<DownloadLinkResponse> {
+    async fn generate_download_link(self: Arc<Self>, download_link: &DownloadLinkKind) -> Result<DownloadLinkResponse> {
+        let (download_file_request, query_params) = match download_link {
+            DownloadLinkKind::Premium(download_file_request) => (download_file_request, String::new()),
+            DownloadLinkKind::Free(NxmDownloadLink { request, query }) => (
+                request,
+                serde_urlencoded::to_string(query)
+                    .with_context(|| format!("Serializing query: {query:?}"))
+                    .map(|q| format!("?{q}"))?,
+            ),
+        };
+        let url = format!("{}{query_params}", download_file_request.nexus_api_url());
         self.client
-            .get(format!(
-                "{BASE_URL}/v1/games/{game_domain_name}/mods/{mod_id}/files/{file_id}/download_link.json"
-            ))
+            .get(&url)
             .send()
             .map_context("sending request")
             .inspect_ok(|response| {
@@ -132,8 +191,10 @@ impl NexusDownloader {
             })
             .and_then(|response| response.json_response_ok(|_| Ok(())))
             .await
+            .with_context(|| format!("when fetching from {url}"))
     }
-    pub async fn download(self: Arc<Self>, request: DownloadFileRequest) -> Result<HumanUrl> {
+    pub async fn download(self: Arc<Self>, request: impl Into<DownloadLinkKind>) -> Result<HumanUrl> {
+        let request = request.into();
         self.clone()
             .generate_download_link(&request)
             .and_then(|download_link| {

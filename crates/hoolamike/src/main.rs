@@ -5,9 +5,9 @@
 
 use {
     anyhow::{Context, Result},
-    clap::{Args, Parser, Subcommand, ValueEnum},
+    clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum},
     modlist_data::ModlistSummary,
-    modlist_json::DirectiveKind,
+    modlist_json::{DirectiveKind, HumanUrl},
     num::ToPrimitive,
     std::{ops::Div, path::PathBuf, str::FromStr},
     tap::{Pipe, TapFallible},
@@ -30,10 +30,15 @@ struct Cli {
     #[arg(long, short = 'c', default_value = std::env::current_dir().unwrap().join("hoolamike.yaml").into_os_string())]
     hoolamike_config: PathBuf,
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
     /// generates a flamegraph, useful for performance testing (SLOW!)
     #[arg(long, value_enum, default_value_t = Default::default())]
     logging_mode: LoggingMode,
+    /// nxm handler default port, override this with an env var
+    #[arg(long, env, default_value_t = crate::nxm_handler::single_instance_server::DEFAULT_PORT)]
+    nxm_link_handler_port: u16,
+    /// this is just for the nxm handler
+    nxm_link: Option<HumanUrl>,
 }
 
 #[derive(clap::Args, Default)]
@@ -62,7 +67,10 @@ struct HoolamikeDebug {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Emulats TTW installer functionality (make sure to add installer variables to hoolamike.yaml)
+    /// Spawns the NXM handler process
+    /// (or tries to queue up the download in case the link is provided)
+    HandleNxm(nxm_handler::cli::HandleNxmCli),
+    /// Emulates TTW installer (make sure to add installer variables to hoolamike.yaml)
     TaleOfTwoWastelands(crate::extensions::tale_of_two_wastelands_installer::CliConfig),
     /// applies 4GB patch to FalloutNV.exe (replaces FNVPatcher.exe/FNVPatcher.py etc )
     FalloutNewVegasPatcher {
@@ -97,6 +105,8 @@ enum Commands {
 pub mod read_wrappers;
 #[macro_use]
 pub mod utils;
+
+pub mod nxm_handler;
 
 pub mod archive_cli;
 pub mod audio_cli;
@@ -204,66 +214,77 @@ async fn async_main() -> Result<()> {
         command,
         hoolamike_config,
         logging_mode,
+        nxm_link_handler_port,
+        nxm_link,
     } = Cli::parse();
     let _guard = setup_logging(logging_mode);
-
-    match command {
-        Commands::FalloutNewVegasPatcher { at_path } => crate::extensions::fallout_new_vegas_4gb_patch::patch_fallout_new_vegas(&at_path)
-            .context("applying patch")
-            .tap_ok(|_| info!("[🩹] Fallout New Vegas 4GB Patch is applied (no need to run FNVPatch.exe or anything like that)")),
-        Commands::PostInstallFixup => {
-            let (_config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
-            post_install_fixup::run_post_install_fixup(&config)
-        }
-        Commands::ValidateModlist { path } => tokio::fs::read_to_string(&path)
-            .await
-            .context("reading test file")
-            .and_then(|input| modlist_json::parsing_helpers::validate_modlist_file(&input))
-            .with_context(|| format!("testing file {}", path.display())),
-        Commands::ModlistInfo { path } => wabbajack_file::WabbajackFile::load_wabbajack_file(path)
-            .context("reading modlist")
-            .map(|(_, modlist)| ModlistSummary::new(&modlist.modlist))
-            .map(|modlist| modlist.print())
-            .map(|modlist| println!("\n{modlist}")),
-        Commands::PrintDefaultConfig => config_file::HoolamikeConfig::default()
-            .write()
-            .map(|config| println!("{config}")),
-        Commands::Install { debug } => {
-            let (config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
-            tracing::info!("found config at [{}]", config_path.display());
-
-            install_modlist::install_modlist(config, debug)
+    match (command, nxm_link) {
+        (Some(command), _) => match command {
+            Commands::FalloutNewVegasPatcher { at_path } => crate::extensions::fallout_new_vegas_4gb_patch::patch_fallout_new_vegas(&at_path)
+                .context("applying patch")
+                .tap_ok(|_| info!("[🩹] Fallout New Vegas 4GB Patch is applied (no need to run FNVPatch.exe or anything like that)")),
+            Commands::PostInstallFixup => {
+                let (_config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
+                post_install_fixup::run_post_install_fixup(&config)
+            }
+            Commands::ValidateModlist { path } => tokio::fs::read_to_string(&path)
                 .await
-                .map_err(|errors| {
-                    errors
-                        .iter()
-                        .enumerate()
-                        .for_each(|(idx, reason)| tracing::error!("{idx}. {reason:?}", idx = idx + 1));
+                .context("reading test file")
+                .and_then(|input| modlist_json::parsing_helpers::validate_modlist_file(&input))
+                .with_context(|| format!("testing file {}", path.display())),
+            Commands::ModlistInfo { path } => wabbajack_file::WabbajackFile::load_wabbajack_file(path)
+                .context("reading modlist")
+                .map(|(_, modlist)| ModlistSummary::new(&modlist.modlist))
+                .map(|modlist| modlist.print())
+                .map(|modlist| println!("\n{modlist}")),
+            Commands::PrintDefaultConfig => config_file::HoolamikeConfig::default()
+                .write()
+                .map(|config| println!("{config}")),
+            Commands::Install { debug } => {
+                let (config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
+                tracing::info!("found config at [{}]", config_path.display());
 
-                    anyhow::anyhow!("could not finish installation due to [{}] errors", errors.len())
-                })
-                .map(|count| println!("successfully installed [{}] mods", count.len()))
-        }
-        Commands::HoolamikeDebug(HoolamikeDebug { command }) => match command {
-            HoolamikeDebugCommand::ReserializeDirectives { modlist_file } => wabbajack_file::WabbajackFile::load_wabbajack_file(modlist_file)
-                .context("loading modlist file")
-                .and_then(|modlist| {
-                    modlist
-                        .1
-                        .modlist
-                        .directives
-                        .pipe_ref(|directives| serde_json::to_string_pretty(directives).context("serializing directives"))
-                })
-                .map(|directives| println!("{directives}")),
+                install_modlist::install_modlist(config, debug)
+                    .await
+                    .map_err(|errors| {
+                        errors
+                            .iter()
+                            .enumerate()
+                            .for_each(|(idx, reason)| tracing::error!("{idx}. {reason:?}", idx = idx + 1));
+
+                        anyhow::anyhow!("could not finish installation due to [{}] errors", errors.len())
+                    })
+                    .map(|count| println!("successfully installed [{}] mods", count.len()))
+            }
+            Commands::HoolamikeDebug(HoolamikeDebug { command }) => match command {
+                HoolamikeDebugCommand::ReserializeDirectives { modlist_file } => wabbajack_file::WabbajackFile::load_wabbajack_file(modlist_file)
+                    .context("loading modlist file")
+                    .and_then(|modlist| {
+                        modlist
+                            .1
+                            .modlist
+                            .directives
+                            .pipe_ref(|directives| serde_json::to_string_pretty(directives).context("serializing directives"))
+                    })
+                    .map(|directives| println!("{directives}")),
+            },
+            Commands::Archive(archive_cli_command) => archive_cli_command.run(),
+            Commands::Audio(audio_cli_command) => audio_cli_command
+                .command
+                .pipe(|c| c.clone().run().with_context(|| format!("running\n{c:#?}"))),
+            Commands::TaleOfTwoWastelands(cli_config) => {
+                let (_config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
+                crate::extensions::tale_of_two_wastelands_installer::install(cli_config, config)
+            }
+            Commands::HandleNxm(handle_nxm_cli) => {
+                let (_config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
+                nxm_handler::run(config, handle_nxm_cli).await
+            }
         },
-        Commands::Archive(archive_cli_command) => archive_cli_command.run(),
-        Commands::Audio(audio_cli_command) => audio_cli_command
-            .command
-            .pipe(|c| c.clone().run().with_context(|| format!("running\n{c:#?}"))),
-        Commands::TaleOfTwoWastelands(cli_config) => {
-            let (_config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
-            crate::extensions::tale_of_two_wastelands_installer::install(cli_config, config)
-        }
+        (None, Some(nxm_link)) => nxm_handler::handle_nxm_link(nxm_link_handler_port, nxm_link).await,
+        _ => Cli::command()
+            .error(clap::error::ErrorKind::ArgumentConflict, "bad usage")
+            .exit(),
     }
     .with_context(|| {
         format!(

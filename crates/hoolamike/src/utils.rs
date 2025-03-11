@@ -10,6 +10,32 @@ use {
     tracing::{debug_span, info_span},
 };
 
+pub fn obfuscate_value(value: &str) -> String {
+    match value {
+        value if value.len() < 3 => value.chars().map(|_| '*').collect(),
+        other => {
+            let chars = || other.chars();
+            chars()
+                .take(1)
+                .chain(chars().skip(1).take(other.len() - 1).map(|_| '*'))
+                .chain(chars().last())
+                .collect()
+        }
+    }
+}
+
+#[derive(derive_more::Constructor, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Deserialize)]
+pub struct Obfuscated<T>(pub T);
+
+impl<T> std::fmt::Debug for Obfuscated<T>
+where
+    T: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        obfuscate_value(&format!("{}", self.0)).fmt(f)
+    }
+}
+
 #[extension_traits::extension(pub trait ReadableCatchUnwindExt)]
 impl<T> std::result::Result<T, Box<dyn std::any::Any + Send>> {
     fn for_anyhow(self) -> anyhow::Result<T> {

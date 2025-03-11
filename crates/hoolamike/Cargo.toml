@@ -32,7 +32,7 @@ flate2.workspace = true
 futures.workspace = true
 hex.workspace = true
 indexmap.workspace = true
-indicatif = { workspace = true, features = ["rayon"] }
+indicatif = { workspace = true, features = ["futures", "rayon"] }
 itertools.workspace = true
 memmap2 = { workspace = true }
 nonempty.workspace = true
@@ -78,9 +78,14 @@ snailquote = { workspace = true }
 filetime = { workspace = true }
 sha1 = { workspace = true }
 hex-literal = { workspace = true }
+directories = "6.0.0"
+axum = { version = "0.8.1", features = ["macros"] }
+tokio-stream = { version = "0.1.17", features = ["full"] }
+serde_urlencoded.workspace = true
 # tikv-jemallocator = "0.6.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
+winreg = "0.55.0"
 vcpkg = "0.2"
 
 [dev-dependencies]

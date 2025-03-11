@@ -223,35 +223,19 @@ impl Synchronizers {
 
     pub async fn prepare_sync_task(self, Archive { descriptor, state }: Archive) -> Result<SyncTask> {
         match state.clone() {
-            State::Nexus(NexusState {
-                game_name, file_id, mod_id, ..
-            }) => {
-                self.inner
-                    .nexus
-                    .clone()
-                    .context("nexus not configured")
-                    .pipe(ready)
-                    .and_then(|nexus| {
-                        nexus.download(nexus::DownloadFileRequest {
-                            // TODO: validate this
-                            game_domain_name: match game_name {
-                                NexusGameName::GameName(game_name) => game_name.to_string(),
-                                NexusGameName::Special(special) => match special {
-                                    crate::modlist_json::SpecialGameName::ModdingTools => "site".into(),
-                                    crate::modlist_json::SpecialGameName::FalloutNewVegas => "newvegas".into(),
-                                },
-                            },
-                            mod_id,
-                            file_id,
-                        })
-                    })
-                    .await
-                    .map(|url| DownloadTask {
-                        inner: (url, self.cache.download_output_path(descriptor.name.clone())),
-                        descriptor,
-                    })
-                    .map(SyncTask::from)
-            }
+            State::Nexus(nexus_state) => self
+                .inner
+                .nexus
+                .clone()
+                .context("nexus not configured")
+                .pipe(ready)
+                .and_then(|nexus| nexus.download(nexus::DownloadFileRequest::from_nexus_state(nexus_state)))
+                .await
+                .map(|url| DownloadTask {
+                    inner: (url, self.cache.download_output_path(descriptor.name.clone())),
+                    descriptor,
+                })
+                .map(SyncTask::from),
             State::GoogleDrive(GoogleDriveState { id }) => crate::downloaders::google_drive::GoogleDriveDownloader::download(id, descriptor.size)
                 .await
                 .map(|url| DownloadTask {
