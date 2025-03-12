@@ -75,7 +75,7 @@ mod windows {
 
         nxm_key
             .set_value("", &"URL:NXM Protocol")
-            .contexT("setting nxm protocol key")?;
+            .context("setting nxm protocol key")?;
         nxm_key
             .set_value("URL Protocol", &"")
             .context("setting url protocol key")?;
