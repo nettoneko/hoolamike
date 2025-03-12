@@ -43,6 +43,10 @@ pub async fn handle_nxm_link(port: u16, nxm_link: HumanUrl) -> Result<()> {
         .await
         .context("sending request failed")
         .map(|response| info!("response: {response}"))
+        .tap_err(|message| {
+            tracing::error!("{message:?}");
+            std::thread::sleep(std::time::Duration::from_secs(3));
+        })
 }
 
 #[derive(Debug, Clone)]
@@ -405,7 +409,7 @@ pub mod single_instance_server {
         serde::{Deserialize, Serialize},
         std::net::{Ipv4Addr, SocketAddr},
         tap::prelude::*,
-        tracing::info,
+        tracing::{info, trace},
     };
 
     pub const DEFAULT_PORT: u16 = 8007;
@@ -478,7 +482,7 @@ pub mod single_instance_server {
     }
 
     async fn handler(State(tx): State<Sender>, Json(message): Json<Message>) -> NxmApiResult<Html<&'static str>> {
-        info!("new message: {message:#?}");
+        trace!("new message: {message:#?}");
         tx.send(message)
             .await
             .context("communicating to channel failed")

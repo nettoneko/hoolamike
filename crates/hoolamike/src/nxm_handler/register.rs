@@ -4,8 +4,6 @@ use {
     tracing::{info, instrument},
 };
 
-pub(crate) const HANDLE_NXM_ARG: &str = "handle-nxm";
-
 mod linux {
     use super::*;
 
@@ -31,12 +29,14 @@ mod linux {
 
         let desktop_entry = format!(
             r#"
-"[Desktop Entry]
+[Desktop Entry]
 Type=Application
-Name={crate_name}
-Exec="{current_exe}" {HANDLE_NXM_ARG} %u
+Categories=Game;
+Name={crate_name} NXM handler
+Exec="{current_exe}" %u
 Terminal=true
-MimeType=x-scheme-handler/nxm;",
+NoDisplay=true
+MimeType=x-scheme-handler/nxm;
 "#
         )
         .trim()
@@ -86,7 +86,7 @@ mod windows {
             .create_subkey("command")
             .context("command subkey")?;
 
-        let exe_path = format!(r#""{}" {HANDLE_NXM_ARG} "%1""#, std::env::current_exe().context("no current exe")?.display());
+        let exe_path = format!(r#""{}" "%1""#, std::env::current_exe().context("no current exe")?.display());
         command_key
             .set_value("", &exe_path)
             .context("setting final value")?;

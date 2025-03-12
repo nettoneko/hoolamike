@@ -15,7 +15,7 @@ use {
             WithArchiveDescriptor,
         },
         error::{MultiErrorCollectExt, TotalResult},
-        modlist_json::{Archive, GoogleDriveState, HttpState, HumanUrl, ManualState, MediaFireState, MegaState, NexusGameName, NexusState, State},
+        modlist_json::{Archive, GoogleDriveState, HttpState, HumanUrl, ManualState, MediaFireState, MegaState, State},
         progress_bars_v2::IndicatifWrapIoExt,
     },
     anyhow::Result,
