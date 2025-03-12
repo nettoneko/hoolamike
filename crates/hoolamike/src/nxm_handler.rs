@@ -334,17 +334,18 @@ pub async fn run(
 
                 info!("opening {nexus_website_url} with {use_browser}");
                 tokio::process::Command::new(&use_browser)
-                    .arg(nexus_website_url)
+                    .arg(&nexus_website_url)
                     .output()
                     .await
-                    .context("spawning browser failed")
+                    .context("spawning browser process")
                     .and_then(|o| {
                         o.status
                             .success()
                             .then_some(())
                             .ok_or(o.status)
                             .map_err(|s| anyhow!("bad status: {s}"))
-                    })?;
+                    })
+                    .with_context(|| format!("opening [{nexus_website_url}] with ({use_browser}) failed: check 'hoolamike handle-nxm --help'"))?;
 
                 match downloader_events.next().await {
                     Some(s) => match s {

@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug Fixes
 
+- *(nexus)* Fix linux desktop entry for automatic nxm handling, better error messages
+
+## [0.15.1] - 2025-03-11
+
+### 🐛 Bug Fixes
+
 - *(nexus)* Go directly to the specific file download link for multifile mods
 
 ## [0.15.0] - 2025-03-11
