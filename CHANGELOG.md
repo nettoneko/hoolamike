@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug Fixes
 
+- *(windows)* Fix windows build, remove unnecessary compiler feature flags
+
+## [0.15.2] - 2025-03-12
+
+### 🐛 Bug Fixes
+
 - *(nexus)* Fix linux desktop entry for automatic nxm handling, better error messages
 
 ## [0.15.1] - 2025-03-11
