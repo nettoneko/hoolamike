@@ -5,7 +5,7 @@ use {
     anyhow::{anyhow, Context, Result},
     list_output::{ListOutput, ListOutputEntry},
     std::{
-        collections::BTreeSet,
+        collections::{BTreeMap, BTreeSet},
         iter::once,
         path::{Path, PathBuf},
         process::{Command, Output, Stdio},
@@ -165,7 +165,11 @@ impl ArchiveHandle {
 
     #[instrument]
     pub fn get_many_handles(&self, paths: &[&Path]) -> Result<Vec<(ListOutputEntry, ArchiveFileHandle)>> {
-        let mut lookup = paths.iter().copied().collect::<BTreeSet<_>>();
+        let mut lookup = paths
+            .iter()
+            .copied()
+            .map(|p| (p.display().to_string().to_lowercase(), p))
+            .collect::<BTreeMap<_, _>>();
         tempfile::tempdir_in(&self.binary.temp_files_dir)
             .context("creating temporary directory")
             .map(|temp_dir| temp_dir.into_path())
@@ -174,7 +178,11 @@ impl ArchiveHandle {
                     .map(|files| {
                         files
                             .into_iter()
-                            .filter(|entry| lookup.remove(entry.path.as_path()))
+                            .filter_map(|entry| {
+                                lookup
+                                    .remove(&entry.path.display().to_string().to_lowercase())
+                                    .map(|_| entry)
+                            })
                             .collect::<Vec<_>>()
                     })
                     .and_then(|entries| {
