@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [unreleased]
+
+### 🐛 Bug Fixes
+
+- *(7zip)* Make 7zip filenames case-insensitive when extracting
+
 ## [0.15.3] - 2025-03-12
 
 ### 🐛 Bug Fixes
