@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 🚀 Features
+
+- *(archive)* Another 7zip implementation to try before 7zip cli, intel tex decompression library integration for SIMD accelerated BC7 handling
+
+## [0.15.5] - 2025-03-18
+
 ### 🐛 Bug Fixes
 
 - *(7zip)* Make 7zip filenames case-insensitive when extracting
