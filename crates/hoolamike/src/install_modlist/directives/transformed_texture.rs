@@ -7,6 +7,7 @@ use {
     },
     preheat_archive_hash_paths::PreheatedArchiveHashPaths,
     std::io::{Read, Write},
+    tracing::warn,
 };
 
 #[derive(Clone, derivative::Derivative)]
@@ -30,7 +31,9 @@ impl std::io::Result<u64> {
 
 // #[cfg(feature = "dds_recompression")]
 mod dds_recompression;
-mod dds_recompression_v2;
+mod dds_recompression_directx_tex;
+
+mod dds_recompression_intel_tex;
 
 impl TransformedTextureHandler {
     #[instrument(skip(self, preheated))]
@@ -68,8 +71,14 @@ impl TransformedTextureHandler {
                         info_span!("perform_copy").in_scope(|| {
                             let mut writer = to;
                             let mut reader = tracing::Span::current().wrap_read(size, from);
-
-                            dds_recompression_v2::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
+                            Ok(())
+                                .and_then(|_| {
+                                    dds_recompression_intel_tex::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer).map(|_| size)
+                                })
+                                .or_else(|e| {
+                                    warn!("intel texture recompression (fast) failed, falling back to microsoft directxtex (slow)\nreason:\n{e:?}");
+                                    dds_recompression_directx_tex::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
+                                })
                                 .and_then(|wrote| {
                                     wrote
                                         .eq(&size)

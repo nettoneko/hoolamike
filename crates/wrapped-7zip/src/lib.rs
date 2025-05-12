@@ -5,7 +5,7 @@ use {
     anyhow::{anyhow, Context, Result},
     list_output::{ListOutput, ListOutputEntry},
     std::{
-        collections::{BTreeMap, BTreeSet},
+        collections::BTreeMap,
         iter::once,
         path::{Path, PathBuf},
         process::{Command, Output, Stdio},

@@ -26,20 +26,6 @@ fn parse_date(input: &str) -> Result<NaiveDateTime> {
         .pipe(|input| NaiveDateTime::parse_from_str(input, "%Y-%m-%d %H:%M:%S").with_context(|| format!("not a valid date: [{input}]")))
 }
 
-#[cfg(test)]
-mod test_date_parsing {
-    use super::*;
-    #[test]
-    fn test_example_1() -> Result<()> {
-        parse_date("2024-08-04 22:02:17.2575336").map(|_| ())
-    }
-
-    #[test]
-    fn test_example_2() -> Result<()> {
-        parse_date("2024-08-06 13:25:23.4918567").map(|_| ())
-    }
-}
-
 impl FromStr for ListOutput {
     type Err = anyhow::Error;
 
@@ -104,5 +90,19 @@ impl FromStr for ListOutput {
                         .map(|entries| Self { entries })
                 })
         })
+    }
+}
+
+#[cfg(test)]
+mod test_date_parsing {
+    use super::*;
+    #[test]
+    fn test_example_1() -> Result<()> {
+        parse_date("2024-08-04 22:02:17.2575336").map(|_| ())
+    }
+
+    #[test]
+    fn test_example_2() -> Result<()> {
+        parse_date("2024-08-06 13:25:23.4918567").map(|_| ())
     }
 }
