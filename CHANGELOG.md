@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### ⚙️ Miscellaneous Tasks
+
+- *(ci)* Update ubuntu image
+
+## [0.15.6] - 2025-05-12
+
 ### 🚀 Features
 
 - *(archive)* Another 7zip implementation to try before 7zip cli, intel tex decompression library integration for SIMD accelerated BC7 handling
