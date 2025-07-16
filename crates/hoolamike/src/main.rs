@@ -78,6 +78,7 @@ enum Commands {
     },
     HoolamikeDebug(HoolamikeDebug),
     /// tests the modlist parser
+    #[cfg(debug_assertions)]
     ValidateModlist {
         /// path to modlist (.wabbajack) file
         path: PathBuf,
@@ -226,6 +227,7 @@ async fn async_main() -> Result<()> {
                 let (_config_path, config) = config_file::HoolamikeConfig::find(&hoolamike_config).context("reading hoolamike config file")?;
                 post_install_fixup::run_post_install_fixup(&config)
             }
+            #[cfg(debug_assertions)]
             Commands::ValidateModlist { path } => tokio::fs::read_to_string(&path)
                 .await
                 .context("reading test file")
