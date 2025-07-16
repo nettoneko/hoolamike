@@ -71,13 +71,16 @@ impl TransformedTextureHandler {
                         info_span!("perform_copy").in_scope(|| {
                             let mut writer = to;
                             let mut reader = tracing::Span::current().wrap_read(size, from);
-                            Ok(())
-                                .and_then(|_| {
-                                    dds_recompression_intel_tex::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer).map(|_| size)
-                                })
+                            Err(anyhow::anyhow!("trying multiple algorithms"))
+                                // .or_else(|e| {
+                                //     dds_recompression_intel_tex::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
+                                //         .map(|_| size)
+                                //         .with_context(|| format!("tried because: {e:?}"))
+                                // })
                                 .or_else(|e| {
                                     warn!("intel texture recompression (fast) failed, falling back to microsoft directxtex (slow)\nreason:\n{e:?}");
                                     dds_recompression_directx_tex::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
+                                        .with_context(|| format!("tried because: {e:?}"))
                                 })
                                 .and_then(|wrote| {
                                     wrote
