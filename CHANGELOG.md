@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 🚀 Features
+
+- *(wabbajack-file)* More permissive top level file parsing (will work with extra fields, missing non-important fields)
+- *(hoolamike)* Remove misleading validate-modlist subcommand
+
+### ⚙️ Miscellaneous Tasks
+
+- *(textures)* Disable intel tex
+
+## [0.15.7] - 2025-05-12
+
 ### ⚙️ Miscellaneous Tasks
 
 - *(ci)* Update ubuntu image
