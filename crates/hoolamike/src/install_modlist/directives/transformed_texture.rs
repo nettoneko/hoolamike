@@ -33,6 +33,7 @@ impl std::io::Result<u64> {
 mod dds_recompression;
 mod dds_recompression_directx_tex;
 
+#[cfg(feature = "intel_tex")]
 mod dds_recompression_intel_tex;
 
 impl TransformedTextureHandler {
@@ -72,11 +73,20 @@ impl TransformedTextureHandler {
                             let mut writer = to;
                             let mut reader = tracing::Span::current().wrap_read(size, from);
                             Err(anyhow::anyhow!("trying multiple algorithms"))
-                                // .or_else(|e| {
-                                //     dds_recompression_intel_tex::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
-                                //         .map(|_| size)
-                                //         .with_context(|| format!("tried because: {e:?}"))
-                                // })
+                                .pipe(|r| {
+                                    #[cfg(feature = "intel_tex")]
+                                    {
+                                        r.or_else(|e| {
+                                            dds_recompression_intel_tex::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
+                                                .map(|_| size)
+                                                .with_context(|| format!("tried because: {e:?}"))
+                                        })
+                                    }
+                                    #[cfg(not(feature = "intel_tex"))]
+                                    {
+                                        r
+                                    }
+                                })
                                 .or_else(|e| {
                                     warn!("intel texture recompression (fast) failed, falling back to microsoft directxtex (slow)\nreason:\n{e:?}");
                                     dds_recompression_directx_tex::resize_dds(&mut reader, width, height, format, mip_levels, &mut writer)
