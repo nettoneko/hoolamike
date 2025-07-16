@@ -68,6 +68,28 @@ If you face any issues, consult the **[Discord Community](https://discord.gg/xYH
 
 Whether you're here to wishlist modlists, contribute, or just chat with fellow enthusiasts, our **[Discord Community](https://discord.gg/xYHjpKX3YP)** is open for you! 🎉
 
+## Troubleshooting "Too Many Open Files" Error
+
+If you encounter a "Too many open files" error (os error 24) while running hoolamike, it's  due to the default system's file descriptor limit being too low.
+
+### Solution
+
+Increase the file descriptor limit before running hoolamike. You can do this by executing the following command in your terminal:
+
+```bash
+ulimit -n 64556
+```
+
+This sets the maximum number of open file descriptors to 64,556, which has been found to resolve the issue. Note that lower values (e.g., 1024 or 2048) may not be sufficient.
+
+### Steps to Verify Current Limits
+
+To check your current file descriptor limit, run:
+
+```bash
+ulimit -n
+```
+
 ## 🌟 Contributing
 
 We welcome contributions of all kinds! Whether it’s fixing bugs, improving documentation, or adding support for new modlists, your help is appreciated. Check out our `CONTRIBUTING.md` for guidelines.
