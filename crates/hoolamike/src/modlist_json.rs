@@ -43,7 +43,6 @@ impl std::fmt::Debug for HumanUrl {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 #[serde(rename_all = "PascalCase")]
 pub struct Modlist {
     /// archives: Vec<Archive>
@@ -53,10 +52,12 @@ pub struct Modlist {
     /// author: String
     /// Description: The name of the modlist's creator.
     /// Usage: Display or record the author's name for attribution.
+    #[serde(default)]
     pub author: String,
     /// description: String
     /// Description: A brief description of the modlist.
     /// Usage: Show this to users to inform them about the modlist.
+    #[serde(default)]
     pub description: String,
     /// directives: Vec<Directive>
     /// Description: Instructions on how to process the archives and install the mods.
@@ -69,6 +70,7 @@ pub struct Modlist {
     /// image: String
     /// Description: Path or URL to an image representing the modlist.
     /// Usage: Display this image in your tool's UI.
+    #[serde(default)]
     pub image: String,
     /// is_nsfw: bool
     /// Description: Indicates if the modlist contains adult content.
@@ -82,6 +84,7 @@ pub struct Modlist {
     /// readme: String
     /// Description: Path or URL to a README file with detailed instructions.
     /// Usage: Provide access to the README for additional guidance.
+    #[serde(default)]
     pub readme: String,
     /// version: String
     /// Description: The version number of the modlist.
@@ -94,6 +97,7 @@ pub struct Modlist {
     /// website: String
     /// Description: The modlist's website or homepage.
     /// Usage: Provide users with a link for more information.
+    #[serde(default)]
     pub website: String,
 }
 
