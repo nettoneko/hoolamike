@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
+- *(intel_tex)* Make intel tex optional
+
+## [0.16.0] - 2025-07-16
+
+### 🚀 Features
+
 - *(wabbajack-file)* More permissive top level file parsing (will work with extra fields, missing non-important fields)
 - *(hoolamike)* Remove misleading validate-modlist subcommand
 
