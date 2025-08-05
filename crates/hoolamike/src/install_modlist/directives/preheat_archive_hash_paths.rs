@@ -100,8 +100,8 @@ impl PreheatedArchiveHashPaths {
                                     .flat_map(|(a, b, c)| {
                                         c.tap_mut(|files| files.shuffle(&mut rand::thread_rng()))
                                             .into_iter()
-                                            // TODO: this is guesstimated, ideally they would be chunked by actual size
-                                            .chunks(64)
+                                            // Sequential for 7z archives since they are already multi-threaded and very slow, reduce chunk size for everything else to 16
+                                            .chunks(if b.last().extension().map(|ext| ext.to_string_lossy().to_lowercase()).as_deref() == Some("7z") { 1 } else { 16 })
                                             .into_iter()
                                             .map(move |c| (a.clone(), b.clone(), c.collect_vec()))
                                             .collect_vec()
