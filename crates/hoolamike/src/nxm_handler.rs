@@ -242,7 +242,7 @@ pub async fn run(
                                     .inspect_err(move |reason| tracing::error!(?url, ?output_path, "could not finish download:\n\n{reason:?}"))
                             },
                         )
-                        .buffer_unordered(8)
+                        .buffer_unordered(num_cpus::get() * 2)
                         .try_for_each(|e| {
                             info!("[OK] {e:?}");
                             ready(Ok(()))

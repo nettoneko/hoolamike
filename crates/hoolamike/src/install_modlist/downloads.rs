@@ -293,7 +293,7 @@ impl Synchronizers {
 
     #[instrument(skip_all, fields(archives=%archives.len()))]
     pub async fn sync_downloads(self, archives: Vec<Archive>) -> TotalResult<WithArchiveDescriptor<PathBuf>> {
-        let base_concurrency = 7;
+        let base_concurrency = num_cpus::get() * 2;
         let sync_downloads = tracing::Span::current().tap(|pb| {
             pb.pb_set_length(archives.iter().map(|a| a.descriptor.size).sum());
             pb.pb_set_style(&io_progress_style());
