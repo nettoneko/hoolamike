@@ -21,6 +21,7 @@ use {
 pub struct Wrapped7Zip {
     bin: Arc<Path>,
     temp_files_dir: Arc<Path>,
+    thread_count: Option<usize>,
 }
 
 fn check_exists(file: &Path) -> Result<&Path> {
@@ -32,12 +33,17 @@ fn check_exists(file: &Path) -> Result<&Path> {
 
 impl Wrapped7Zip {
     pub fn new(bin: &Path, temp_files_dir: &Path) -> Result<Self> {
+        Self::with_thread_count(bin, temp_files_dir, None)
+    }
+
+    pub fn with_thread_count(bin: &Path, temp_files_dir: &Path, thread_count: Option<usize>) -> Result<Self> {
         check_exists(bin)
             .context("checking if binary exists")
             .map(Arc::from)
             .map(|bin| Self {
                 bin,
                 temp_files_dir: Arc::from(temp_files_dir),
+                thread_count,
             })
             .with_context(|| format!("instantiating wrapper at [{}]", bin.display()))
     }
@@ -86,10 +92,15 @@ impl Wrapped7Zip {
         let mut command = Command::new(self.bin.as_ref());
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
+        // Add thread count option if specified
+        if let Some(count) = self.thread_count {
+            command.arg(format!("-mmt{}", count));
+        }
         // command.kill_on_drop(true);
         build_command(&mut command);
         command
     }
+
     #[tracing::instrument(level = "TRACE")]
     pub fn query_file_info(&self, path: &Path) -> Result<String> {
         path.try_exists()
@@ -98,6 +109,7 @@ impl Wrapped7Zip {
             .map(|path| self.command(|c| c.arg("l").arg(path)))
             .and_then(|command| command.read_stdout_ok())
     }
+
     #[tracing::instrument(level = "TRACE")]
     pub fn open_file(&self, archive: &Path) -> Result<ArchiveHandle> {
         self.query_file_info(archive)
@@ -107,15 +119,13 @@ impl Wrapped7Zip {
                 archive: archive.into(),
             })
     }
-}
 
-impl Wrapped7Zip {
-    pub fn find_bin(temp_files_dir: &Path) -> Result<Self> {
+    pub fn find_bin(temp_files_dir: &Path, thread_count: Option<usize>) -> Result<Self> {
         ["7z", "7z.exe"]
             .into_iter()
             .find_map(|bin| which::which(bin).ok())
             .context("no 7z binary")
-            .and_then(|bin| Self::new(&bin, temp_files_dir))
+            .and_then(|bin| Self::with_thread_count(&bin, temp_files_dir, thread_count))
     }
 }
 
