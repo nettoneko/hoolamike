@@ -14,8 +14,14 @@ use {
     tap::prelude::*,
     tokio::sync::OwnedSemaphorePermit,
     tracing::{info_span, instrument, warn, Instrument},
-    wrapped_7zip::WRAPPED_7ZIP,
 };
+
+fn get_wrapped_7zip_for_extension(extension: Option<&OsStr>) -> Result<::wrapped_7zip::Wrapped7Zip> {
+    match extension.and_then(|ext| ext.to_str()).map(|s| s.to_lowercase()).as_deref() {
+        Some("7z") => ::wrapped_7zip::Wrapped7Zip::find_bin(*crate::consts::TEMP_FILE_DIR, Some(1)),
+        _ => ::wrapped_7zip::Wrapped7Zip::find_bin(*crate::consts::TEMP_FILE_DIR, None),
+    }
+}
 
 pub mod preheated_archive;
 
@@ -196,8 +202,8 @@ impl ArchiveHandle<'_> {
                         .tap_err(|message| tracing::warn!("could not open archive with CompressTools: {message:?}"))
                 })
                 .or_else(|reason| {
-                    WRAPPED_7ZIP
-                        .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                    get_wrapped_7zip_for_extension(extension)
+                        .and_then(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
                         .and_then(&mut with_guessed)
                         .with_context(|| format!("trying because: {reason:?}"))
                         .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
@@ -223,8 +229,8 @@ impl ArchiveHandle<'_> {
                         .tap_err(|message| tracing::warn!("could not open archive with CompressTools: {message:?}"))
                 })
                 .or_else(|reason| {
-                    WRAPPED_7ZIP
-                        .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                    get_wrapped_7zip_for_extension(extension)
+                        .and_then(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
                         .and_then(&mut with_guessed)
                         .with_context(|| format!("trying because: {reason:?}"))
                         .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
@@ -256,8 +262,8 @@ impl ArchiveHandle<'_> {
                         .tap_err(|message| tracing::warn!("could not open archive with SevenzRust2: {message:?}"))
                 })
                 .or_else(|reason| {
-                    WRAPPED_7ZIP
-                        .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                    get_wrapped_7zip_for_extension(extension)
+                        .and_then(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
                         .and_then(&mut with_guessed)
                         .with_context(|| format!("trying because: {reason:?}"))
                         .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
@@ -300,8 +306,8 @@ impl ArchiveHandle<'_> {
                             .tap_err(|message| tracing::warn!("could not open archive with SevenzRust2: {message:?}"))
                     })
                     .or_else(|err| {
-                        WRAPPED_7ZIP
-                            .with(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
+                        get_wrapped_7zip_for_extension(extension)
+                            .and_then(|wrapped| wrapped.open_file(path).map(Self::Wrapped7Zip))
                             .and_then(&mut with_guessed)
                             .with_context(|| format!("because: {err:#?}"))
                             .tap_err(|message| tracing::warn!("could not open archive with 7z: {message:?}"))
