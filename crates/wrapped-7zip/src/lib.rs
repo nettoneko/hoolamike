@@ -129,9 +129,12 @@ impl Wrapped7Zip {
     }
 }
 
-// thread_local! {
-//     pub static WRAPPED_7ZIP: Arc<Wrapped7Zip> = Arc::new(Wrapped7Zip::find_bin().expect("no 7z found, fix your dependencies"));
-// }
+thread_local! {
+    pub static WRAPPED_7ZIP: Arc<Wrapped7Zip> = Arc::new(
+        Wrapped7Zip::find_bin(std::env::temp_dir().as_path(), None)
+            .expect("no 7z found, fix your dependencies")
+    );
+}
 
 pub struct ArchiveFileHandle {
     pub path: TempPath,
